@@ -1,8 +1,8 @@
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 // Correct relative paths from app/_layout.tsx to the root src folder
-import { supabase } from './src/lib/supabase';
-import { useAuthStore } from './src/store/useAuthStore';
+import { supabase } from '../src/lib/supabase';
+import { useAuthStore } from '../src/store/useAuthStore';
 
 export default function RootLayout() {
   const { session, setSession, initialized, setInitialized } = useAuthStore();
@@ -35,7 +35,7 @@ export default function RootLayout() {
       router.replace('/(auth)/login'); 
     } else if (session && inAuthGroup) {
       // If logged in and trying to access auth screens, go home
-      router.replace('/(main)/home');
+      router.replace('/(main)/home' as any);
     }
   }, [session, initialized, segments]);
 
