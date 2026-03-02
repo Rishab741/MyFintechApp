@@ -13,10 +13,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+// Corrected relative path and filename casing
+import ConnectInvestment from '../../components/ConnectInvestments';
 
 const { width } = Dimensions.get('window');
 
-// ─── Colour tokens (matches AuthScreen) ──────────────────────────────────────
+// ─── Colour tokens ──────────────────────────────────────────────────────────
 const GOLD = '#C9A84C';
 const GOLD_LIGHT = '#E5C97A';
 const GOLD_DIM = 'rgba(201,168,76,0.15)';
@@ -59,7 +61,6 @@ const AvatarRing: React.FC<{ initials: string; size?: number }> = ({ initials, s
 
   return (
     <View style={{ width: size + 12, height: size + 12, alignItems: 'center', justifyContent: 'center' }}>
-      {/* Rotating dashed ring */}
       <Animated.View
         style={{
           position: 'absolute',
@@ -325,6 +326,7 @@ export default function TabOneScreen() {
             <View style={{ marginLeft: 20, flex: 1 }}>
               <Text style={styles.fullName}>{fullName}</Text>
               <Text style={styles.emailText}>{email}</Text>
+              {/* FIXED: Replaced div with View */}
               <View style={styles.typePill}>
                 <Text style={styles.typePillText}>{investorType}</Text>
               </View>
@@ -339,6 +341,20 @@ export default function TabOneScreen() {
           <StatCard icon="🔐" label="2FA Status" value="Off" delay={180} />
           <View style={{ width: 10 }} />
           <StatCard icon="🌐" label="Sessions" value="1 Active" delay={260} />
+        </View>
+
+        {/* ── Wealth Aggregation (Plaid Integration) ── */}
+        <SectionHeader title="Wealth Aggregation" />
+        <View style={styles.section}>
+          <View style={styles.plaidContainer}>
+            <View style={styles.plaidInfo}>
+              <Text style={styles.plaidTitle}>Connect External Brokerage</Text>
+              <Text style={styles.plaidSub}>
+                Sync your holdings for unified AI-driven growth analysis.
+              </Text>
+            </View>
+            <ConnectInvestment />
+          </View>
         </View>
 
         {/* ── Account Details ── */}
@@ -507,6 +523,31 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     marginBottom: 4,
+  },
+
+  // Plaid Container
+  plaidContainer: {
+    padding: 20,
+    backgroundColor: CARD,
+    alignItems: 'center',
+  },
+  plaidInfo: {
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  plaidTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    marginBottom: 6,
+  },
+  plaidSub: {
+    color: TEXT_SUB,
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 10,
   },
 
   // Sections

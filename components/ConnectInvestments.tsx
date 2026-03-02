@@ -1,30 +1,54 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-// Use create and open instead of usePlaidLink
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinkExit, LinkSuccess, create, open } from 'react-native-plaid-link-sdk';
 import { supabase } from '../src/lib/supabase';
 
 export default function ConnectInvestment() {
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
-  useEffect(() => {
-    const fetchToken = async () => {
-      const { data, error } = await supabase.functions.invoke('create-plaid-link-token');
-      if (data?.link_token) {
-        setLinkToken(data.link_token);
-        // Pre-initialize Link to reduce latency when the user clicks
-        create({ token: data.link_token });
-      }
-    };
-    fetchToken();
+  const fetchToken = useCallback(async () => {
+    setIsFetching(true);
+    setHasError(false);
+    
+    // We point to 'exchange-plaid-token' using the 'create' action 
+    // to match your consolidated backend logic.
+    const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
+      body: { action: 'create' }
+    });
+
+    if (error || !data?.link_token) {
+      console.error('Plaid Link Token Error:', error);
+      setHasError(true);
+      setIsFetching(false);
+      return;
+    }
+
+    setLinkToken(data.link_token);
+    create({ token: data.link_token });
+    setIsFetching(false);
   }, []);
 
+  useEffect(() => {
+    fetchToken();
+  }, [fetchToken]);
+
   const onSuccess = async (success: LinkSuccess) => {
-    const { error } = await supabase.functions.invoke('exchange-plaid-token', {
-      body: { public_token: success.publicToken, metadata: success.metadata },
+    const { error: exchangeError } = await supabase.functions.invoke('exchange-plaid-token', {
+      body: { 
+        action: 'exchange',
+        public_token: success.publicToken, 
+        metadata: success.metadata 
+      },
     });
     
-    if (!error) Alert.alert("Success", "Account connected!");
+    if (exchangeError) {
+      Alert.alert("Connection Failed", "We couldn't link your account. Please try again.");
+      console.error(exchangeError);
+    } else {
+      Alert.alert("Success", "Account connected!");
+    }
   };
 
   const handleOpenLink = () => {
@@ -36,7 +60,27 @@ export default function ConnectInvestment() {
     }
   };
 
-  if (!linkToken) return <Text>Loading Connection...</Text>;
+  // --- Fallback UI States ---
+
+  if (hasError) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>Failed to initialize connection.</Text>
+        <TouchableOpacity style={styles.button} onPress={fetchToken}>
+          <Text style={styles.buttonText}>Retry Setup</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (isFetching || !linkToken) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator color="#C9A84C" />
+        <Text style={styles.loadingText}>Initializing Secure Link...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -51,7 +95,17 @@ export default function ConnectInvestment() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20 },
-  button: { backgroundColor: '#000', padding: 18, borderRadius: 12, alignItems: 'center' },
-  buttonText: { color: '#fff', fontWeight: 'bold' }
+  container: { padding: 20, alignItems: 'center' },
+  button: { 
+    backgroundColor: '#12161F', 
+    padding: 18, 
+    borderRadius: 12, 
+    alignItems: 'center', 
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,76,0.3)'
+  },
+  buttonText: { color: '#E5C97A', fontWeight: 'bold' },
+  loadingText: { color: '#5A6070', marginTop: 10, fontSize: 12 },
+  errorText: { color: '#E74C3C', marginBottom: 10, fontSize: 12 },
 });
