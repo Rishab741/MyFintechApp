@@ -19,7 +19,7 @@ export default function ConnectInvestment() {
     try {
       // Step 1: Fetch the link token from your edge function
       const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
-        body: { action: 'create' },
+        body: { action: 'plaid_create' },
       });
 
       if (error || !data?.link_token) {
@@ -39,7 +39,7 @@ export default function ConnectInvestment() {
 
           const { error: exchangeError } = await supabase.functions.invoke('exchange-plaid-token', {
             body: {
-              action: 'exchange',
+              action: 'plaid_exchange',
               public_token: success.publicToken,
               metadata: success.metadata,
             },
