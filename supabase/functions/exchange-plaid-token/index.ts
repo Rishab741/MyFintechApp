@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createHmac } from "https://deno.land/std@0.168.0/node/crypto.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -10,8 +9,6 @@ const corsHeaders = {
 
 const PLAID_BASE_URL     = 'https://sandbox.plaid.com'
 const SNAPTRADE_BASE_URL = 'https://api.snaptrade.com/api/v1'
-const BINANCE_BASE_URL   = 'https://api.binance.com'
-const COINBASE_BASE_URL  = 'https://api.coinbase.com/v2'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -21,12 +18,28 @@ const json = (body: unknown, status = 200) =>
 
 const getSupabaseAdmin = () =>
   createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    Deno.env.get('SNAPTRADE_SUPABASE_URL') ?? Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SNAPTRADE_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   )
 
-const hmacSign = (secret: string, message: string): string =>
-  createHmac('sha256', secret).update(message).digest('hex')
+// ✅ Use Web Crypto API (native Deno) — produces Base64, which SnapTrade expects
+async function hmacSign(secret: string, message: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const keyData = encoder.encode(secret)
+  const messageData = encoder.encode(message)
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData)
+  // SnapTrade requires Base64, NOT hex
+  return btoa(String.fromCharCode(...new Uint8Array(signature)))
+}
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -35,44 +48,117 @@ serve(async (req: Request) => {
 
   try {
     const body = await req.json()
-    const {
-      action,
-      user_id,
-      public_token,
-      metadata,
-      api_key,
-      api_secret,
-      authorization_id,
-    } = body
+    const { action, user_id, public_token, metadata } = body
 
     // ══════════════════════════════════════════════════════════════════════════
-    // DEBUG — Check env vars (REMOVE AFTER FIXING)
+    // SNAPTRADE — Brokerages
     // ══════════════════════════════════════════════════════════════════════════
-    if (action === 'debug') {
-      const clientId = Deno.env.get('PLAID_CLIENT_ID')
-      const secret   = Deno.env.get('PLAID_SECRET')
-      return json({
-        PLAID_CLIENT_ID_length: clientId?.length ?? 0,
-        PLAID_CLIENT_ID_first6: clientId?.substring(0, 6) ?? 'EMPTY',
-        PLAID_SECRET_length: secret?.length ?? 0,
-        PLAID_SECRET_first6: secret?.substring(0, 6) ?? 'EMPTY',
-      })
+
+    if (action === 'snaptrade_create') {
+      console.log("--- STARTING SNAPTRADE_CREATE ---");
+
+      const clientId = Deno.env.get('SNAPTRADE_CLIENT_ID')
+      const consumerKey = Deno.env.get('SNAPTRADE_CONSUMER_KEY')
+
+      console.log("DEBUG clientId:", clientId)
+  console.log("DEBUG consumerKey length:", consumerKey?.length)
+  console.log("DEBUG consumerKey first5:", consumerKey?.substring(0, 5))
+  console.log("DEBUG consumerKey last5:", consumerKey?.substring(consumerKey.length - 5))
+
+      if (!clientId || !consumerKey) {
+        return json({ error: "Server configuration missing" }, 500)
+      }
+
+      const supabaseAdmin = getSupabaseAdmin()
+
+      // ✅ Fresh timestamp for EACH request to avoid clock-skew rejections
+      const getTimestampAndSig = async () => {
+        const timestamp = Math.floor(Date.now() / 1000).toString()
+        const signature = await hmacSign(consumerKey, timestamp)
+        return { timestamp, signature }
+      }
+
+      // 1. Check DB for existing user secret
+      const { data: existingUser } = await supabaseAdmin
+        .from('snaptrade_users')
+        .select('user_secret')
+        .eq('user_id', user_id)
+        .maybeSingle()
+
+      let userSecret = existingUser?.user_secret
+
+      // 2. Register if not found
+      if (!userSecret) {
+        console.log("Registering new SnapTrade user...")
+        const { timestamp, signature } = await getTimestampAndSig()
+
+        const registerResponse = await fetch(
+          `${SNAPTRADE_BASE_URL}/snapTrade/registerUser?clientId=${clientId}&timestamp=${timestamp}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'clientId': clientId,
+              'timestamp': timestamp,
+              'signature': signature,
+            },
+            body: JSON.stringify({ userId: user_id }),
+          }
+        )
+
+        const registerData = await registerResponse.json()
+        console.log("Register response:", JSON.stringify(registerData))
+
+        if (registerResponse.ok && registerData.userSecret) {
+          userSecret = registerData.userSecret
+          await supabaseAdmin.from('snaptrade_users').upsert({
+            user_id,
+            user_secret: userSecret,
+          })
+        } else {
+          return json({ error: "SnapTrade registration failed", details: registerData }, 401)
+        }
+      }
+
+      // 3. Generate Login Portal Link — ✅ fresh timestamp here too
+      console.log("Generating SnapTrade Login URI...")
+      const { timestamp: loginTs, signature: loginSig } = await getTimestampAndSig()
+
+      const loginResponse = await fetch(
+        `${SNAPTRADE_BASE_URL}/snapTrade/login?clientId=${clientId}&timestamp=${loginTs}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'clientId': clientId,
+            'timestamp': loginTs,
+            'signature': loginSig,
+          },
+          body: JSON.stringify({ userId: user_id, userSecret }),
+        }
+      )
+
+      const loginData = await loginResponse.json()
+      console.log("Login response:", JSON.stringify(loginData))
+
+      if (!loginResponse.ok) {
+        return json({ error: "Failed to generate redirect URI", details: loginData }, 401)
+      }
+
+      return json({ redirect_uri: loginData.redirectURI })
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // PLAID — Bank accounts
+    // PLAID — Traditional Banks
     // ══════════════════════════════════════════════════════════════════════════
 
     if (action === 'plaid_create') {
-      const clientId = Deno.env.get('PLAID_CLIENT_ID') ?? ''
-      const secret   = Deno.env.get('PLAID_SECRET') ?? ''
-
       const response = await fetch(`${PLAID_BASE_URL}/link/token/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'PLAID-CLIENT-ID': clientId,
-          'PLAID-SECRET': secret,
+          'PLAID-CLIENT-ID': Deno.env.get('PLAID_CLIENT_ID') ?? '',
+          'PLAID-SECRET': Deno.env.get('PLAID_SECRET') ?? '',
         },
         body: JSON.stringify({
           user: { client_user_id: user_id ?? 'user_sandbox' },
@@ -83,16 +169,11 @@ serve(async (req: Request) => {
         }),
       })
       const data = await response.json()
-      if (!response.ok) {
-        console.error('Plaid create failed:', JSON.stringify(data))
-        return json({ error: data.error_message ?? 'Failed to create Plaid link token' }, 502)
-      }
+      if (!response.ok) return json({ error: data.error_message }, 502)
       return json({ link_token: data.link_token })
     }
 
     if (action === 'plaid_exchange') {
-      if (!public_token) return json({ error: 'public_token is required' }, 400)
-
       const plaidResponse = await fetch(`${PLAID_BASE_URL}/item/public_token/exchange`, {
         method: 'POST',
         headers: {
@@ -103,206 +184,24 @@ serve(async (req: Request) => {
         body: JSON.stringify({ public_token }),
       })
       const plaidData = await plaidResponse.json()
-      if (!plaidResponse.ok) {
-        console.error('Plaid exchange failed:', plaidData)
-        return json({ error: plaidData.error_message ?? 'Token exchange failed' }, 502)
-      }
+      if (!plaidResponse.ok) return json({ error: plaidData.error_message }, 502)
 
-      const { error: dbError } = await getSupabaseAdmin()
-        .from('linked_accounts')
-        .insert({
-          user_id: user_id ?? '00000000-0000-0000-0000-000000000000',
-          provider: 'plaid',
-          access_token: plaidData.access_token,
-          provider_item_id: plaidData.item_id,
-          institution_name: metadata?.institution?.name ?? 'Unknown',
-          account_type: 'bank',
-          created_at: new Date().toISOString(),
-        })
-
-      if (dbError) {
-        console.error('DB insert failed:', dbError)
-        return json({ error: 'Failed to save account' }, 500)
-      }
-      return json({ success: true })
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // SNAPTRADE — Stock brokerages
-    // ══════════════════════════════════════════════════════════════════════════
-
-    if (action === 'snaptrade_create') {
-      if (!user_id) return json({ error: 'user_id is required' }, 400)
-
-      const clientId    = Deno.env.get('SNAPTRADE_CLIENT_ID') ?? ''
-      const consumerKey = Deno.env.get('SNAPTRADE_CONSUMER_KEY') ?? ''
-      const timestamp   = Math.floor(Date.now() / 1000).toString()
-      const signature   = hmacSign(consumerKey, `${clientId}${timestamp}`)
-
-      const registerResponse = await fetch(`${SNAPTRADE_BASE_URL}/snapTrade/registerUser`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'clientId': clientId,
-          'timestamp': timestamp,
-          'signature': signature,
-        },
-        body: JSON.stringify({ userId: user_id }),
+      await getSupabaseAdmin().from('linked_accounts').insert({
+        user_id,
+        provider: 'plaid',
+        access_token: plaidData.access_token,
+        provider_item_id: plaidData.item_id,
+        institution_name: metadata?.institution?.name ?? 'Bank',
+        account_type: 'bank',
       })
-      const registerData = await registerResponse.json()
-      let userSecret = registerData.userSecret
 
-      if (!userSecret) {
-        const { data: existingUser } = await getSupabaseAdmin()
-          .from('snaptrade_users')
-          .select('user_secret')
-          .eq('user_id', user_id)
-          .single()
-        userSecret = existingUser?.user_secret
-      } else {
-        await getSupabaseAdmin()
-          .from('snaptrade_users')
-          .upsert({ user_id, user_secret: userSecret })
-      }
-
-      if (!userSecret) return json({ error: 'Failed to get Snaptrade user secret' }, 500)
-
-      const linkTimestamp = Math.floor(Date.now() / 1000).toString()
-      const linkSignature = hmacSign(consumerKey, `${clientId}${linkTimestamp}`)
-
-      const linkResponse = await fetch(`${SNAPTRADE_BASE_URL}/snapTrade/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'clientId': clientId,
-          'timestamp': linkTimestamp,
-          'signature': linkSignature,
-        },
-        body: JSON.stringify({ userId: user_id, userSecret }),
-      })
-      const linkData = await linkResponse.json()
-      if (!linkResponse.ok) {
-        console.error('Snaptrade login failed:', linkData)
-        return json({ error: 'Failed to create Snaptrade link' }, 502)
-      }
-      return json({ redirect_uri: linkData.redirectURI })
-    }
-
-    if (action === 'snaptrade_exchange') {
-      if (!authorization_id) return json({ error: 'authorization_id is required' }, 400)
-
-      const { error: dbError } = await getSupabaseAdmin()
-        .from('linked_accounts')
-        .insert({
-          user_id: user_id ?? '00000000-0000-0000-0000-000000000000',
-          provider: 'snaptrade',
-          provider_item_id: authorization_id,
-          account_type: 'brokerage',
-          institution_name: metadata?.broker ?? 'Unknown Broker',
-          created_at: new Date().toISOString(),
-        })
-
-      if (dbError) {
-        console.error('DB insert failed:', dbError)
-        return json({ error: 'Failed to save Snaptrade account' }, 500)
-      }
       return json({ success: true })
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // COINBASE — Crypto (user-provided read-only API keys)
-    // ══════════════════════════════════════════════════════════════════════════
-
-    if (action === 'coinbase_connect') {
-      if (!api_key || !api_secret) {
-        return json({ error: 'api_key and api_secret are required' }, 400)
-      }
-
-      const timestamp = Math.floor(Date.now() / 1000).toString()
-      const message   = `${timestamp}GET/v2/accounts`
-      const signature = hmacSign(api_secret, message)
-
-      const verifyResponse = await fetch(`${COINBASE_BASE_URL}/accounts`, {
-        headers: {
-          'CB-ACCESS-KEY': api_key,
-          'CB-ACCESS-SIGN': signature,
-          'CB-ACCESS-TIMESTAMP': timestamp,
-          'CB-VERSION': '2016-02-18',
-        },
-      })
-      const verifyData = await verifyResponse.json()
-      if (!verifyResponse.ok) {
-        console.error('Coinbase verify failed:', verifyData)
-        return json({
-          error: verifyData.errors?.[0]?.message ?? 'Invalid Coinbase API keys'
-        }, 502)
-      }
-
-      const { error: dbError } = await getSupabaseAdmin()
-        .from('linked_accounts')
-        .insert({
-          user_id: user_id ?? '00000000-0000-0000-0000-000000000000',
-          provider: 'coinbase',
-          access_token: api_key,
-          refresh_token: api_secret,
-          account_type: 'crypto',
-          institution_name: 'Coinbase',
-          created_at: new Date().toISOString(),
-        })
-
-      if (dbError) {
-        console.error('DB insert failed:', dbError)
-        return json({ error: 'Failed to save Coinbase account' }, 500)
-      }
-      return json({ success: true })
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // BINANCE — Crypto (user-provided read-only API keys)
-    // ══════════════════════════════════════════════════════════════════════════
-
-    if (action === 'binance_connect') {
-      if (!api_key || !api_secret) {
-        return json({ error: 'api_key and api_secret are required' }, 400)
-      }
-
-      const timestamp   = Date.now().toString()
-      const queryString = `timestamp=${timestamp}`
-      const signature   = hmacSign(api_secret, queryString)
-
-      const verifyResponse = await fetch(
-        `${BINANCE_BASE_URL}/api/v3/account?${queryString}&signature=${signature}`,
-        { headers: { 'X-MBX-APIKEY': api_key } }
-      )
-      const verifyData = await verifyResponse.json()
-      if (!verifyResponse.ok) {
-        console.error('Binance verify failed:', verifyData)
-        return json({ error: verifyData.msg ?? 'Invalid Binance API keys' }, 502)
-      }
-
-      const { error: dbError } = await getSupabaseAdmin()
-        .from('linked_accounts')
-        .insert({
-          user_id: user_id ?? '00000000-0000-0000-0000-000000000000',
-          provider: 'binance',
-          access_token: api_key,
-          refresh_token: api_secret,
-          account_type: 'crypto',
-          institution_name: 'Binance',
-          created_at: new Date().toISOString(),
-        })
-
-      if (dbError) {
-        console.error('DB insert failed:', dbError)
-        return json({ error: 'Failed to save Binance account' }, 500)
-      }
-      return json({ success: true })
-    }
-
-    return json({ error: `Unknown action: "${action}"` }, 400)
+    return json({ error: `Unknown action: ${action}` }, 400)
 
   } catch (err) {
-    console.error('Unhandled function error:', err)
-    return json({ error: 'Internal server error' }, 500)
+    console.error('CRITICAL ERROR:', err.message)
+    return json({ error: 'Internal Server Error', message: err.message }, 500)
   }
 })

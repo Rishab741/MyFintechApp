@@ -44,15 +44,24 @@ export default function ConnectInvestment() {
   // --- 2. SNAPTRADE: For Binance, Coinbase, & Brokerages ---
   // This uses the "Portal" flow where users log in directly to the exchange
   const handleBrokerageConnect = async (brokerId?: string) => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
-        body: { 
-          action: 'snaptrade_create',
-          // Optional: specify 'binance' or 'coinbase' to skip the selection screen
-          broker: brokerId 
-        }
-      });
+  setLoading(true);
+  try {
+    // 1. Get the current user first
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      Alert.alert("Error", "You must be logged in to connect accounts.");
+      setLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
+      body: { 
+        action: 'snaptrade_create',
+        user_id: user.id, // PASS THE ACTUAL USER ID
+        broker: brokerId 
+      }
+    });
 
       setLoading(false);
 
