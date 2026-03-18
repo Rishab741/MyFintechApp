@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const PLAID_BASE_URL     = 'https://sandbox.plaid.com'
+const PLAID_BASE_URL = 'https://sandbox.plaid.com'
 const SNAPTRADE_BASE_URL = 'https://api.snaptrade.com/api/v1'
 
 const json = (body: unknown, status = 200) =>
@@ -16,35 +16,122 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 
-const getSupabaseAdmin = () =>
-  createClient(
-    Deno.env.get('SNAPTRADE_SUPABASE_URL') ?? Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SNAPTRADE_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  )
-
-// ✅ Use Web Crypto API (native Deno) — produces Base64, which SnapTrade expects
-async function hmacSign(secret: string, message: string): Promise<string> {
+async function snapTradeSign(
+  consumerKey: string,
+  path: string,
+  query: string,
+  content: Record<string, unknown> | null
+): Promise<string> {
+  const sigObject = { content, path, query }
+  const sigContent = JSON.stringify(sigObject)
   const encoder = new TextEncoder()
-  const keyData = encoder.encode(secret)
-  const messageData = encoder.encode(message)
-
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
+  const encodedKey = encodeURI(consumerKey)
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(encodedKey),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
   )
-
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData)
-  // SnapTrade requires Base64, NOT hex
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(sigContent))
   return btoa(String.fromCharCode(...new Uint8Array(signature)))
 }
 
-serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+async function snapTradeRequest(
+  clientId: string,
+  consumerKey: string,
+  method: string,
+  path: string,
+  body: Record<string, unknown> | null = null
+): Promise<{ status: number; data: any }> {
+  const timestamp = Math.floor(Date.now() / 1000).toString()
+  const query = `clientId=${clientId}&timestamp=${timestamp}`
+  const signature = await snapTradeSign(consumerKey, `/api/v1${path}`, query, body)
+
+  const res = await fetch(`${SNAPTRADE_BASE_URL}${path}?${query}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'clientId': clientId,
+      'timestamp': timestamp,
+      'Signature': signature,
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  })
+
+  const data = await res.json()
+  return { status: res.status, data }
+}
+
+// ✅ Login is special — userId and userSecret go in QUERY PARAMS not body
+async function snapTradeLogin(
+  clientId: string,
+  consumerKey: string,
+  userId: string,
+  userSecret: string
+): Promise<{ status: number; data: any }> {
+  const timestamp = Math.floor(Date.now() / 1000).toString()
+  const query = `clientId=${clientId}&timestamp=${timestamp}&userId=${userId}&userSecret=${userSecret}`
+  const path = '/api/v1/snapTrade/login'
+  const signature = await snapTradeSign(consumerKey, path, query, null)
+
+  console.log("Signing:", JSON.stringify({ content: null, path, query }))
+
+  const res = await fetch(`${SNAPTRADE_BASE_URL}/snapTrade/login?${query}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'clientId': clientId,
+      'timestamp': timestamp,
+      'Signature': signature,
+    },
+  })
+
+  const data = await res.json()
+  return { status: res.status, data }
+}
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+async function waitForDeletion(
+  clientId: string,
+  consumerKey: string,
+  userId: string,
+  maxAttempts = 10
+): Promise<void> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await delay(2000)
+    const { data: userList } = await snapTradeRequest(
+      clientId, consumerKey, 'GET', '/snapTrade/listUsers', null
+    )
+    console.log(`Polling deletion attempt ${i + 1}:`, JSON.stringify(userList))
+    if (Array.isArray(userList) && !userList.includes(userId)) {
+      console.log("User fully deleted ✅")
+      return
+    }
   }
+  console.log("Max deletion polling attempts reached, proceeding anyway...")
+}
+
+async function waitForRegistration(
+  clientId: string,
+  consumerKey: string,
+  userId: string,
+  maxAttempts = 10
+): Promise<void> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await delay(2000)
+    const { data: userList } = await snapTradeRequest(
+      clientId, consumerKey, 'GET', '/snapTrade/listUsers', null
+    )
+    console.log(`Polling registration attempt ${i + 1}:`, JSON.stringify(userList))
+    if (Array.isArray(userList) && userList.includes(userId)) {
+      console.log("User fully registered and active ✅")
+      return
+    }
+  }
+  console.log("Max registration polling attempts reached, proceeding anyway...")
+}
+
+serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
     const body = await req.json()
@@ -55,28 +142,17 @@ serve(async (req: Request) => {
     // ══════════════════════════════════════════════════════════════════════════
 
     if (action === 'snaptrade_create') {
-      console.log("--- STARTING SNAPTRADE_CREATE ---");
+      console.log("--- STARTING SNAPTRADE_CREATE ---")
+      console.log("App user_id:", user_id)
 
       const clientId = Deno.env.get('SNAPTRADE_CLIENT_ID')
       const consumerKey = Deno.env.get('SNAPTRADE_CONSUMER_KEY')
+      if (!clientId || !consumerKey) return json({ error: "Config missing" }, 500)
 
-      console.log("DEBUG clientId:", clientId)
-  console.log("DEBUG consumerKey length:", consumerKey?.length)
-  console.log("DEBUG consumerKey first5:", consumerKey?.substring(0, 5))
-  console.log("DEBUG consumerKey last5:", consumerKey?.substring(consumerKey.length - 5))
-
-      if (!clientId || !consumerKey) {
-        return json({ error: "Server configuration missing" }, 500)
-      }
-
-      const supabaseAdmin = getSupabaseAdmin()
-
-      // ✅ Fresh timestamp for EACH request to avoid clock-skew rejections
-      const getTimestampAndSig = async () => {
-        const timestamp = Math.floor(Date.now() / 1000).toString()
-        const signature = await hmacSign(consumerKey, timestamp)
-        return { timestamp, signature }
-      }
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      )
 
       // 1. Check DB for existing user secret
       const { data: existingUser } = await supabaseAdmin
@@ -87,62 +163,112 @@ serve(async (req: Request) => {
 
       let userSecret = existingUser?.user_secret
 
-      // 2. Register if not found
+      // 2. Register if not found in DB
       if (!userSecret) {
-        console.log("Registering new SnapTrade user...")
-        const { timestamp, signature } = await getTimestampAndSig()
+        console.log("No secret in DB. Attempting registration...")
 
-        const registerResponse = await fetch(
-          `${SNAPTRADE_BASE_URL}/snapTrade/registerUser?clientId=${clientId}&timestamp=${timestamp}`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'clientId': clientId,
-              'timestamp': timestamp,
-              'signature': signature,
-            },
-            body: JSON.stringify({ userId: user_id }),
-          }
+        const { status: regStatus, data: regData } = await snapTradeRequest(
+          clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId: user_id }
         )
+        console.log("Register response:", JSON.stringify(regData))
 
-        const registerData = await registerResponse.json()
-        console.log("Register response:", JSON.stringify(registerData))
+        if (regStatus === 200 && regData.userSecret) {
+          userSecret = regData.userSecret
+          console.log("Waiting for registration to fully activate...")
+          await waitForRegistration(clientId, consumerKey, user_id)
 
-        if (registerResponse.ok && registerData.userSecret) {
-          userSecret = registerData.userSecret
-          await supabaseAdmin.from('snaptrade_users').upsert({
-            user_id,
-            user_secret: userSecret,
-          })
+        } else if (regData.code === '1012' || regData.code === 1012) {
+          console.log("1012 hit — listing all SnapTrade users to clean up...")
+          const { data: userList } = await snapTradeRequest(
+            clientId, consumerKey, 'GET', '/snapTrade/listUsers', null
+          )
+          console.log("Existing SnapTrade users:", JSON.stringify(userList))
+
+          if (Array.isArray(userList)) {
+            for (const existingUserId of userList) {
+              console.log(`Deleting SnapTrade user: ${existingUserId}`)
+              const { status: delStatus, data: delData } = await snapTradeRequest(
+                clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', { userId: existingUserId }
+              )
+              console.log(`Delete ${existingUserId}:`, delStatus, JSON.stringify(delData))
+              await waitForDeletion(clientId, consumerKey, existingUserId)
+            }
+          }
+
+          console.log("Re-registering with correct userId...")
+          const { status: retryStatus, data: retryData } = await snapTradeRequest(
+            clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId: user_id }
+          )
+          console.log("Re-register response:", JSON.stringify(retryData))
+
+          if (retryStatus === 200 && retryData.userSecret) {
+            userSecret = retryData.userSecret
+            console.log("Waiting for registration to fully activate...")
+            await waitForRegistration(clientId, consumerKey, user_id)
+          } else {
+            return json({ error: "Re-registration failed after 1012", details: retryData }, 401)
+          }
+
+        } else if (regData.code === '1010' || regData.code === 1010) {
+          console.log("1010 hit — userId exists, cycling to get fresh secret...")
+          const { status: delStatus, data: delData } = await snapTradeRequest(
+            clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', { userId: user_id }
+          )
+          console.log("Delete response:", delStatus, JSON.stringify(delData))
+          await waitForDeletion(clientId, consumerKey, user_id)
+
+          console.log("Re-registering...")
+          const { status: retryStatus, data: retryData } = await snapTradeRequest(
+            clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId: user_id }
+          )
+          console.log("Re-register response:", JSON.stringify(retryData))
+
+          if (retryStatus === 200 && retryData.userSecret) {
+            userSecret = retryData.userSecret
+            console.log("Waiting for registration to fully activate...")
+            await waitForRegistration(clientId, consumerKey, user_id)
+          } else {
+            return json({ error: "Re-registration failed after 1010", details: retryData }, 401)
+          }
+
         } else {
-          return json({ error: "SnapTrade registration failed", details: registerData }, 401)
+          return json({ error: "Registration failed", details: regData }, 401)
         }
+
+        await supabaseAdmin.from('snaptrade_users').upsert({
+          user_id,
+          user_secret: userSecret,
+        })
+        console.log("userSecret saved to DB ✅")
       }
 
-      // 3. Generate Login Portal Link — ✅ fresh timestamp here too
-      console.log("Generating SnapTrade Login URI...")
-      const { timestamp: loginTs, signature: loginSig } = await getTimestampAndSig()
-
-      const loginResponse = await fetch(
-        `${SNAPTRADE_BASE_URL}/snapTrade/login?clientId=${clientId}&timestamp=${loginTs}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'clientId': clientId,
-            'timestamp': loginTs,
-            'signature': loginSig,
-          },
-          body: JSON.stringify({ userId: user_id, userSecret }),
-        }
+      // 3. Generate Login Portal Link
+      console.log("Generating Login Link...")
+      const { status: loginStatus, data: loginData } = await snapTradeLogin(
+        clientId, consumerKey, user_id, userSecret
       )
-
-      const loginData = await loginResponse.json()
       console.log("Login response:", JSON.stringify(loginData))
 
-      if (!loginResponse.ok) {
-        return json({ error: "Failed to generate redirect URI", details: loginData }, 401)
+      if (loginData.code === '1083' || loginData.code === 1083) {
+        console.log("1083 on login — waiting 4s and retrying once...")
+        await delay(4000)
+
+        const { status: retryLoginStatus, data: retryLoginData } = await snapTradeLogin(
+          clientId, consumerKey, user_id, userSecret
+        )
+        console.log("Retry login response:", JSON.stringify(retryLoginData))
+
+        if (retryLoginStatus === 200 && retryLoginData.redirectURI) {
+          return json({ redirect_uri: retryLoginData.redirectURI })
+        }
+
+        console.log("Retry login also failed, clearing DB for next attempt...")
+        await supabaseAdmin.from('snaptrade_users').delete().eq('user_id', user_id)
+        return json({ error: "Session expired, please try connecting again" }, 401)
+      }
+
+      if (loginStatus !== 200) {
+        return json({ error: "Login failed", details: loginData }, 401)
       }
 
       return json({ redirect_uri: loginData.redirectURI })
@@ -186,7 +312,10 @@ serve(async (req: Request) => {
       const plaidData = await plaidResponse.json()
       if (!plaidResponse.ok) return json({ error: plaidData.error_message }, 502)
 
-      await getSupabaseAdmin().from('linked_accounts').insert({
+      await createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      ).from('linked_accounts').insert({
         user_id,
         provider: 'plaid',
         access_token: plaidData.access_token,
