@@ -62,7 +62,6 @@ async function snapTradeRequest(
   return { status: res.status, data }
 }
 
-// ── UNTOUCHED from original working code ──────────────────────────────────────
 async function snapTradeLogin(
   clientId: string,
   consumerKey: string,
@@ -70,7 +69,13 @@ async function snapTradeLogin(
   userSecret: string
 ): Promise<{ status: number; data: any }> {
   const timestamp = Math.floor(Date.now() / 1000).toString()
-  const query = `clientId=${clientId}&timestamp=${timestamp}&userId=${userId}&userSecret=${userSecret}`
+
+  // customRedirect and immediateRedirect go in the query string alongside the
+  // auth params — same string that gets signed with null content.
+  // This is safe because the original signing worked with null content,
+  // and adding params to the query doesn't change the content field.
+  const redirectUri = encodeURIComponent('vestara://snaptrade-callback')
+  const query = `clientId=${clientId}&timestamp=${timestamp}&userId=${userId}&userSecret=${userSecret}&customRedirect=${redirectUri}&immediateRedirect=true`
   const path = '/api/v1/snapTrade/login'
   const signature = await snapTradeSign(consumerKey, path, query, null)
 
