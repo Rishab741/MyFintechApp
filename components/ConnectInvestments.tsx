@@ -27,7 +27,7 @@ function parseQueryParams(url: string): Record<string, string> {
   return result;
 }
 
-export default function ConnectInvestment() {
+export default function ConnectInvestment({ onConnectionChange }: { onConnectionChange?: (connected: boolean) => void } = {}) {
   const [loading, setLoading] = useState(false);
   const [brokerageConnected, setBrokerageConnected] = useState(false);
   const [checkingConnection, setCheckingConnection] = useState(true);
@@ -118,6 +118,7 @@ export default function ConnectInvestment() {
 
       console.log('Connection saved ✅ account_id:', data.account_id);
       setBrokerageConnected(true);
+      onConnectionChange?.(true);
       Alert.alert('Connected!', 'Your Binance account has been linked successfully.');
     } catch (err: any) {
       setLoading(false);
