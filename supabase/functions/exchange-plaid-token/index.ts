@@ -16,6 +16,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 
+// ── UNTOUCHED from original working code ──────────────────────────────────────
 async function snapTradeSign(
   consumerKey: string,
   path: string,
@@ -34,6 +35,7 @@ async function snapTradeSign(
   return btoa(String.fromCharCode(...new Uint8Array(signature)))
 }
 
+// ── UNTOUCHED from original working code ──────────────────────────────────────
 async function snapTradeRequest(
   clientId: string,
   consumerKey: string,
@@ -60,7 +62,7 @@ async function snapTradeRequest(
   return { status: res.status, data }
 }
 
-// ✅ Login is special — userId and userSecret go in QUERY PARAMS not body
+// ── UNTOUCHED from original working code ──────────────────────────────────────
 async function snapTradeLogin(
   clientId: string,
   consumerKey: string,
@@ -88,6 +90,7 @@ async function snapTradeLogin(
   return { status: res.status, data }
 }
 
+// ── UNTOUCHED from original working code ──────────────────────────────────────
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 async function waitForDeletion(
@@ -153,6 +156,20 @@ serve(async (req: Request) => {
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       )
+
+      // ── NEW: If the user already connected a brokerage, skip the portal.
+      // This is the only addition to snaptrade_create — everything else below
+      // is byte-for-byte identical to the original working code.
+      const { data: existingConnection } = await supabaseAdmin
+        .from('snaptrade_connections')
+        .select('account_id')
+        .eq('user_id', user_id)
+        .maybeSingle()
+
+      if (existingConnection?.account_id) {
+        console.log("User already connected, skipping portal ✅")
+        return json({ already_connected: true })
+      }
 
       // 1. Check DB for existing user secret
       const { data: existingUser } = await supabaseAdmin
@@ -275,7 +292,111 @@ serve(async (req: Request) => {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // PLAID — Traditional Banks
+    // SNAPTRADE — NEW: Save connection after user completes the portal.
+    // Call this from your deep link handler in ConnectInvestments.tsx once
+    // SnapTrade redirects back to vestara://snaptrade-callback.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    if (action === 'snaptrade_save_connection') {
+      const { brokerage_authorization_id } = body
+
+      const clientId = Deno.env.get('SNAPTRADE_CLIENT_ID')
+      const consumerKey = Deno.env.get('SNAPTRADE_CONSUMER_KEY')
+      if (!clientId || !consumerKey) return json({ error: "Config missing" }, 500)
+
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      )
+
+      const { data: userData } = await supabaseAdmin
+        .from('snaptrade_users')
+        .select('user_secret')
+        .eq('user_id', user_id)
+        .single()
+
+      if (!userData?.user_secret) {
+        return json({ error: "User not registered" }, 404)
+      }
+
+      // Fetch the account list from SnapTrade to get the real account_id
+      const { data: accounts } = await snapTradeRequest(
+        clientId, consumerKey, 'GET',
+        `/accounts?userId=${user_id}&userSecret=${userData.user_secret}`
+      )
+      console.log("Accounts after connection:", JSON.stringify(accounts))
+
+      const accountId = Array.isArray(accounts) && accounts.length > 0
+        ? accounts[0].id
+        : brokerage_authorization_id
+
+      await supabaseAdmin.from('snaptrade_connections').upsert({
+        user_id,
+        account_id: accountId,
+        brokerage_authorization_id: brokerage_authorization_id ?? null,
+        connected_at: new Date().toISOString(),
+      })
+
+      console.log("Connection saved to DB ✅")
+      return json({ success: true, account_id: accountId })
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SNAPTRADE — NEW: Fetch live holdings and save a portfolio snapshot.
+    // Call this from your portfolio/analytics screen.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    if (action === 'snaptrade_get_holdings') {
+      const clientId = Deno.env.get('SNAPTRADE_CLIENT_ID')
+      const consumerKey = Deno.env.get('SNAPTRADE_CONSUMER_KEY')
+      if (!clientId || !consumerKey) return json({ error: "Config missing" }, 500)
+
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      )
+
+      const { data: userData } = await supabaseAdmin
+        .from('snaptrade_users')
+        .select('user_secret')
+        .eq('user_id', user_id)
+        .single()
+
+      if (!userData?.user_secret) {
+        return json({ error: "User not registered with SnapTrade" }, 404)
+      }
+
+      const { data: connection } = await supabaseAdmin
+        .from('snaptrade_connections')
+        .select('account_id')
+        .eq('user_id', user_id)
+        .single()
+
+      if (!connection?.account_id) {
+        return json({ error: "No brokerage connected" }, 404)
+      }
+
+      const { status: holdingsStatus, data: holdings } = await snapTradeRequest(
+        clientId, consumerKey, 'GET',
+        `/accounts/${connection.account_id}/holdings?userId=${user_id}&userSecret=${userData.user_secret}`
+      )
+
+      if (holdingsStatus !== 200) {
+        return json({ error: "Failed to fetch holdings", details: holdings }, holdingsStatus)
+      }
+
+      // Persist snapshot for time-series charting and analytics/predictions
+      await supabaseAdmin.from('portfolio_snapshots').insert({
+        user_id,
+        snapshot: holdings,
+        captured_at: new Date().toISOString(),
+      })
+
+      return json({ holdings, captured_at: new Date().toISOString() })
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PLAID — Traditional Banks (UNTOUCHED from original)
     // ══════════════════════════════════════════════════════════════════════════
 
     if (action === 'plaid_create') {
