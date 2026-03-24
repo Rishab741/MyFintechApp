@@ -1,77 +1,146 @@
-/**
- * app/_layout.tsx  —  Root layout & auth gate
- *
- * YOUR ROUTE STRUCTURE:
- *   app/(auth)/login.tsx   ← sign in / sign up screen  (already exists ✓)
- *   app/(main)/home.tsx    ← main app with tabs         (already exists ✓)
- *
- * THE BLANK SCREEN BUG:
- *   After signInWithPassword() succeeds, Supabase updates its internal
- *   session but nothing told Expo Router to navigate anywhere.
- *   Result: blank screen until you manually tapped away.
- *
- * THE FIX:
- *   onAuthStateChange fires on every auth event (sign-in, sign-out, refresh).
- *   We store the session in Zustand there, and the routing useEffect
- *   immediately reacts and pushes the correct route.
- *
- * ABOUT THE auth.tsx I GENERATED EARLIER:
- *   → DELETE IT. It was wrong for your structure.
- *   → Your auth screen lives at app/(auth)/login.tsx. Keep it exactly there.
- *   → No changes needed to your (auth)/login.tsx or (main)/home.tsx files.
- */
-
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { AppState, AppStateStatus, ActivityIndicator, Linking, View } from 'react-native';
 import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/store/useAuthStore';
+import { useConnectionStore } from '../src/store/useConnectionStore';
 
 export default function RootLayout() {
   const { session, setSession, initialized, setInitialized } = useAuthStore();
+  const { setConnecting, setBrokerageConnected } = useConnectionStore();
   const segments = useSegments();
   const router = useRouter();
+  const appState = useRef<AppStateStatus>(AppState.currentState);
 
   // ── 1. Hydrate session on cold start + listen for all future changes ────────
   useEffect(() => {
-    // Check whatever session already exists (e.g. from a previous app open)
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setInitialized(true);
     });
 
-    // *** THIS IS THE KEY FIX ***
-    // onAuthStateChange fires when the user signs in, signs out, or the
-    // JWT refreshes. Calling setSession here triggers the routing effect
-    // below — so navigation happens instantly after login with zero
-    // blank-screen delay.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
-        setInitialized(true); // also covers the edge case where listener fires before getSession
+        setInitialized(true);
       }
     );
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── 2. Route guard — runs whenever session or route changes ─────────────────
+  // ── 2. SnapTrade callback handler (always active at root level) ──────────────
+  //
+  // Two triggers for saving the connection:
+  //   A) Deep link  — SnapTrade redirects to myfintechapp://snaptrade-callback
+  //   B) AppState   — user manually swipes back from the browser (fallback)
+  //
+  // Both call the same saveSnapTradeConnection helper.
+
+  const saveSnapTradeConnection = async (authorizationId: string | null) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Skip if already saved
+    const { data: existing } = await supabase
+      .from('snaptrade_connections')
+      .select('account_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (existing?.account_id) {
+      setBrokerageConnected(true);
+      setConnecting(false);
+      return;
+    }
+
+    // Save the connection — the edge function fetches the real account_id from SnapTrade
+    const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
+      body: {
+        action: 'snaptrade_save_connection',
+        user_id: user.id,
+        brokerage_authorization_id: authorizationId,
+      },
+    });
+
+    if (error || !data?.success) {
+      console.log('saveSnapTradeConnection failed:', error, data);
+      setConnecting(false);
+      return;
+    }
+
+    console.log('Connection saved at root level ✅ account_id:', data.account_id);
+    setBrokerageConnected(true);
+    setConnecting(false);
+
+    // Fetch holdings in background so Portfolio has data ready immediately
+    supabase.functions.invoke('exchange-plaid-token', {
+      body: { action: 'snaptrade_get_holdings', user_id: user.id },
+    }).then(({ error: hErr }) => {
+      if (hErr) console.log('Initial holdings fetch error:', hErr);
+      else console.log('Initial holdings fetched ✅');
+    });
+  };
+
+  // Trigger A: deep link (myfintechapp://snaptrade-callback)
   useEffect(() => {
-    if (!initialized) return; // wait until we know the real auth state
+    const handleUrl = ({ url }: { url: string }) => {
+      if (!url.includes('snaptrade-callback')) return;
+      console.log('Deep link received at root:', url);
+      const questionMark = url.indexOf('?');
+      const params: Record<string, string> = {};
+      if (questionMark !== -1) {
+        url.slice(questionMark + 1).split('&').forEach(pair => {
+          const [k, v] = pair.split('=');
+          if (k) params[decodeURIComponent(k)] = decodeURIComponent(v ?? '');
+        });
+      }
+      const authId =
+        params['authorizationId'] ??
+        params['brokerage_authorization'] ??
+        params['brokerageAuthorizationId'] ??
+        null;
+      saveSnapTradeConnection(authId);
+    };
+
+    // Cold-start: app was fully closed and opened via deep link
+    Linking.getInitialURL().then(url => { if (url) handleUrl({ url }); });
+
+    // Warm: app already running, deep link fires
+    const sub = Linking.addEventListener('url', handleUrl);
+    return () => sub.remove();
+  }, []);
+
+  // Trigger B: AppState foreground (user swiped back from browser without deep link)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextState === 'active' &&
+        useConnectionStore.getState().isConnecting
+      ) {
+        console.log('App foregrounded during connect flow — attempting save...');
+        saveSnapTradeConnection(null);
+      }
+      appState.current = nextState;
+    });
+    return () => sub.remove();
+  }, []);
+
+  // ── 3. Route guard ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!initialized) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!session && !inAuthGroup) {
-      // Not logged in → send to login
       router.replace('/(auth)/login');
     } else if (session && inAuthGroup) {
-      // Logged in but still on auth screen → go to app
       router.replace('/(tabs)');
     }
-    // session && in (main) → do nothing, already in the right place
   }, [session, initialized, segments]);
 
-  // ── 3. Dark splash while session resolves (prevents wrong-screen flash) ─────
+  // ── 4. Splash while session resolves ────────────────────────────────────────
   if (!initialized) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0A0D14', alignItems: 'center', justifyContent: 'center' }}>

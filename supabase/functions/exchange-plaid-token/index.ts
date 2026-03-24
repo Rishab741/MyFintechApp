@@ -41,10 +41,12 @@ async function snapTradeRequest(
   consumerKey: string,
   method: string,
   path: string,
-  body: Record<string, unknown> | null = null
+  body: Record<string, unknown> | null = null,
+  extraQuery = ''
 ): Promise<{ status: number; data: any }> {
   const timestamp = Math.floor(Date.now() / 1000).toString()
-  const query = `clientId=${clientId}&timestamp=${timestamp}`
+  const baseQuery = `clientId=${clientId}&timestamp=${timestamp}`
+  const query = extraQuery ? `${baseQuery}&${extraQuery}` : baseQuery
   const signature = await snapTradeSign(consumerKey, `/api/v1${path}`, query, body)
 
   const res = await fetch(`${SNAPTRADE_BASE_URL}${path}?${query}`, {
@@ -74,7 +76,7 @@ async function snapTradeLogin(
   // auth params — same string that gets signed with null content.
   // This is safe because the original signing worked with null content,
   // and adding params to the query doesn't change the content field.
-  const redirectUri = encodeURIComponent('vestara://snaptrade-callback')
+  const redirectUri = encodeURIComponent('myfintechapp://snaptrade-callback')
   const query = `clientId=${clientId}&timestamp=${timestamp}&userId=${userId}&userSecret=${userSecret}&customRedirect=${redirectUri}&immediateRedirect=true`
   const path = '/api/v1/snapTrade/login'
   const signature = await snapTradeSign(consumerKey, path, query, null)
@@ -326,8 +328,8 @@ serve(async (req: Request) => {
 
       // Fetch the account list from SnapTrade to get the real account_id
       const { data: accounts } = await snapTradeRequest(
-        clientId, consumerKey, 'GET',
-        `/accounts?userId=${user_id}&userSecret=${userData.user_secret}`
+        clientId, consumerKey, 'GET', '/accounts', null,
+        `userId=${user_id}&userSecret=${userData.user_secret}`
       )
       console.log("Accounts after connection:", JSON.stringify(accounts))
 
@@ -383,7 +385,8 @@ serve(async (req: Request) => {
 
       const { status: holdingsStatus, data: holdings } = await snapTradeRequest(
         clientId, consumerKey, 'GET',
-        `/accounts/${connection.account_id}/holdings?userId=${user_id}&userSecret=${userData.user_secret}`
+        `/accounts/${connection.account_id}/holdings`, null,
+        `userId=${user_id}&userSecret=${userData.user_secret}`
       )
 
       if (holdingsStatus !== 200) {
