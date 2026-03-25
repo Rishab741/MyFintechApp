@@ -1,5 +1,10 @@
 import { supabase } from '@/src/lib/supabase';
 
+// ── Auto-trigger debounce state ───────────────────────────────────────────────
+// Keyed by userId. Prevents hammering the edge function more than once per window.
+const _lastTriggered: Record<string, number> = {};
+const _INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours between auto-generates
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface DatasetSummary {
@@ -98,4 +103,60 @@ export async function getDatasetInfo(userId: string): Promise<DatasetInfo> {
     if (error) throw new Error(`getDatasetInfo failed: ${error.message}`);
     if (data?.error) throw new Error(data.error);
     return data as DatasetInfo;
+}
+
+// ── Auto-trigger ──────────────────────────────────────────────────────────────
+
+/**
+ * Fire-and-forget dataset generation with a 6-hour in-memory debounce.
+ * Safe to call after every holdings fetch — it will silently skip if the
+ * dataset was already regenerated within the debounce window.
+ *
+ * The DB trigger (migration 20260325000002) also fires on every snapshot
+ * INSERT, so this call is a safety-net for when the DB trigger is not yet
+ * configured or the user opens the app between cron runs.
+ */
+export function autoTriggerDataset(userId: string): void {
+    const now  = Date.now();
+    const last = _lastTriggered[userId] ?? 0;
+
+    if (now - last < _INTERVAL_MS) return; // too recent — skip
+
+    // Mark immediately so concurrent calls in the same tick are deduplicated
+    _lastTriggered[userId] = now;
+
+    generateDataset(userId)
+        .then(summary => {
+            console.log(
+                `[ML] Dataset generated: ${summary.portfolio_feature_rows} portfolio rows, ` +
+                `${summary.position_feature_rows} position rows`
+            );
+        })
+        .catch(err => {
+            // Reset timestamp so the next holdings fetch will retry
+            delete _lastTriggered[userId];
+            console.warn('[ML] autoTriggerDataset failed (will retry next cycle):', err.message);
+        });
+}
+
+/**
+ * Starts a periodic background interval that regenerates the dataset every
+ * `intervalMs` milliseconds while the app is in the foreground.
+ * Returns a cleanup function — call it in a useEffect return.
+ *
+ * Usage:
+ *   useEffect(() => schedulePeriodicRefresh(userId, 6 * 3600_000), [userId]);
+ */
+export function schedulePeriodicRefresh(
+    userId: string,
+    intervalMs = _INTERVAL_MS
+): () => void {
+    // Trigger once immediately (respects debounce)
+    autoTriggerDataset(userId);
+
+    const handle = setInterval(() => {
+        autoTriggerDataset(userId);
+    }, intervalMs);
+
+    return () => clearInterval(handle);
 }

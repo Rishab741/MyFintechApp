@@ -1,5 +1,6 @@
 import { supabase } from '@/src/lib/supabase';
 import { useConnectionStore } from '@/src/store/useConnectionStore';
+import { autoTriggerDataset } from '@/src/services/mlPipeline';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated } from 'react-native';
 import { SP500, getUnits, getTicker, getCurrency, getCategory, filterByPeriod, normalize100, computeRiskMetrics } from '../helpers';
@@ -94,7 +95,12 @@ export function usePortfolioData(): PortfolioDataResult {
             const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
                 body: { action: 'snaptrade_get_holdings', user_id: userId },
             });
-            if (!error && data?.holdings) { setHoldings(data.holdings); setLastUpdated(new Date()); }
+            if (!error && data?.holdings) {
+                setHoldings(data.holdings);
+                setLastUpdated(new Date());
+                // Fire-and-forget: regenerate ML dataset (debounced to once per 6 h)
+                autoTriggerDataset(userId);
+            }
         } catch {}
     };
 
