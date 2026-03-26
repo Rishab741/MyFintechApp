@@ -7,12 +7,11 @@ import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
   color: string;
 }) {
-  return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
+  return <FontAwesome size={22} style={{ marginBottom: -3 }} {...props} />;
 }
 
 export default function TabLayout() {
@@ -21,23 +20,36 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
+        tabBarActiveTintColor: '#C9A84C',
+        tabBarInactiveTintColor: '#4A5468',
+        tabBarStyle: {
+          backgroundColor: '#080B12',
+          borderTopColor: 'rgba(255,255,255,0.06)',
+          borderTopWidth: 1,
+        },
+        tabBarLabelStyle: {
+          fontFamily: 'Courier New',
+          fontSize: 10,
+          letterSpacing: 0.5,
+        },
         headerShown: useClientOnlyValue(false, true),
-      }}>
+        headerStyle: { backgroundColor: '#080B12' },
+        headerTintColor: '#EEE8DC',
+        headerTitleStyle: { fontFamily: 'Courier New', letterSpacing: 1 },
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Tab One',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
           headerRight: () => (
             <Link href="/modal" asChild>
               <Pressable>
                 {({ pressed }) => (
                   <FontAwesome
                     name="info-circle"
-                    size={25}
+                    size={22}
                     color={Colors[colorScheme ?? 'light'].text}
                     style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
                   />
@@ -48,10 +60,26 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="Market"
+        options={{
+          title: 'Markets',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <TabBarIcon name="line-chart" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="Portfolio"
+        options={{
+          title: 'Portfolio',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <TabBarIcon name="pie-chart" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="two"
         options={{
-          title: 'Tab Two',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+          title: 'Profile Setup',
+          tabBarIcon: ({ color }) => <TabBarIcon name="sliders" color={color} />,
         }}
       />
     </Tabs>

@@ -1,6 +1,7 @@
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus, ActivityIndicator, Linking, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useConnectionStore } from '../src/store/useConnectionStore';
@@ -143,11 +144,17 @@ export default function RootLayout() {
   // ── 4. Splash while session resolves ────────────────────────────────────────
   if (!initialized) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0A0D14', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#C9A84C" size="large" />
-      </View>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: '#0A0D14', alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color="#C9A84C" size="large" />
+        </View>
+      </GestureHandlerRootView>
     );
   }
 
-  return <Slot />;
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Slot />
+    </GestureHandlerRootView>
+  );
 }
