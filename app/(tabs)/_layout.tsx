@@ -76,6 +76,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="Insights"
+        options={{
+          title: 'Insights',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <TabBarIcon name="bar-chart" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="two"
         options={{
           title: 'Profile Setup',

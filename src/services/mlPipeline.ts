@@ -105,6 +105,64 @@ export async function getDatasetInfo(userId: string): Promise<DatasetInfo> {
     return data as DatasetInfo;
 }
 
+// ── Types for insights ────────────────────────────────────────────────────────
+
+export type InsightSeverity = 'critical' | 'warning' | 'positive' | 'neutral';
+export type InsightCategory = 'risk' | 'momentum' | 'allocation' | 'benchmark' | 'strategy';
+
+export interface InsightSignal {
+    id:       string;
+    category: InsightCategory;
+    severity: InsightSeverity;
+    title:    string;
+    body:     string;
+    action:   string;
+    value?:   string;
+}
+
+export interface PortfolioInsights {
+    health_score:   number;
+    health_label:   'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Critical';
+    health_tagline: string;
+    signals:        InsightSignal[];
+    summary: {
+        sharpe:            number;
+        alpha:             number;
+        win_rate:          number;
+        ann_vol:           number;
+        var95:             number;
+        max_drawdown:      number;
+        total_return:      number;
+        momentum_5:        number;
+        cash_pct:          number;
+        positions_count:   number;
+        volatility_regime: string;
+        benchmark_return:  number;
+        cumulative_return: number;
+    };
+    top_positions: Array<{
+        ticker:    string;
+        alloc_pct: number;
+        pnl_pct:   number;
+        value:     number;
+    }>;
+    generated_at: string;
+}
+
+/**
+ * Fetches the rule-based expert-system insights for a user.
+ * Reads the latest ml_datasets row and applies financial thresholds
+ * to produce a portfolio health score (0-100) and labelled signals.
+ */
+export async function getInsights(userId: string): Promise<PortfolioInsights> {
+    const { data, error } = await supabase.functions.invoke('ml-pipeline', {
+        body: { action: 'get_insights', user_id: userId },
+    });
+    if (error) throw new Error(`getInsights failed: ${error.message}`);
+    if (data?.error) throw new Error(data.error);
+    return data as PortfolioInsights;
+}
+
 // ── Auto-trigger ──────────────────────────────────────────────────────────────
 
 /**
