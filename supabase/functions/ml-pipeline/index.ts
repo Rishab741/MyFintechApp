@@ -366,6 +366,367 @@ serve(async (req: Request) => {
       })
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // get_insights — rule-based expert system over the latest ml_datasets row
+    // Returns: health score (0-100), labelled signals, summary stats, top positions
+    // ══════════════════════════════════════════════════════════════════════════
+    if (action === 'get_insights') {
+      const { data, error: dsErr } = await supabaseAdmin
+        .from('ml_datasets')
+        .select('feature_rows, position_rows, summary, generated_at')
+        .eq('user_id', user_id)
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (dsErr || !data) return json({ error: 'No dataset found. Generate a dataset first via generate_dataset.' }, 404)
+
+      const featureRows  = (data.feature_rows  as any[]) ?? []
+      const positionRows = (data.position_rows as any[]) ?? []
+      const summary      = data.summary as any
+
+      if (featureRows.length === 0) return json({ error: 'Dataset has no feature rows.' }, 422)
+
+      const latestRow = featureRows[featureRows.length - 1]
+
+      // ── Destructure summary risk stats ───────────────────────────────────
+      const { sharpe = 0, ann_vol = 0, var95 = 0, win_rate = 0 } = summary?.risk ?? {}
+      const max_drawdown      = summary?.max_drawdown      ?? 0
+      const momentum_5        = latestRow.momentum_5        ?? 0
+      const cash_pct          = latestRow.cash_pct          ?? 0
+      const positions_count   = latestRow.positions_count   ?? 0
+      const rolling_vol_14    = latestRow.rolling_vol_14    ?? 0
+      const alpha             = latestRow.alpha             ?? 0
+      const cumulative_return = latestRow.cumulative_return ?? 0
+      const benchmark_return  = latestRow.benchmark_return  ?? 0
+      const volatility_regime = latestRow.volatility_regime ?? 'medium'
+
+      // ── Health Score (0-100, base 50) ────────────────────────────────────
+      let score = 50
+
+      if      (sharpe >  1.5) score += 20
+      else if (sharpe >  1.0) score += 12
+      else if (sharpe >  0.5) score +=  6
+      else if (sharpe < -0.5) score -= 30
+      else if (sharpe <  0.0) score -= 20
+
+      if      (alpha >  3) score += 15
+      else if (alpha >  1) score +=  8
+      else if (alpha >  0) score +=  3
+      else if (alpha < -3) score -= 20
+      else if (alpha < -1) score -= 10
+
+      if      (max_drawdown > -5)  score += 10
+      else if (max_drawdown > -10) score +=  5
+      else if (max_drawdown > -20) score +=  0
+      else if (max_drawdown > -30) score -= 10
+      else                          score -= 20
+
+      if      (win_rate > 60) score += 10
+      else if (win_rate > 50) score +=  5
+      else if (win_rate < 40) score -= 10
+
+      if      (var95 > -1) score +=  5
+      else if (var95 > -2) score +=  3
+      else if (var95 < -5) score -= 10
+      else if (var95 < -3) score -=  5
+
+      if      (momentum_5 >  3) score +=  5
+      else if (momentum_5 >  0) score +=  2
+      else if (momentum_5 < -5) score -=  5
+      else if (momentum_5 <  0) score -=  2
+
+      if (cash_pct >= 5 && cash_pct <= 25) score += 5
+      else if (cash_pct > 40)               score -= 3
+      else if (cash_pct < 2 && positions_count > 0) score -= 3
+
+      if      (ann_vol < 15) score +=  5
+      else if (ann_vol > 40) score -= 10
+      else if (ann_vol > 30) score -=  5
+
+      const healthScore   = Math.max(0, Math.min(100, Math.round(score)))
+      const healthLabel   = healthScore >= 80 ? 'Excellent' : healthScore >= 65 ? 'Good' : healthScore >= 50 ? 'Fair' : healthScore >= 35 ? 'Poor' : 'Critical'
+      const healthTagline = healthScore >= 80 ? 'Portfolio operating at peak efficiency' : healthScore >= 65 ? 'Strong risk-adjusted performance' : healthScore >= 50 ? 'Room for strategic improvement' : healthScore >= 35 ? 'Risk management attention required' : 'Immediate portfolio review recommended'
+
+      // ── Signal engine ─────────────────────────────────────────────────────
+      const signals: any[] = []
+      const cumulAlpha = cumulative_return - benchmark_return
+
+      // RISK: Annualised volatility
+      if (ann_vol > 30) {
+        signals.push({
+          id: 'risk_high_vol', category: 'risk',
+          severity: ann_vol > 40 ? 'critical' : 'warning',
+          title: 'High Annualised Volatility',
+          body: `Annualised volatility of ${ann_vol.toFixed(1)}% is ${ann_vol > 40 ? 'critically ' : ''}above the typical 20% threshold, amplifying both gains and drawdowns.`,
+          action: 'Review high-beta positions. Add defensive allocations or reduce sizing on the most volatile holdings.',
+          value: `${ann_vol.toFixed(1)}% Ann. Vol`,
+        })
+      } else if (ann_vol < 8 && positions_count > 0) {
+        signals.push({
+          id: 'risk_low_vol', category: 'risk', severity: 'positive',
+          title: 'Low Portfolio Volatility',
+          body: `Annualised volatility of ${ann_vol.toFixed(1)}% reflects a stable, well-managed portfolio with excellent risk containment.`,
+          action: 'Maintain current sizing. Monitor for market regime shifts that may require re-calibration.',
+          value: `${ann_vol.toFixed(1)}% Ann. Vol`,
+        })
+      }
+
+      // RISK: Maximum drawdown
+      if (max_drawdown < -25) {
+        signals.push({
+          id: 'risk_drawdown', category: 'risk', severity: 'critical',
+          title: 'Significant Peak Drawdown',
+          body: `Maximum drawdown of ${max_drawdown.toFixed(1)}% represents a severe peak-to-trough decline. Recovery requires outsized future gains (e.g., a 33% loss needs a 50% gain to recover).`,
+          action: 'Reassess position sizing and risk per trade. Implement stop-loss levels on large positions.',
+          value: `${max_drawdown.toFixed(1)}% Max DD`,
+        })
+      } else if (max_drawdown < -12) {
+        signals.push({
+          id: 'risk_drawdown_warn', category: 'risk', severity: 'warning',
+          title: 'Notable Drawdown Detected',
+          body: `A ${Math.abs(max_drawdown).toFixed(1)}% peak-to-trough drawdown has been recorded. Risk management thresholds should be reviewed before further capital deployment.`,
+          action: 'Set drawdown-based triggers as future rebalancing and de-risking signals.',
+          value: `${max_drawdown.toFixed(1)}% Max DD`,
+        })
+      }
+
+      // RISK: VaR
+      if (var95 < -3) {
+        signals.push({
+          id: 'risk_var', category: 'risk',
+          severity: var95 < -5 ? 'critical' : 'warning',
+          title: 'Elevated Value at Risk',
+          body: `95% VaR of ${var95.toFixed(2)}% means on a typical bad day you could lose more than ${Math.abs(var95).toFixed(2)}% of portfolio value. Tail risk is elevated.`,
+          action: 'Consider hedging strategies or reducing portfolio beta. Options or inverse ETFs can provide downside protection.',
+          value: `${var95.toFixed(2)}% VaR (95%)`,
+        })
+      }
+
+      // RISK: Short-term vol spike
+      if (rolling_vol_14 > 3) {
+        signals.push({
+          id: 'risk_vol_spike', category: 'risk', severity: 'warning',
+          title: 'Short-Term Volatility Spike',
+          body: `14-day rolling volatility at ${rolling_vol_14.toFixed(2)}% signals a short-term expansion — often preceding or accompanying trend reversals.`,
+          action: 'Temporarily reduce position sizes until volatility normalises. Avoid new speculative entries in this regime.',
+          value: `${rolling_vol_14.toFixed(2)}% 14d Vol`,
+        })
+      }
+
+      // RISK: Volatility regime
+      if (volatility_regime === 'high') {
+        signals.push({
+          id: 'regime_high', category: 'risk', severity: 'warning',
+          title: 'High Volatility Regime Active',
+          body: 'The portfolio is in a high-volatility regime (14d vol > 2.5%). Historically associated with elevated drawdown risk and momentum reversals.',
+          action: 'Reduce exposure. Favour quality and defensive names. Avoid leverage until the regime normalises.',
+          value: 'High Vol Regime',
+        })
+      } else if (volatility_regime === 'low') {
+        signals.push({
+          id: 'regime_low', category: 'strategy', severity: 'positive',
+          title: 'Low Volatility Regime',
+          body: 'Current low-volatility regime is historically favourable for trend-following and growth-oriented equity strategies.',
+          action: 'Conditions are supportive for deploying capital into higher-growth positions.',
+          value: 'Low Vol Regime',
+        })
+      }
+
+      // MOMENTUM
+      if (momentum_5 > 5) {
+        signals.push({
+          id: 'mom_strong', category: 'momentum', severity: 'positive',
+          title: 'Strong 5-Day Momentum',
+          body: `Portfolio has gained ${momentum_5.toFixed(2)}% over 5 days — momentum is firmly positive and trend-following signals are bullish.`,
+          action: 'Hold or modestly add to trending positions. Avoid premature profit-taking in a momentum-driven market.',
+          value: `+${momentum_5.toFixed(2)}% 5d Mom`,
+        })
+      } else if (momentum_5 < -5) {
+        signals.push({
+          id: 'mom_neg', category: 'momentum', severity: 'warning',
+          title: 'Negative 5-Day Momentum',
+          body: `Portfolio is down ${Math.abs(momentum_5).toFixed(2)}% over 5 days. Negative momentum can persist — the "momentum crash" effect is well-documented in financial research.`,
+          action: 'Assess whether declines are fundamental or sentiment-driven. Consider partial de-risking until momentum stabilises.',
+          value: `${momentum_5.toFixed(2)}% 5d Mom`,
+        })
+      }
+
+      // STRATEGY: Sharpe
+      if (sharpe > 1.5) {
+        signals.push({
+          id: 'strat_sharpe_exc', category: 'strategy', severity: 'positive',
+          title: 'Excellent Risk-Adjusted Returns',
+          body: `Sharpe ratio of ${sharpe.toFixed(2)} is institutional-grade — you are generating strong returns for every unit of risk. Most active funds target Sharpe > 1.`,
+          action: 'Your strategy is working. Maintain discipline, avoid over-trading, and document your thesis per position.',
+          value: `${sharpe.toFixed(2)} Sharpe`,
+        })
+      } else if (sharpe > 0.5) {
+        signals.push({
+          id: 'strat_sharpe_good', category: 'strategy', severity: 'positive',
+          title: 'Good Risk-Adjusted Returns',
+          body: `Sharpe ratio of ${sharpe.toFixed(2)} is above average for retail portfolios — you are being compensated well for the risk taken.`,
+          action: 'Trim underperformers and reallocate to high-Sharpe positions to compound the advantage.',
+          value: `${sharpe.toFixed(2)} Sharpe`,
+        })
+      } else if (sharpe < 0) {
+        signals.push({
+          id: 'strat_sharpe_neg', category: 'strategy',
+          severity: sharpe < -0.5 ? 'critical' : 'warning',
+          title: 'Negative Risk-Adjusted Return',
+          body: `Sharpe of ${sharpe.toFixed(2)} means you are accepting risk without adequate return — a T-bill would outperform on a risk-adjusted basis.`,
+          action: 'Fundamentally review portfolio strategy. Identify which positions drag performance and reassess each risk/reward thesis.',
+          value: `${sharpe.toFixed(2)} Sharpe`,
+        })
+      }
+
+      // STRATEGY: Win rate
+      if (win_rate > 60) {
+        signals.push({
+          id: 'strat_win_high', category: 'strategy', severity: 'positive',
+          title: 'High Consistency Rate',
+          body: `${win_rate.toFixed(1)}% of portfolio days are positive — strong consistency indicating disciplined position management.`,
+          action: 'Maintain discipline. Ensure average wins exceed average losses to maximise expected value.',
+          value: `${win_rate.toFixed(1)}% Win Rate`,
+        })
+      } else if (win_rate < 40) {
+        signals.push({
+          id: 'strat_win_low', category: 'strategy', severity: 'warning',
+          title: 'Below-Average Win Rate',
+          body: `Only ${win_rate.toFixed(1)}% of portfolio days are positive, indicating inconsistency or holding through extended drawdowns.`,
+          action: 'Tighten risk management. Size positions relative to conviction level. Cut losers faster.',
+          value: `${win_rate.toFixed(1)}% Win Rate`,
+        })
+      }
+
+      // BENCHMARK: Cumulative alpha
+      if (cumulAlpha > 5) {
+        signals.push({
+          id: 'bench_out', category: 'benchmark', severity: 'positive',
+          title: 'Outperforming S&P 500',
+          body: `Portfolio has generated ${cumulAlpha.toFixed(1)}% alpha vs the S&P 500. Fewer than 15% of active managers consistently beat the index — this is a meaningful achievement.`,
+          action: 'Identify which positions and decisions drove outperformance — these represent your edge. Document and systematise them.',
+          value: `+${cumulAlpha.toFixed(1)}% vs S&P 500`,
+        })
+      } else if (cumulAlpha < -5) {
+        signals.push({
+          id: 'bench_under', category: 'benchmark', severity: 'warning',
+          title: 'Trailing the S&P 500',
+          body: `Portfolio is underperforming the S&P 500 by ${Math.abs(cumulAlpha).toFixed(1)}%. Persistent underperformance suggests active management is not adding value over passive indexing.`,
+          action: 'Consider increasing passive index exposure (SPY/VOO) while reducing underperforming active positions.',
+          value: `${cumulAlpha.toFixed(1)}% vs S&P 500`,
+        })
+      }
+
+      // ALLOCATION: Cash
+      if (cash_pct > 35) {
+        signals.push({
+          id: 'alloc_cash_high', category: 'allocation', severity: 'neutral',
+          title: 'Elevated Cash Drag',
+          body: `${cash_pct.toFixed(1)}% in cash is a meaningful drag on returns, particularly in inflationary environments where cash loses real purchasing power.`,
+          action: 'Identify high-conviction entry points. If none exist, consider short-duration treasuries or money-market funds for yield.',
+          value: `${cash_pct.toFixed(1)}% Cash`,
+        })
+      } else if (cash_pct < 2 && positions_count > 0) {
+        signals.push({
+          id: 'alloc_cash_low', category: 'allocation', severity: 'warning',
+          title: 'No Cash Buffer',
+          body: `With only ${cash_pct.toFixed(1)}% in cash you have no dry powder for dislocations or to meet redemptions without forced selling.`,
+          action: 'Trim 3-5% from your largest position to build a defensive reserve.',
+          value: `${cash_pct.toFixed(1)}% Cash`,
+        })
+      }
+
+      // ALLOCATION: Diversification
+      if (positions_count === 1) {
+        signals.push({
+          id: 'alloc_conc_max', category: 'allocation', severity: 'critical',
+          title: 'Maximum Concentration Risk',
+          body: 'Entire portfolio is in a single position — the highest possible idiosyncratic risk. A single adverse event could be catastrophic.',
+          action: 'Diversify across at least 5-8 uncorrelated positions immediately. No single position should exceed 25-30% of portfolio value.',
+          value: '1 position',
+        })
+      } else if (positions_count <= 3) {
+        signals.push({
+          id: 'alloc_low_div', category: 'allocation', severity: 'warning',
+          title: 'Limited Diversification',
+          body: `${positions_count} positions provide minimal diversification. Company-specific risk (earnings misses, management changes, regulatory actions) is significantly elevated.`,
+          action: 'Broaden to 8-15 positions across different sectors and asset classes to reduce idiosyncratic risk without diluting returns.',
+          value: `${positions_count} positions`,
+        })
+      } else if (positions_count > 20) {
+        signals.push({
+          id: 'alloc_over_div', category: 'allocation', severity: 'neutral',
+          title: 'Possible Over-Diversification',
+          body: `${positions_count} positions risk "diworsification" — marginal holdings dilute returns without meaningfully reducing portfolio risk, approximating a high-fee index fund.`,
+          action: 'Audit each position for its marginal contribution. Remove low-conviction or sector-redundant holdings.',
+          value: `${positions_count} positions`,
+        })
+      }
+
+      // ALLOCATION: Single-position concentration check across position rows
+      const latestPosTimestamp = positionRows.length > 0
+        ? [...positionRows].sort((a: any, b: any) => b.timestamp.localeCompare(a.timestamp))[0].timestamp
+        : null
+      const currentPositions = latestPosTimestamp
+        ? positionRows.filter((p: any) => p.timestamp === latestPosTimestamp)
+        : []
+
+      if (currentPositions.length > 1) {
+        const maxAlloc = Math.max(...currentPositions.map((p: any) => p.alloc_pct ?? 0))
+        if (maxAlloc > 50) {
+          const topPos = currentPositions.find((p: any) => (p.alloc_pct ?? 0) === maxAlloc)
+          signals.push({
+            id: 'alloc_single_conc', category: 'allocation',
+            severity: maxAlloc > 70 ? 'critical' : 'warning',
+            title: 'Single-Position Concentration',
+            body: `${topPos?.ticker ?? 'One position'} represents ${maxAlloc.toFixed(1)}% of the portfolio — heavy concentration in one asset significantly magnifies idiosyncratic risk.`,
+            action: `Scale out of ${topPos?.ticker ?? 'this position'} gradually toward a 25-30% target weight.`,
+            value: `${maxAlloc.toFixed(1)}% — ${topPos?.ticker ?? 'top holding'}`,
+          })
+        }
+      }
+
+      // Sort: critical → warning → positive → neutral
+      const sevOrder: Record<string, number> = { critical: 0, warning: 1, positive: 2, neutral: 3 }
+      signals.sort((a, b) => (sevOrder[a.severity] ?? 4) - (sevOrder[b.severity] ?? 4))
+
+      // ── Top positions ─────────────────────────────────────────────────
+      const topPositions = [...currentPositions]
+        .sort((a: any, b: any) => (b.alloc_pct ?? 0) - (a.alloc_pct ?? 0))
+        .slice(0, 5)
+        .map((p: any) => ({
+          ticker:    p.ticker,
+          alloc_pct: +(p.alloc_pct ?? 0).toFixed(2),
+          pnl_pct:   +(p.pnl_pct   ?? 0).toFixed(2),
+          value:     +(p.value      ?? 0).toFixed(2),
+        }))
+
+      return json({
+        health_score:   healthScore,
+        health_label:   healthLabel,
+        health_tagline: healthTagline,
+        signals,
+        summary: {
+          sharpe:            +sharpe.toFixed(2),
+          alpha:             +alpha.toFixed(2),
+          win_rate:          +win_rate.toFixed(1),
+          ann_vol:           +ann_vol.toFixed(1),
+          var95:             +var95.toFixed(2),
+          max_drawdown:      +max_drawdown.toFixed(1),
+          total_return:      +(summary?.total_return ?? 0).toFixed(2),
+          momentum_5:        +momentum_5.toFixed(2),
+          cash_pct:          +cash_pct.toFixed(1),
+          positions_count:   +positions_count,
+          volatility_regime,
+          benchmark_return:  +benchmark_return.toFixed(2),
+          cumulative_return: +cumulative_return.toFixed(2),
+        },
+        top_positions: topPositions,
+        generated_at:  data.generated_at,
+      })
+    }
+
     return json({ error: `Unknown action: ${action}` }, 400)
 
   } catch (err: any) {

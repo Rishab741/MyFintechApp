@@ -84,6 +84,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="GlobalMarkets"
+        options={{
+          title: 'Macro',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <TabBarIcon name="globe" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="two"
         options={{
           title: 'Profile Setup',
