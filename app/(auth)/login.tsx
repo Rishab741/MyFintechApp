@@ -14,8 +14,63 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthStore } from '../../src/store/useAuthStore';
+
+// ─── Rate limiting ────────────────────────────────────────────────────────────
+// Stored in device keychain so it persists across app restarts.
+const RATE_KEY = 'vestara_auth_rate';
+
+interface RateData {
+  count:       number;   // cumulative failed attempts
+  lockedUntil: number;   // unix ms — 0 means not locked
+}
+
+function getLockDurationMs(count: number): number {
+  if (count >= 10) return 30 * 60 * 1_000;  // 30 min
+  if (count >= 5)  return  5 * 60 * 1_000;  // 5 min
+  if (count >= 3)  return      30 * 1_000;  // 30 s
+  return 0;
+}
+
+async function readRateData(): Promise<RateData> {
+  try {
+    const raw = await SecureStore.getItemAsync(RATE_KEY);
+    if (raw) return JSON.parse(raw) as RateData;
+  } catch {}
+  return { count: 0, lockedUntil: 0 };
+}
+
+async function recordFailedAttempt(): Promise<RateData> {
+  const prev = await readRateData();
+  const count = prev.count + 1;
+  const lockMs = getLockDurationMs(count);
+  const updated: RateData = {
+    count,
+    lockedUntil: lockMs > 0 ? Date.now() + lockMs : 0,
+  };
+  await SecureStore.setItemAsync(RATE_KEY, JSON.stringify(updated));
+  return updated;
+}
+
+async function clearRateData(): Promise<void> {
+  await SecureStore.deleteItemAsync(RATE_KEY);
+}
+
+// Map Supabase error messages to friendly, actionable strings
+function friendlyAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials') || m.includes('invalid email or password'))
+    return 'Incorrect email or password. Please try again.';
+  if (m.includes('email not confirmed'))
+    return 'Please verify your email before signing in. Check your inbox.';
+  if (m.includes('too many requests'))
+    return 'Too many attempts. Please wait a few minutes and try again.';
+  if (m.includes('network'))
+    return 'No internet connection. Please check your network and try again.';
+  return message;
+}
 
 const { width, height } = Dimensions.get('window');
 
@@ -293,6 +348,34 @@ export default function AuthScreen() {
 
   const { isLoading, setLoading } = useAuthStore();
 
+  // ── Rate-limit state ─────────────────────────────────────────────────────
+  const [lockSecondsLeft, setLockSecondsLeft] = useState(0);
+  const lockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // On mount: restore any existing lockout from keychain
+  useEffect(() => {
+    readRateData().then(({ lockedUntil }) => {
+      const remaining = Math.ceil((lockedUntil - Date.now()) / 1_000);
+      if (remaining > 0) startLockoutTimer(remaining);
+    });
+    return () => { if (lockTimerRef.current) clearInterval(lockTimerRef.current); };
+  }, []);
+
+  const startLockoutTimer = (seconds: number) => {
+    setLockSecondsLeft(seconds);
+    if (lockTimerRef.current) clearInterval(lockTimerRef.current);
+    lockTimerRef.current = setInterval(() => {
+      setLockSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(lockTimerRef.current!);
+          lockTimerRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1_000);
+  };
+
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -351,17 +434,25 @@ export default function AuthScreen() {
   };
 
   const handleSignIn = async () => {
-    if (isLoading) return;
+    if (isLoading || lockSecondsLeft > 0) return;
     if (!signInEmail || !signInPassword) return Alert.alert('Required', 'Please fill in all fields');
+
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email: signInEmail,
+        email: signInEmail.trim().toLowerCase(),
         password: signInPassword,
       });
-      if (error) throw error;
+      if (error) {
+        const rate = await recordFailedAttempt();
+        const lockSecs = Math.ceil((rate.lockedUntil - Date.now()) / 1_000);
+        if (lockSecs > 0) startLockoutTimer(lockSecs);
+        Alert.alert('Sign In Failed', friendlyAuthError(error.message));
+      } else {
+        await clearRateData();
+      }
     } catch (e: any) {
-      Alert.alert('Sign In Failed', e.message);
+      Alert.alert('Sign In Failed', friendlyAuthError(e.message ?? 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -439,13 +530,15 @@ export default function AuthScreen() {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.primaryBtn, isLoading && styles.primaryBtnDisabled]}
+        style={[styles.primaryBtn, (isLoading || lockSecondsLeft > 0) && styles.primaryBtnDisabled]}
         onPress={handleSignIn}
-        disabled={isLoading}
+        disabled={isLoading || lockSecondsLeft > 0}
       >
         {isLoading
           ? <ActivityIndicator color="#0E1118" />
-          : <Text style={styles.primaryBtnText}>Sign In</Text>}
+          : lockSecondsLeft > 0
+            ? <Text style={styles.primaryBtnText}>Try again in {lockSecondsLeft}s</Text>
+            : <Text style={styles.primaryBtnText}>Sign In</Text>}
       </TouchableOpacity>
 
       <View style={styles.divider}>
