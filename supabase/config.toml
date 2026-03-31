@@ -1,0 +1,18 @@
+[functions.exchange-plaid-token]
+enabled = true
+verify_jwt = false
+import_map = "./functions/exchange-plaid-token/deno.json"
+entrypoint = "./functions/exchange-plaid-token/index.ts"
+
+[functions.ml-pipeline]
+enabled = true
+verify_jwt = false
+import_map = "./functions/ml-pipeline/deno.json"
+entrypoint = "./functions/ml-pipeline/index.ts"
+
+[functions.market-intelligence]
+enabled = true
+verify_jwt = false
+import_map = "./functions/market-intelligence/deno.json"
+entrypoint = "./functions/market-intelligence/index.ts"
+
