@@ -1,7 +1,7 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Link, Tabs } from 'expo-router';
 import React from 'react';
-import { Pressable } from 'react-native';
+import { Platform, Pressable } from 'react-native';
 
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -20,22 +20,27 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#C9A84C',
-        tabBarInactiveTintColor: '#4A5468',
+        tabBarActiveTintColor: '#818CF8',
+        tabBarInactiveTintColor: '#475569',
         tabBarStyle: {
-          backgroundColor: '#080B12',
-          borderTopColor: 'rgba(255,255,255,0.06)',
+          backgroundColor: '#0C1019',
+          borderTopColor: 'rgba(255,255,255,0.07)',
           borderTopWidth: 1,
+          height: Platform.OS === 'ios' ? 84 : 60,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 6,
         },
         tabBarLabelStyle: {
-          fontFamily: 'Courier New',
+          fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
           fontSize: 10,
-          letterSpacing: 0.5,
+          letterSpacing: 0.2,
         },
         headerShown: useClientOnlyValue(false, true),
-        headerStyle: { backgroundColor: '#080B12' },
-        headerTintColor: '#EEE8DC',
-        headerTitleStyle: { fontFamily: 'Courier New', letterSpacing: 1 },
+        headerStyle: { backgroundColor: '#0C1019' },
+        headerTintColor: '#F1F5F9',
+        headerTitleStyle: {
+          fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
+          fontWeight: '600',
+        },
       }}
     >
       <Tabs.Screen

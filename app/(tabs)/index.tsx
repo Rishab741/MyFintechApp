@@ -9,145 +9,249 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import ConnectInvestment from '../../components/ConnectInvestments';
 
-// ─── Tokens ───────────────────────────────────────────────────────────────────
-const GOLD       = '#C9A84C';
-const GOLD_LIGHT = '#E5C97A';
-const GOLD_DIM   = 'rgba(201,168,76,0.12)';
-const GOLD_BDR   = 'rgba(201,168,76,0.3)';
-const BG         = '#0A0D14';
-const CARD       = '#12161F';
-const CARD2      = '#0F1319';
-const BORDER     = 'rgba(255,255,255,0.07)';
-const TXT        = '#F0EDE6';
-const MUTED      = '#5A6070';
-const SUB        = '#8A94A6';
-const GREEN      = '#2ECC71';
-const RED        = '#E74C3C';
+// ─── Palette — Slate Indigo ───────────────────────────────────────────────────
+const BG      = '#0C1019';
+const CARD    = '#131A27';
+const CARD2   = '#1A2235';
+const BORDER  = 'rgba(255,255,255,0.07)';
+const BORDER2 = 'rgba(255,255,255,0.11)';
 
-const serif = Platform.OS === 'ios' ? 'Georgia' : 'serif';
+const IND     = '#6366F1';   // indigo — primary
+const IND_L   = '#818CF8';
+const IND_D   = 'rgba(99,102,241,0.12)';
+const IND_B   = 'rgba(99,102,241,0.20)';
+
+const VIO     = '#8B5CF6';   // violet — secondary
+const VIO_L   = '#A78BFA';
+const VIO_D   = 'rgba(139,92,246,0.12)';
+
+const TEAL    = '#0EA5E9';   // sky blue — links / info
+const TEAL_D  = 'rgba(14,165,233,0.10)';
+
+const GRN     = '#10B981';   // emerald — success / verified
+const GRN_D   = 'rgba(16,185,129,0.10)';
+
+const AMB     = '#F59E0B';   // amber — warnings
+const AMB_D   = 'rgba(245,158,11,0.10)';
+
+const RED     = '#EF4444';   // danger
+const RED_D   = 'rgba(239,68,68,0.08)';
+
+const T1      = '#F1F5F9';   // primary text
+const T2      = '#94A3B8';   // secondary text
+const T3      = '#475569';   // muted text
+const DIVID   = 'rgba(255,255,255,0.055)';
+
 const sans  = Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif';
+const mono  = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const getInitials = (name: string) => {
-  const p = name.trim().split(' ');
-  return p.length === 1
-    ? (p[0][0] ?? '?').toUpperCase()
-    : (p[0][0] + p[p.length - 1][0]).toUpperCase();
+const getInitials = (n: string) => {
+  const p = n.trim().split(' ');
+  return (p.length === 1 ? p[0][0] : p[0][0] + p[p.length - 1][0]).toUpperCase();
 };
-
-const formatType = (t: string) =>
+const fmtType = (t: string) =>
   ({ retail: 'Retail Investor', accredited: 'Accredited Investor', institutional: 'Institutional' }[t] ?? t);
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
-const Avatar: React.FC<{ initials: string }> = ({ initials }) => {
-  const spin = useRef(new Animated.Value(0)).current;
+const Avatar: React.FC<{ initials: string; score: number }> = ({ initials, score }) => {
+  const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    Animated.loop(Animated.timing(spin, { toValue: 1, duration: 10000, useNativeDriver: true })).start();
+    Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.06, duration: 2600, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1.00, duration: 2600, useNativeDriver: true }),
+    ])).start();
   }, []);
-  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-
+  const ring = score >= 70 ? GRN : score >= 50 ? IND : AMB;
   return (
     <View style={av.wrap}>
-      <Animated.View style={[av.ring, { transform: [{ rotate }] }]} />
-      <View style={av.circle}>
-        <Text style={av.text}>{initials}</Text>
+      <Animated.View style={[av.halo, { borderColor: `${ring}30`, transform: [{ scale: pulse }] }]} />
+      <View style={[av.ring, { borderColor: ring }]}>
+        <View style={av.face}>
+          <Text style={av.initials}>{initials}</Text>
+        </View>
       </View>
     </View>
   );
 };
 const av = StyleSheet.create({
-  wrap:   { width: 92, height: 92, alignItems: 'center', justifyContent: 'center' },
-  ring:   { position: 'absolute', width: 92, height: 92, borderRadius: 46, borderWidth: 1.5, borderColor: GOLD, borderStyle: 'dashed', opacity: 0.5 },
-  circle: { width: 76, height: 76, borderRadius: 38, backgroundColor: GOLD_DIM, borderWidth: 2, borderColor: GOLD_BDR, alignItems: 'center', justifyContent: 'center' },
-  text:   { color: GOLD_LIGHT, fontSize: 26, fontWeight: '700', fontFamily: serif, letterSpacing: 1 },
+  wrap:     { alignItems: 'center', justifyContent: 'center', width: 84, height: 84 },
+  halo:     { position: 'absolute', width: 84, height: 84, borderRadius: 42, borderWidth: 1 },
+  ring:     { width: 76, height: 76, borderRadius: 38, borderWidth: 2.5,
+              padding: 3, backgroundColor: 'transparent' },
+  face:     { flex: 1, borderRadius: 34, backgroundColor: IND_D,
+              alignItems: 'center', justifyContent: 'center' },
+  initials: { color: IND_L, fontSize: 24, fontWeight: '700', fontFamily: sans, letterSpacing: 1 },
 });
 
-// ─── Stat pill ────────────────────────────────────────────────────────────────
-const Stat: React.FC<{ icon: string; label: string; value: string }> = ({ icon, label, value }) => (
-  <View style={st.card}>
-    <Text style={st.icon}>{icon}</Text>
-    <Text style={st.value}>{value}</Text>
-    <Text style={st.label}>{label}</Text>
+// ─── Score bar ────────────────────────────────────────────────────────────────
+const ScoreBar: React.FC<{ score: number }> = ({ score }) => {
+  const w = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(w, { toValue: score / 100, duration: 1100, useNativeDriver: false }).start();
+  }, []);
+  const color = score >= 70 ? GRN : score >= 50 ? IND : AMB;
+  const label = score >= 80 ? 'Excellent' : score >= 65 ? 'Good' : score >= 50 ? 'Fair' : 'Low';
+  return (
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={bar.lbl}>Trust Score</Text>
+        <View style={bar.badge}>
+          <Text style={[bar.badgeTxt, { color }]}>{label}</Text>
+          <Text style={[bar.score, { color }]}>{score}<Text style={bar.max}>/100</Text></Text>
+        </View>
+      </View>
+      <View style={bar.track}>
+        <Animated.View style={[bar.fill, { width: w.interpolate({ inputRange:[0,1], outputRange:['0%','100%'] }), backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+};
+const bar = StyleSheet.create({
+  lbl:      { color: T2, fontSize: 13, fontFamily: sans },
+  badge:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  badgeTxt: { fontSize: 12, fontFamily: sans },
+  score:    { fontSize: 15, fontWeight: '700', fontFamily: sans },
+  max:      { fontSize: 11, color: T3 },
+  track:    { height: 4, backgroundColor: CARD2, borderRadius: 4, overflow: 'hidden' },
+  fill:     { height: '100%', borderRadius: 4 },
+});
+
+// ─── Section header ───────────────────────────────────────────────────────────
+const SectionHead: React.FC<{ title: string }> = ({ title }) => (
+  <Text style={sh.txt}>{title}</Text>
+);
+const sh = StyleSheet.create({
+  txt: { color: T3, fontSize: 11, fontWeight: '600', fontFamily: sans,
+         textTransform: 'uppercase', letterSpacing: 1.2,
+         marginTop: 28, marginBottom: 10 },
+});
+
+// ─── Stat tile ────────────────────────────────────────────────────────────────
+const Stat: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = T1 }) => (
+  <View style={st.tile}>
+    <Text style={[st.val, { color }]}>{value}</Text>
+    <Text style={st.lbl}>{label}</Text>
   </View>
 );
 const st = StyleSheet.create({
-  card:  { flex: 1, backgroundColor: CARD2, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 14, alignItems: 'center', gap: 3 },
-  icon:  { fontSize: 18, marginBottom: 2 },
-  value: { color: TXT, fontSize: 15, fontWeight: '700', fontFamily: serif },
-  label: { color: MUTED, fontSize: 10, letterSpacing: 0.5, textAlign: 'center' },
+  tile: { flex: 1, alignItems: 'center', paddingVertical: 14 },
+  val:  { fontSize: 14, fontWeight: '700', fontFamily: sans, marginBottom: 3 },
+  lbl:  { color: T3, fontSize: 10, fontFamily: sans, textAlign: 'center' },
 });
 
 // ─── Nav card ─────────────────────────────────────────────────────────────────
-const NavCard: React.FC<{ icon: string; title: string; sub: string; onPress: () => void; accent?: string }> = ({ icon, title, sub, onPress, accent = GOLD }) => {
-  const scale = useRef(new Animated.Value(1)).current;
+const NavCard: React.FC<{
+  icon: string; title: string; sub: string; accent: string;
+  onPress: () => void; pill?: string;
+}> = ({ icon, title, sub, accent, onPress, pill }) => {
+  const sc = useRef(new Animated.Value(1)).current;
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
+    <Animated.View style={{ transform: [{ scale: sc }] }}>
       <TouchableOpacity
-        style={[nc.card, { borderColor: `${accent}30` }]}
+        style={nc.card}
         onPress={onPress}
-        onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start()}
-        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+        onPressIn={() => Animated.spring(sc, { toValue: 0.975, useNativeDriver: true }).start()}
+        onPressOut={() => Animated.spring(sc, { toValue: 1.000, useNativeDriver: true }).start()}
         activeOpacity={1}
       >
-        <View style={[nc.icon, { backgroundColor: `${accent}15` }]}>
-          <Text style={{ fontSize: 20 }}>{icon}</Text>
+        <View style={[nc.icon, { backgroundColor: `${accent}18` }]}>
+          <Text style={{ fontSize: 19 }}>{icon}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={nc.title}>{title}</Text>
           <Text style={nc.sub}>{sub}</Text>
         </View>
-        <Text style={[nc.arrow, { color: accent }]}>›</Text>
+        {pill && (
+          <View style={[nc.pill, { backgroundColor: `${accent}15`, borderColor: `${accent}30` }]}>
+            <Text style={[nc.pillTxt, { color: accent }]}>{pill}</Text>
+          </View>
+        )}
+        <Text style={[nc.arrow, { color: T3 }]}>›</Text>
       </TouchableOpacity>
     </Animated.View>
   );
 };
 const nc = StyleSheet.create({
-  card:  { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 16, borderWidth: 1, padding: 16, gap: 14, marginBottom: 10 },
-  icon:  { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  title: { color: TXT, fontSize: 15, fontWeight: '700', fontFamily: serif },
-  sub:   { color: MUTED, fontSize: 12, marginTop: 2 },
-  arrow: { fontSize: 24, marginRight: -4 },
+  card:    { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD,
+             borderRadius: 14, borderWidth: 1, borderColor: BORDER,
+             padding: 14, gap: 13, marginBottom: 8 },
+  icon:    { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  title:   { color: T1, fontSize: 14, fontWeight: '600', fontFamily: sans, marginBottom: 2 },
+  sub:     { color: T2, fontSize: 11, lineHeight: 16 },
+  pill:    { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  pillTxt: { fontSize: 9, fontWeight: '700', fontFamily: sans, letterSpacing: 0.5 },
+  arrow:   { fontSize: 22, marginLeft: 4 },
+});
+
+// ─── Settings group ───────────────────────────────────────────────────────────
+const Group: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <View style={grp.wrap}>{children}</View>
+);
+const grp = StyleSheet.create({
+  wrap: { backgroundColor: CARD, borderRadius: 16, borderWidth: 1,
+          borderColor: BORDER, overflow: 'hidden' },
 });
 
 // ─── Settings row ─────────────────────────────────────────────────────────────
-const Row: React.FC<{ icon: string; label: string; value?: string; onPress?: () => void; danger?: boolean }> = ({ icon, label, value, onPress, danger }) => (
-  <TouchableOpacity style={rw.row} onPress={onPress} activeOpacity={0.7}>
-    <View style={[rw.iconWrap, danger && { backgroundColor: 'rgba(231,76,60,0.1)' }]}>
+const Row: React.FC<{
+  icon: string; iconBg: string; label: string;
+  value?: string; onPress?: () => void;
+  toggle?: boolean; toggleVal?: boolean; last?: boolean;
+}> = ({ icon, iconBg, label, value, onPress, toggle, toggleVal, last }) => (
+  <TouchableOpacity
+    style={[rw.row, last && rw.rowLast]}
+    onPress={onPress}
+    activeOpacity={onPress ? 0.6 : 1}
+  >
+    <View style={[rw.icon, { backgroundColor: iconBg }]}>
       <Text style={{ fontSize: 15 }}>{icon}</Text>
     </View>
-    <Text style={[rw.label, danger && { color: RED }]}>{label}</Text>
+    <Text style={rw.label}>{label}</Text>
     <View style={{ flex: 1 }} />
-    {value ? <Text style={rw.value}>{value}</Text> : null}
-    {!danger && <Text style={rw.chevron}>›</Text>}
+    {toggle ? (
+      <Switch
+        value={toggleVal ?? false}
+        onValueChange={() => Alert.alert('Coming Soon')}
+        trackColor={{ false: CARD2, true: VIO }}
+        thumbColor={toggleVal ? '#fff' : T2}
+        ios_backgroundColor={CARD2}
+      />
+    ) : (
+      <>
+        {value && <Text style={rw.value}>{value}</Text>}
+        {onPress && <Text style={rw.chevron}>›</Text>}
+      </>
+    )}
   </TouchableOpacity>
 );
 const rw = StyleSheet.create({
-  row:      { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: BORDER, gap: 12 },
-  iconWrap: { width: 34, height: 34, borderRadius: 9, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center' },
-  label:    { color: TXT, fontSize: 14, fontWeight: '500' },
-  value:    { color: MUTED, fontSize: 13, marginRight: 6 },
-  chevron:  { color: MUTED, fontSize: 20 },
+  row:      { flexDirection: 'row', alignItems: 'center', paddingVertical: 13,
+              paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: DIVID, gap: 13 },
+  rowLast:  { borderBottomWidth: 0 },
+  icon:     { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  label:    { color: T1, fontSize: 14, fontFamily: sans },
+  value:    { color: T2, fontSize: 13, fontFamily: sans, marginRight: 2 },
+  chevron:  { color: T3, fontSize: 20 },
 });
 
-const Section: React.FC<{ title: string }> = ({ title }) => (
-  <Text style={{ color: MUTED, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', marginTop: 28, marginBottom: 8, fontFamily: sans }}>{title}</Text>
-);
-
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Main screen ──────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
   const { setLoading } = useAuthStore();
-  const [user, setUser]         = useState<any>(null);
-  const [meta, setMeta]         = useState<any>({});
+  const [user, setUser]           = useState<any>(null);
+  const [meta, setMeta]           = useState<any>({});
   const [connected, setConnected] = useState(false);
 
   const fade  = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(-20)).current;
+  const slideA = useRef(new Animated.Value(20)).current;
+  const slideB = useRef(new Animated.Value(28)).current;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -155,170 +259,223 @@ export default function ProfileScreen() {
     });
     checkBrokerageConnection();
     Animated.parallel([
-      Animated.timing(fade,  { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.spring(slide, { toValue: 0, tension: 70, friction: 8, useNativeDriver: true }),
+      Animated.timing(fade,   { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.spring(slideA, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
+      Animated.spring(slideB, { toValue: 0, delay: 80, tension: 80, friction: 10, useNativeDriver: true }),
     ]).start();
   }, []);
 
   const checkBrokerageConnection = async () => {
     const { data: { user: u } } = await supabase.auth.getUser();
     if (!u) return;
-    const { data } = await supabase.from('snaptrade_connections').select('account_id').eq('user_id', u.id).maybeSingle();
+    const { data } = await supabase
+      .from('snaptrade_connections').select('account_id').eq('user_id', u.id).maybeSingle();
     setConnected(!!data?.account_id);
   };
 
   const handleSignOut = () =>
-    Alert.alert('Sign Out', 'Are you sure?', [
+    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: async () => {
         setLoading(true);
-        try { await supabase.auth.signOut(); } catch (e: any) { Alert.alert('Error', e.message); } finally { setLoading(false); }
+        try { await supabase.auth.signOut(); }
+        catch (e: any) { Alert.alert('Error', e.message); }
+        finally { setLoading(false); }
       }},
     ]);
 
-  const fullName   = meta.first_name && meta.last_name ? `${meta.first_name} ${meta.last_name}` : user?.email?.split('@')[0] ?? 'Investor';
-  const email      = user?.email ?? '—';
-  const phone      = meta.phone || '—';
-  const type       = meta.investor_type ? formatType(meta.investor_type) : '—';
-  const since      = user?.created_at ? new Date(user.created_at).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }) : '—';
-  const verified   = user?.email_confirmed_at ? 'Verified' : 'Pending';
-  const initials   = getInitials(fullName);
+  const fullName  = meta.first_name && meta.last_name
+    ? `${meta.first_name} ${meta.last_name}`
+    : user?.email?.split('@')[0] ?? 'Investor';
+  const email     = user?.email ?? '—';
+  const phone     = meta.phone  || 'Not set';
+  const type      = meta.investor_type ? fmtType(meta.investor_type) : 'Not set';
+  const since     = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
+    : '—';
+  const verified  = !!user?.email_confirmed_at;
+  const initials  = getInitials(fullName);
+  const score     = verified ? 74 : 40;
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="light-content" />
-      <View style={s.glow1} /><View style={s.glow2} />
+      <StatusBar barStyle="light-content" backgroundColor={BG} />
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      {/* Soft background glow */}
+      <View style={s.glow} />
 
-        {/* ── Header card ── */}
-        <Animated.View style={[s.headerCard, { opacity: fade, transform: [{ translateY: slide }] }]}>
-          {/* Top bar */}
-          <View style={s.topBar}>
-            <View>
-              <Text style={s.screenLabel}>MY PROFILE</Text>
-              <Text style={s.brand}>Vestara</Text>
-            </View>
-            <View style={[s.badge, { backgroundColor: verified === 'Verified' ? 'rgba(46,204,113,0.12)' : 'rgba(231,76,60,0.1)' }]}>
-              <View style={[s.dot, { backgroundColor: verified === 'Verified' ? GREEN : RED }]} />
-              <Text style={[s.badgeTxt, { color: verified === 'Verified' ? GREEN : RED }]}>{verified}</Text>
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* ─── Profile Hero ─────────────────────────────────── */}
+        <Animated.View style={[s.hero, { opacity: fade, transform: [{ translateY: slideA }] }]}>
+
+          {/* Top row: label + status */}
+          <View style={s.heroTop}>
+            <Text style={s.screenLabel}>My Profile</Text>
+            <View style={[s.statusBadge,
+              verified
+                ? { backgroundColor: GRN_D, borderColor: `${GRN}35` }
+                : { backgroundColor: AMB_D, borderColor: `${AMB}35` }
+            ]}>
+              <View style={[s.statusDot, { backgroundColor: verified ? GRN : AMB }]} />
+              <Text style={[s.statusTxt, { color: verified ? GRN : AMB }]}>
+                {verified ? 'Verified' : 'Pending'}
+              </Text>
             </View>
           </View>
 
-          {/* Avatar + info */}
+          {/* Avatar + identity */}
           <View style={s.identity}>
-            <Avatar initials={initials} />
-            <View style={{ flex: 1, marginLeft: 18 }}>
+            <Avatar initials={initials} score={score} />
+            <View style={s.identityText}>
               <Text style={s.name}>{fullName}</Text>
-              <Text style={s.email}>{email}</Text>
-              <View style={s.pill}>
-                <Text style={s.pillTxt}>{type}</Text>
-              </View>
+              <Text style={s.emailTxt}>{email}</Text>
+              {meta.investor_type ? (
+                <View style={s.rolePill}>
+                  <Text style={s.roleTxt}>{type}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
-          {/* Stats */}
-          <View style={s.statsRow}>
-            <Stat icon="📅" label="Member Since" value={since} />
-            <View style={{ width: 8 }} />
-            <Stat icon="🔐" label="2FA" value="Off" />
-            <View style={{ width: 8 }} />
-            <Stat icon="🌐" label="Sessions" value="1 Active" />
+          {/* Stats strip */}
+          <View style={s.statsStrip}>
+            <Stat label="Member since" value={since}       color={T1}   />
+            <View style={s.statDiv} />
+            <Stat label="Trust score"  value={`${score}/100`} color={score >= 65 ? GRN : score >= 50 ? IND_L : AMB} />
+            <View style={s.statDiv} />
+            <Stat label="Sessions"     value="1 active"    color={IND_L} />
           </View>
         </Animated.View>
 
-        {/* ── Navigate to other screens ── */}
-        <Section title="My Portfolio" />
+        {/* ─── Trust score card ─────────────────────────────── */}
+        <Animated.View style={[s.card, { opacity: fade, transform: [{ translateY: slideB }] }]}>
+          <ScoreBar score={score} />
+        </Animated.View>
 
+        {/* ─── Portfolio ────────────────────────────────────── */}
+        <SectionHead title="Portfolio" />
         <NavCard
           icon="📊"
           title="Portfolio Dashboard"
-          sub={connected ? 'Binance connected · tap to view live data' : 'Connect a brokerage to see your holdings'}
+          sub={connected ? 'Account connected · view live holdings' : 'Connect a brokerage to get started'}
+          accent={IND}
           onPress={() => router.push('/(tabs)/Portfolio')}
-          accent={GOLD}
+          pill={connected ? 'Live' : 'Connect'}
         />
         <NavCard
           icon="🎯"
           title="Investment Profile"
-          sub="Exchanges, risk tolerance & asset classes"
+          sub="Risk tolerance, asset classes & exchanges"
+          accent={VIO}
           onPress={() => router.push('/two')}
-          accent="#3B82F6"
         />
 
-        {/* ── Brokerage connection ── */}
-        <Section title="Wealth Aggregation" />
-        <View style={s.section}>
-          <View style={{ padding: 16, paddingBottom: 8 }}>
-            <Text style={s.sectionTitle}>Connect External Accounts</Text>
-            <Text style={s.sectionSub}>Sync your holdings for unified AI-driven analysis</Text>
+        {/* ─── Connect accounts ─────────────────────────────── */}
+        <SectionHead title="Connected Accounts" />
+        <View style={s.connectCard}>
+          <View style={s.connectTop}>
+            <Text style={s.connectTitle}>Link External Accounts</Text>
+            <Text style={s.connectSub}>Sync your brokerage holdings for unified portfolio analysis.</Text>
           </View>
           <ConnectInvestment onConnectionChange={setConnected} />
         </View>
 
-        {/* ── Account details ── */}
-        <Section title="Account Details" />
-        <View style={s.section}>
-          <Row icon="✉️" label="Email"         value={email} />
-          <Row icon="📱" label="Phone"         value={phone} />
-          <Row icon="🏷️" label="Investor Type" value={type}  />
+        {/* ─── Account settings ─────────────────────────────── */}
+        <SectionHead title="Account Details" />
+        <Group>
+          <Row icon="✉️" iconBg={IND_D}       label="Email"         value={email}  onPress={() => Alert.alert('Coming Soon')} />
+          <Row icon="📱" iconBg={TEAL_D}      label="Phone"         value={phone}  onPress={() => Alert.alert('Coming Soon')} />
+          <Row icon="🏷️" iconBg={VIO_D}       label="Investor type" value={type}   onPress={() => Alert.alert('Coming Soon')} />
+          <Row icon="🌐" iconBg={`${T3}25`}   label="Region"        value="UTC"    onPress={() => Alert.alert('Coming Soon')} last />
+        </Group>
+
+        {/* ─── Security ─────────────────────────────────────── */}
+        <SectionHead title="Security" />
+        <Group>
+          <Row icon="🔑" iconBg={AMB_D}  label="Change password"           onPress={() => Alert.alert('Coming Soon')} />
+          <Row icon="🛡️" iconBg={VIO_D}  label="Two-factor authentication" toggle toggleVal={false} />
+          <Row icon="📋" iconBg={IND_D}  label="Active sessions"            onPress={() => Alert.alert('Coming Soon')} last />
+        </Group>
+
+        {/* ─── Preferences ──────────────────────────────────── */}
+        <SectionHead title="Preferences" />
+        <Group>
+          <Row icon="🔔" iconBg={AMB_D}        label="Notifications"   onPress={() => {}} />
+          <Row icon="🌙" iconBg={VIO_D}        label="Appearance"      value="Dark"   onPress={() => {}} />
+          <Row icon="💱" iconBg={TEAL_D}       label="Base currency"   value="AUD"    onPress={() => {}} />
+          <Row icon="📳" iconBg={`${T3}20`}   label="Haptic feedback" value="On"     onPress={() => {}} last />
+        </Group>
+
+        {/* ─── Sign out ─────────────────────────────────────── */}
+        <SectionHead title="Account" />
+        <Group>
+          <Row icon="🚪" iconBg={RED_D} label="Sign out" onPress={handleSignOut} last />
+        </Group>
+
+        {/* ─── Footer ───────────────────────────────────────── */}
+        <View style={s.footer}>
+          <Text style={s.footerTxt}>Vestara · v1.0.0</Text>
         </View>
 
-        {/* ── Security ── */}
-        <Section title="Security" />
-        <View style={s.section}>
-          <Row icon="🔑" label="Change Password"           onPress={() => Alert.alert('Coming Soon')} />
-          <Row icon="🛡️" label="Two-Factor Authentication" value="Off" onPress={() => Alert.alert('Coming Soon')} />
-          <Row icon="📋" label="Active Sessions"           onPress={() => Alert.alert('Coming Soon')} />
-        </View>
-
-        {/* ── Preferences ── */}
-        <Section title="Preferences" />
-        <View style={s.section}>
-          <Row icon="🔔" label="Notifications" onPress={() => {}} />
-          <Row icon="🌙" label="Appearance"    value="Dark"  onPress={() => {}} />
-          <Row icon="💱" label="Base Currency" value="AUD"   onPress={() => {}} />
-        </View>
-
-        {/* ── Account ── */}
-        <Section title="Account" />
-        <View style={s.section}>
-          <Row icon="🚪" label="Sign Out" onPress={handleSignOut} danger />
-        </View>
-
-        <View style={s.wordmark}>
-          <Text style={s.wordmarkTxt}>◈ VESTARA · v1.0.0</Text>
-        </View>
       </ScrollView>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  root:    { flex: 1, backgroundColor: BG },
-  glow1:   { position: 'absolute', width: 320, height: 320, borderRadius: 160, backgroundColor: 'rgba(201,168,76,0.04)', top: -80, right: -80 },
-  glow2:   { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(59,130,246,0.03)', bottom: 120, left: -60 },
-  scroll:  { paddingHorizontal: 18, paddingTop: Platform.OS === 'ios' ? 58 : 36, paddingBottom: 48 },
+  root:   { flex: 1, backgroundColor: BG },
+  glow:   { position: 'absolute', top: -120, left: '50%', marginLeft: -150,
+            width: 300, height: 300, borderRadius: 150,
+            backgroundColor: 'rgba(99,102,241,0.06)' },
 
-  headerCard:  { backgroundColor: CARD, borderRadius: 22, borderWidth: 1, borderColor: BORDER, padding: 20, marginBottom: 4, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 12 },
-  topBar:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 },
-  screenLabel: { fontSize: 9, color: GOLD, letterSpacing: 3, fontFamily: sans },
-  brand:       { fontSize: 22, fontWeight: '700', color: TXT, fontFamily: serif, letterSpacing: 0.3, marginTop: 2 },
-  badge:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, gap: 6 },
-  dot:         { width: 6, height: 6, borderRadius: 3 },
-  badgeTxt:    { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  scroll: { paddingHorizontal: 18,
+            paddingTop: Platform.OS === 'ios' ? 60 : 38,
+            paddingBottom: 56 },
 
-  identity:    { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  name:        { fontSize: 19, fontWeight: '700', color: TXT, fontFamily: serif, marginBottom: 3 },
-  email:       { fontSize: 12, color: MUTED, marginBottom: 8 },
-  pill:        { alignSelf: 'flex-start', backgroundColor: GOLD_DIM, borderWidth: 1, borderColor: GOLD_BDR, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
-  pillTxt:     { color: GOLD_LIGHT, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  // ── Hero
+  hero:        { backgroundColor: CARD, borderRadius: 20, borderWidth: 1,
+                 borderColor: BORDER, padding: 20, marginBottom: 10,
+                 shadowColor: '#000', shadowOpacity: 0.25,
+                 shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  heroTop:     { flexDirection: 'row', justifyContent: 'space-between',
+                 alignItems: 'center', marginBottom: 20 },
+  screenLabel: { color: T1, fontSize: 18, fontWeight: '700', fontFamily: sans },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6,
+                 paddingHorizontal: 11, paddingVertical: 5,
+                 borderRadius: 20, borderWidth: 1 },
+  statusDot:   { width: 6, height: 6, borderRadius: 3 },
+  statusTxt:   { fontSize: 12, fontWeight: '600', fontFamily: sans },
 
-  statsRow:    { flexDirection: 'row' },
+  identity:    { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 22 },
+  identityText:{ flex: 1 },
+  name:        { color: T1, fontSize: 20, fontWeight: '700', fontFamily: sans,
+                 marginBottom: 3, letterSpacing: 0.1 },
+  emailTxt:    { color: T2, fontSize: 12, fontFamily: sans, marginBottom: 8 },
+  rolePill:    { alignSelf: 'flex-start', backgroundColor: IND_D,
+                 borderWidth: 1, borderColor: IND_B,
+                 borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
+  roleTxt:     { color: IND_L, fontSize: 11, fontWeight: '600', fontFamily: sans },
 
-  section:     { backgroundColor: CARD, borderRadius: 18, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' },
-  sectionTitle:{ color: TXT, fontSize: 15, fontWeight: '700', fontFamily: serif, marginBottom: 4 },
-  sectionSub:  { color: SUB, fontSize: 12, lineHeight: 18 },
+  statsStrip:  { flexDirection: 'row', backgroundColor: CARD2,
+                 borderRadius: 14, borderWidth: 1, borderColor: BORDER },
+  statDiv:     { width: 1, backgroundColor: BORDER, marginVertical: 12 },
 
-  wordmark:    { alignItems: 'center', marginTop: 32 },
-  wordmarkTxt: { color: 'rgba(201,168,76,0.2)', fontSize: 11, letterSpacing: 3, fontFamily: serif },
+  // ── Score card
+  card:        { backgroundColor: CARD, borderRadius: 16, borderWidth: 1,
+                 borderColor: BORDER, padding: 18, marginBottom: 4 },
+
+  // ── Connect
+  connectCard: { backgroundColor: CARD, borderRadius: 16, borderWidth: 1,
+                 borderColor: BORDER, overflow: 'hidden' },
+  connectTop:  { padding: 16, paddingBottom: 10 },
+  connectTitle:{ color: T1, fontSize: 15, fontWeight: '600', fontFamily: sans, marginBottom: 4 },
+  connectSub:  { color: T2, fontSize: 12, lineHeight: 18 },
+
+  // ── Footer
+  footer:    { alignItems: 'center', marginTop: 32 },
+  footerTxt: { color: T3, fontSize: 11, fontFamily: sans },
 });
