@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { TXT, MUTED, serif, sans, mono } from '../tokens';
+import { TXT, MUTED, SUB, sans, mono } from '../tokens';
 
 const Metric: React.FC<{ label: string; value: string; color?: string; sub?: string }> = ({ label, value, color = TXT, sub }) => (
     <View style={mt.wrap}>
@@ -12,9 +12,9 @@ const Metric: React.FC<{ label: string; value: string; color?: string; sub?: str
 
 export const mt = StyleSheet.create({
     wrap:  { flex: 1 },
-    label: { color: MUTED, fontSize: 9, fontFamily: sans, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 5 },
-    value: { fontSize: 20, fontWeight: '700', fontFamily: serif },
-    sub:   { color: MUTED, fontSize: 10, fontFamily: mono, marginTop: 3 },
+    label: { color: MUTED, fontSize: 9, fontFamily: sans, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 6 },
+    value: { fontSize: 22, fontWeight: '700', fontFamily: sans },
+    sub:   { color: SUB, fontSize: 10, fontFamily: mono, marginTop: 3 },
 });
 
 export default Metric;

@@ -23,14 +23,14 @@ const CARD2   = '#1A2235';
 const BORDER  = 'rgba(255,255,255,0.07)';
 const BORDER2 = 'rgba(255,255,255,0.11)';
 
-const IND     = '#6366F1';   // indigo — primary
-const IND_L   = '#818CF8';
-const IND_D   = 'rgba(99,102,241,0.12)';
-const IND_B   = 'rgba(99,102,241,0.20)';
+const IND     = '#7C6CF0';   // electric violet — primary
+const IND_L   = '#A89CF5';
+const IND_D   = 'rgba(124,108,240,0.10)';
+const IND_B   = 'rgba(124,108,240,0.22)';
 
-const VIO     = '#8B5CF6';   // violet — secondary
-const VIO_L   = '#A78BFA';
-const VIO_D   = 'rgba(139,92,246,0.12)';
+const VIO     = '#9B8CF4';   // violet — secondary (lighter shade)
+const VIO_L   = '#C4B5FD';
+const VIO_D   = 'rgba(155,140,244,0.12)';
 
 const TEAL    = '#0EA5E9';   // sky blue — links / info
 const TEAL_D  = 'rgba(14,165,233,0.10)';
