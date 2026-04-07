@@ -17,10 +17,14 @@ import {
 } from 'react-native';
 
 import { useInsights } from '@/src/insights/useInsights';
-import { InsightSignal, InsightSeverity, InsightCategory } from '@/src/services/mlPipeline';
+import { useRecommendations } from '@/src/insights/useRecommendations';
+import {
+    InsightSignal, InsightSeverity, InsightCategory,
+    StockRecommendation, RecommendationAction, RecommendationType,
+} from '@/src/services/mlPipeline';
 import {
     BG, CARD, CARD2, BORDER, BORDER2,
-    GOLD, GOLD_L, GOLD_D, GOLD_B,
+    GOLD, GOLD_L, GOLD_D,
     GREEN, GREEN_D, RED, RED_D,
     ORANGE, ORANGE_D, BLUE, BLUE_D,
     TXT, TXT2, MUTED, SUB,
@@ -28,8 +32,7 @@ import {
 } from '@/src/portfolio/tokens';
 
 // ─── Design constants ──────────────────────────────────────────────────────────
-const PURPLE   = '#C084FC';
-const PURPLE_D = 'rgba(192,132,252,0.1)';
+const PURPLE = '#C084FC';
 
 // ─── Severity → colour mapping ────────────────────────────────────────────────
 const SEV_COLOR: Record<InsightSeverity, string> = {
@@ -163,7 +166,7 @@ const SignalCard: React.FC<{ signal: InsightSignal }> = ({ signal }) => {
 // ── Top Position Row ───────────────────────────────────────────────────────────
 const PositionRow: React.FC<{
     ticker: string; alloc_pct: number; pnl_pct: number; value: number; maxAlloc: number;
-}> = ({ ticker, alloc_pct, pnl_pct, value, maxAlloc }) => {
+}> = ({ ticker, alloc_pct, pnl_pct, maxAlloc }) => {
     const pnlColor = pnl_pct >= 0 ? GREEN : RED;
     const barWidth = maxAlloc > 0 ? `${(alloc_pct / maxAlloc) * 100}%` as any : '0%';
     return (
@@ -177,6 +180,416 @@ const PositionRow: React.FC<{
         </View>
     );
 };
+
+// ─── Recommendation constants ─────────────────────────────────────────────────
+
+const ACTION_COLOR: Record<RecommendationAction, string> = {
+    strong_buy: GREEN,
+    buy:        BLUE,
+    watch:      GOLD,
+};
+const ACTION_BG: Record<RecommendationAction, string> = {
+    strong_buy: GREEN_D,
+    buy:        BLUE_D,
+    watch:      GOLD_D,
+};
+const ACTION_LABEL: Record<RecommendationAction, string> = {
+    strong_buy: 'STRONG BUY',
+    buy:        'BUY',
+    watch:      'WATCH',
+};
+const TYPE_ICON: Record<RecommendationType, string> = {
+    stock:  '◈',
+    etf:    '◎',
+    forex:  '◉',
+    crypto: '◆',
+};
+const RISK_COLOR: Record<string, string> = {
+    low:    GREEN,
+    medium: GOLD,
+    high:   RED,
+};
+
+// ── Conviction bar ─────────────────────────────────────────────────────────────
+const ConvictionBar: React.FC<{ score: number; color: string }> = ({ score, color }) => (
+    <View style={rc.barWrap}>
+        <View style={[rc.barFill, { width: `${score}%` as any, backgroundColor: color }]} />
+    </View>
+);
+
+// ── Recommendation card ────────────────────────────────────────────────────────
+const RecommendationCard: React.FC<{ rec: StockRecommendation }> = ({ rec }) => {
+    const actionColor = ACTION_COLOR[rec.action] ?? GOLD;
+    const actionBg    = ACTION_BG[rec.action]    ?? GOLD_D;
+    const riskColor   = RISK_COLOR[rec.risk_level] ?? MUTED;
+    const typeIcon    = TYPE_ICON[rec.type] ?? '◈';
+
+    return (
+        <View style={[rc.card, { borderLeftColor: actionColor }]}>
+            {/* Header */}
+            <View style={rc.header}>
+                <View style={rc.tickerRow}>
+                    <Text style={[rc.typeIcon, { color: actionColor }]}>{typeIcon}</Text>
+                    <Text style={rc.ticker}>{rec.ticker}</Text>
+                    <View style={[rc.actionBadge, { backgroundColor: actionBg, borderColor: `${actionColor}40` }]}>
+                        <Text style={[rc.actionText, { color: actionColor }]}>{ACTION_LABEL[rec.action]}</Text>
+                    </View>
+                </View>
+                <View style={rc.convictionWrap}>
+                    <ConvictionBar score={rec.conviction_score} color={actionColor} />
+                    <Text style={[rc.convictionScore, { color: actionColor }]}>{rec.conviction_score}</Text>
+                </View>
+            </View>
+
+            {/* Name + category */}
+            <Text style={rc.name}>{rec.name}</Text>
+            <View style={rc.tagRow}>
+                <View style={[rc.catTag, { backgroundColor: `${PURPLE}18` }]}>
+                    <Text style={[rc.catTagText, { color: PURPLE }]}>{rec.category.toUpperCase()}</Text>
+                </View>
+                <View style={[rc.catTag, { backgroundColor: `${riskColor}18` }]}>
+                    <Text style={[rc.catTagText, { color: riskColor }]}>{rec.risk_level.toUpperCase()} RISK</Text>
+                </View>
+                <View style={[rc.catTag, { backgroundColor: `${MUTED}15` }]}>
+                    <Text style={[rc.catTagText, { color: MUTED }]}>{rec.type.toUpperCase()}</Text>
+                </View>
+            </View>
+
+            {/* Rationale */}
+            <Text style={rc.rationale}>{rec.rationale}</Text>
+
+            {/* Portfolio fit */}
+            <View style={rc.fitRow}>
+                <Text style={rc.fitLabel}>PORTFOLIO FIT  </Text>
+                <Text style={rc.fitText}>{rec.fit}</Text>
+            </View>
+        </View>
+    );
+};
+
+// ── AI Picks section ───────────────────────────────────────────────────────────
+const AIPicks: React.FC<{
+    recs:         ReturnType<typeof useRecommendations>;
+    hasDataset:   boolean;
+}> = ({ recs, hasDataset }) => {
+    if (!hasDataset) return null;
+
+    if (!recs.data && !recs.loading && !recs.error) {
+        return (
+            <View style={rc.promptCard}>
+                <Text style={rc.promptIcon}>✦</Text>
+                <Text style={rc.promptTitle}>VESTARA AI PICKS</Text>
+                <Text style={rc.promptBody}>
+                    Generate personalised stock, ETF, forex, and crypto recommendations tailored to your exact portfolio metrics — powered by Gemini AI.
+                </Text>
+                <TouchableOpacity style={rc.promptBtn} onPress={recs.fetch}>
+                    <Text style={rc.promptBtnText}>Generate AI Picks</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    if (recs.loading) {
+        return (
+            <View style={rc.loadingCard}>
+                <ActivityIndicator color={GOLD} />
+                <Text style={rc.loadingText}>Analysing portfolio with Gemini AI…</Text>
+            </View>
+        );
+    }
+
+    if (recs.error) {
+        return (
+            <View style={rc.errorCard}>
+                <Text style={[rc.promptTitle, { color: RED }]}>AI PICKS UNAVAILABLE</Text>
+                <Text style={rc.rationale}>{recs.error}</Text>
+                <TouchableOpacity style={[rc.promptBtn, { backgroundColor: RED_D, borderColor: `${RED}30` }]} onPress={recs.fetch}>
+                    <Text style={[rc.promptBtnText, { color: RED }]}>Retry</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    const { recommendations, analyst_note, generated_at, portfolio_context } = recs.data!;
+    const genTime = new Date(generated_at).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+
+    return (
+        <>
+            {/* Analyst note */}
+            <View style={rc.analystCard}>
+                <View style={rc.analystHeader}>
+                    <Text style={rc.analystLabel}>GEMINI ANALYST NOTE</Text>
+                    <Text style={rc.analystMeta}>
+                        {portfolio_context.risk_profile.toUpperCase()} · {genTime.toUpperCase()}
+                    </Text>
+                </View>
+                <Text style={rc.analystNote}>{analyst_note}</Text>
+            </View>
+
+            {/* Recommendation cards */}
+            {recommendations.map((rec, i) => (
+                <RecommendationCard key={`${rec.ticker}-${i}`} rec={rec} />
+            ))}
+
+            {/* Refresh button */}
+            <TouchableOpacity style={rc.refreshRecs} onPress={recs.fetch}>
+                <Text style={rc.refreshRecsText}>↺  REFRESH AI PICKS</Text>
+            </TouchableOpacity>
+        </>
+    );
+};
+
+// Styles for recommendation components
+const rc = StyleSheet.create({
+    card: {
+        backgroundColor: CARD,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: BORDER,
+        borderLeftWidth: 4,
+        marginHorizontal: 16,
+        marginBottom: 10,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 4,
+    },
+    header: { marginBottom: 8 },
+    tickerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+    },
+    typeIcon: { fontSize: 14, fontFamily: mono },
+    ticker: {
+        color: TXT,
+        fontSize: 18,
+        fontFamily: mono,
+        fontWeight: '800',
+        letterSpacing: 1,
+        flex: 1,
+    },
+    actionBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        borderWidth: 1,
+    },
+    actionText: {
+        fontSize: 9,
+        fontFamily: mono,
+        fontWeight: '800',
+        letterSpacing: 1.5,
+    },
+    convictionWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    barWrap: {
+        flex: 1,
+        height: 4,
+        backgroundColor: BORDER,
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    barFill: {
+        height: '100%',
+        borderRadius: 2,
+        opacity: 0.85,
+    },
+    convictionScore: {
+        fontSize: 11,
+        fontFamily: mono,
+        fontWeight: '700',
+        width: 28,
+        textAlign: 'right',
+    },
+    name: {
+        color: TXT2,
+        fontSize: 13,
+        fontFamily: sans,
+        marginBottom: 8,
+    },
+    tagRow: {
+        flexDirection: 'row',
+        gap: 6,
+        flexWrap: 'wrap',
+        marginBottom: 10,
+    },
+    catTag: {
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 5,
+    },
+    catTagText: {
+        fontSize: 8,
+        fontFamily: mono,
+        fontWeight: '700',
+        letterSpacing: 1,
+    },
+    rationale: {
+        color: TXT2,
+        fontSize: 12,
+        fontFamily: sans,
+        lineHeight: 18,
+        marginBottom: 10,
+    },
+    fitRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        backgroundColor: GOLD_D,
+        borderRadius: 7,
+        padding: 9,
+    },
+    fitLabel: {
+        color: GOLD,
+        fontSize: 9,
+        fontFamily: mono,
+        fontWeight: '800',
+        letterSpacing: 1,
+        marginTop: 1,
+        flexShrink: 0,
+    },
+    fitText: {
+        color: GOLD_L,
+        fontSize: 11,
+        fontFamily: sans,
+        lineHeight: 16,
+        flex: 1,
+    },
+    // Prompt / loading / error states
+    promptCard: {
+        backgroundColor: CARD,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: `${GOLD}30`,
+        marginHorizontal: 16,
+        marginBottom: 12,
+        padding: 24,
+        alignItems: 'center',
+    },
+    promptIcon: {
+        color: GOLD,
+        fontSize: 32,
+        marginBottom: 12,
+    },
+    promptTitle: {
+        color: TXT,
+        fontSize: 13,
+        fontFamily: mono,
+        fontWeight: '700',
+        letterSpacing: 2,
+        marginBottom: 10,
+    },
+    promptBody: {
+        color: SUB,
+        fontSize: 13,
+        fontFamily: sans,
+        lineHeight: 20,
+        textAlign: 'center',
+        marginBottom: 20,
+        maxWidth: 280,
+    },
+    promptBtn: {
+        backgroundColor: GOLD_D,
+        borderWidth: 1,
+        borderColor: `${GOLD}40`,
+        paddingVertical: 13,
+        paddingHorizontal: 28,
+        borderRadius: 12,
+    },
+    promptBtnText: {
+        color: GOLD_L,
+        fontSize: 13,
+        fontFamily: sans,
+        fontWeight: '800',
+        letterSpacing: 0.5,
+    },
+    loadingCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: CARD,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: BORDER,
+        marginHorizontal: 16,
+        marginBottom: 12,
+        padding: 20,
+    },
+    loadingText: {
+        color: MUTED,
+        fontSize: 12,
+        fontFamily: mono,
+        letterSpacing: 0.5,
+    },
+    errorCard: {
+        backgroundColor: CARD,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: `${RED}30`,
+        marginHorizontal: 16,
+        marginBottom: 12,
+        padding: 20,
+        alignItems: 'center',
+        gap: 10,
+    },
+    analystCard: {
+        backgroundColor: CARD,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: `${GOLD}25`,
+        marginHorizontal: 16,
+        marginBottom: 10,
+        padding: 16,
+    },
+    analystHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    analystLabel: {
+        color: GOLD,
+        fontSize: 10,
+        fontFamily: mono,
+        fontWeight: '700',
+        letterSpacing: 1.5,
+    },
+    analystMeta: {
+        color: MUTED,
+        fontSize: 9,
+        fontFamily: mono,
+        letterSpacing: 0.5,
+    },
+    analystNote: {
+        color: TXT2,
+        fontSize: 13,
+        fontFamily: sans,
+        lineHeight: 20,
+    },
+    refreshRecs: {
+        marginHorizontal: 16,
+        marginBottom: 12,
+        paddingVertical: 12,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: BORDER2,
+        alignItems: 'center',
+    },
+    refreshRecsText: {
+        color: MUTED,
+        fontSize: 11,
+        fontFamily: mono,
+        letterSpacing: 1.5,
+    },
+});
 
 // ─── Empty / No-dataset state ─────────────────────────────────────────────────
 const EmptyState: React.FC<{ onGenerate: () => void; loading: boolean }> = ({ onGenerate, loading }) => (
@@ -197,6 +610,7 @@ const EmptyState: React.FC<{ onGenerate: () => void; loading: boolean }> = ({ on
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function InsightsScreen() {
     const { data, loading, refreshing, error, noDataset, onRefresh, generateAndFetch } = useInsights();
+    const recs = useRecommendations();
 
     // ── Loading ──
     if (loading) {
@@ -472,9 +886,16 @@ export default function InsightsScreen() {
                     </View>
                 </View>
 
+                {/* ── AI Picks ── */}
+                <SectionHeader
+                    title="AI INVESTMENT PICKS"
+                    right="GEMINI POWERED"
+                />
+                <AIPicks recs={recs} hasDataset={!noDataset && !!data} />
+
                 {/* ── Disclaimer ── */}
                 <Text style={s.disclaimer}>
-                    Signals are generated using rule-based financial thresholds and historical portfolio data. Not financial advice. Past performance is not indicative of future results.
+                    Signals are generated using rule-based financial thresholds and historical portfolio data. AI picks are generated by Gemini 1.5 Flash and are not financial advice. Past performance is not indicative of future results.
                 </Text>
 
                 <View style={{ height: 32 }} />
@@ -484,7 +905,6 @@ export default function InsightsScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const ORANGE_D_LOCAL = 'rgba(251,146,60,0.1)';
 
 const s = StyleSheet.create({
     root: {

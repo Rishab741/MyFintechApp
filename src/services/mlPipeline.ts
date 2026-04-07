@@ -1,5 +1,36 @@
 import { supabase } from '@/src/lib/supabase';
 
+// ── Recommendation types ──────────────────────────────────────────────────────
+
+export type RecommendationAction   = 'strong_buy' | 'buy' | 'watch';
+export type RecommendationRisk     = 'low' | 'medium' | 'high';
+export type RecommendationType     = 'stock' | 'etf' | 'forex' | 'crypto';
+
+export interface StockRecommendation {
+    ticker:           string;
+    name:             string;
+    type:             RecommendationType;
+    action:           RecommendationAction;
+    rationale:        string;
+    risk_level:       RecommendationRisk;
+    conviction_score: number;
+    category:         string;
+    fit:              string;
+}
+
+export interface RecommendationsResult {
+    recommendations:   StockRecommendation[];
+    analyst_note:      string;
+    generated_at:      string;
+    model:             string;
+    portfolio_context: {
+        risk_profile:       string;
+        volatility_regime:  string;
+        positions_count:    number;
+        alpha:              number;
+    };
+}
+
 // ── Auto-trigger debounce state ───────────────────────────────────────────────
 // Keyed by userId. Prevents hammering the edge function more than once per window.
 const _lastTriggered: Record<string, number> = {};
@@ -161,6 +192,22 @@ export async function getInsights(userId: string): Promise<PortfolioInsights> {
     if (error) throw new Error(`getInsights failed: ${error.message}`);
     if (data?.error) throw new Error(data.error);
     return data as PortfolioInsights;
+}
+
+/**
+ * Calls Gemini 1.5 Flash (via the ml-pipeline edge function) to generate
+ * 5 personalised stock/ETF/FX/crypto picks based on the user's portfolio
+ * metrics and current holdings.
+ *
+ * Requires GEMINI_API_KEY to be set as a Supabase secret.
+ */
+export async function getRecommendations(userId: string): Promise<RecommendationsResult> {
+    const { data, error } = await supabase.functions.invoke('ml-pipeline', {
+        body: { action: 'get_recommendations', user_id: userId },
+    });
+    if (error) throw new Error(`getRecommendations failed: ${error.message}`);
+    if (data?.error) throw new Error(data.error);
+    return data as RecommendationsResult;
 }
 
 // ── Auto-trigger ──────────────────────────────────────────────────────────────

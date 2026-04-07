@@ -727,6 +727,164 @@ serve(async (req: Request) => {
       })
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // get_recommendations — Gemini-powered AI stock/ETF/FX suggestion engine
+    // Reads the latest ml_datasets row, builds a portfolio context prompt,
+    // calls Gemini 1.5 Flash, and returns 5 structured investment picks.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (action === 'get_recommendations') {
+      const GEMINI_KEY = Deno.env.get('GEMINI_API_KEY')
+      if (!GEMINI_KEY) return json({ error: 'GEMINI_API_KEY secret not configured in Supabase.' }, 500)
+
+      // ── Fetch latest dataset ──────────────────────────────────────────────
+      const { data, error: dsErr } = await supabaseAdmin
+        .from('ml_datasets')
+        .select('feature_rows, position_rows, summary, generated_at')
+        .eq('user_id', user_id)
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (dsErr || !data) return json({ error: 'No dataset found. Generate a dataset first via generate_dataset.' }, 404)
+
+      const featureRows  = (data.feature_rows  as any[]) ?? []
+      const positionRows = (data.position_rows as any[]) ?? []
+      const summary      = data.summary as any
+
+      if (featureRows.length === 0) return json({ error: 'Dataset has no feature rows.' }, 422)
+
+      const latestRow = featureRows[featureRows.length - 1]
+
+      // ── Extract metrics ───────────────────────────────────────────────────
+      const { sharpe = 0, ann_vol = 0, var95 = 0, win_rate = 0 } = summary?.risk ?? {}
+      const max_drawdown      = summary?.max_drawdown ?? 0
+      const total_return      = summary?.total_return ?? 0
+      const momentum_5        = latestRow.momentum_5        ?? 0
+      const cash_pct          = latestRow.cash_pct          ?? 0
+      const positions_count   = latestRow.positions_count   ?? 0
+      const volatility_regime = latestRow.volatility_regime ?? 'medium'
+      const cumulative_return = latestRow.cumulative_return ?? 0
+      const benchmark_return  = latestRow.benchmark_return  ?? 0
+      const alpha             = cumulative_return - benchmark_return
+
+      // ── Current holdings summary ──────────────────────────────────────────
+      const latestPosTimestamp = positionRows.length > 0
+        ? [...positionRows].sort((a: any, b: any) => b.timestamp.localeCompare(a.timestamp))[0].timestamp
+        : null
+      const currentPositions = latestPosTimestamp
+        ? positionRows.filter((p: any) => p.timestamp === latestPosTimestamp)
+        : []
+
+      const holdingsSummary = currentPositions.length > 0
+        ? currentPositions
+            .sort((a: any, b: any) => (b.alloc_pct ?? 0) - (a.alloc_pct ?? 0))
+            .slice(0, 8)
+            .map((p: any) =>
+              `${p.ticker} (${(p.alloc_pct ?? 0).toFixed(1)}% alloc, P&L ${(p.pnl_pct ?? 0).toFixed(1)}%)`
+            )
+            .join('; ')
+        : 'No position data available'
+
+      // ── Derive implied risk profile ───────────────────────────────────────
+      const riskProfile = ann_vol > 30 ? 'aggressive' : ann_vol > 15 ? 'moderate' : 'conservative'
+
+      // ── Build prompt ──────────────────────────────────────────────────────
+      const prompt = `You are a quantitative financial analyst AI. Analyse the portfolio below and suggest 5 investments.
+
+PORTFOLIO METRICS:
+- Sharpe Ratio: ${sharpe.toFixed(2)}
+- Annualised Volatility: ${ann_vol.toFixed(1)}%
+- Max Drawdown: ${max_drawdown.toFixed(1)}%
+- Total Return: ${total_return.toFixed(1)}%
+- 5-Day Momentum: ${momentum_5.toFixed(2)}%
+- Cash Position: ${cash_pct.toFixed(1)}%
+- Win Rate: ${win_rate.toFixed(1)}%
+- VaR (95%): ${var95.toFixed(2)}%
+- Volatility Regime: ${volatility_regime}
+- vs S&P 500 Alpha: ${alpha >= 0 ? '+' : ''}${alpha.toFixed(1)}%
+- Positions Count: ${positions_count}
+- Implied Risk Profile: ${riskProfile}
+
+CURRENT HOLDINGS:
+${holdingsSummary}
+
+TASK: Based on this specific portfolio's metrics, risk profile, and gaps, suggest exactly 5 investments (can be stocks, ETFs, currencies, or crypto) that would complement this portfolio.
+
+Return ONLY a valid JSON object with this structure:
+{
+  "recommendations": [
+    {
+      "ticker": "e.g. AAPL, SPY, BTC-USD, EUR/USD",
+      "name": "Full instrument name",
+      "type": "stock|etf|forex|crypto",
+      "action": "strong_buy|buy|watch",
+      "rationale": "1-2 sentences on why given the portfolio metrics above",
+      "risk_level": "low|medium|high",
+      "conviction_score": 0-100,
+      "category": "e.g. Growth, Dividend, Hedge, Diversification, Momentum, Income",
+      "fit": "1 sentence on how it specifically addresses this portfolio's weaknesses or gaps"
+    }
+  ],
+  "analyst_note": "2-3 sentence strategic overview for this specific portfolio"
+}`
+
+      // ── Call Gemini 1.5 Flash ─────────────────────────────────────────────
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: 2000,
+              thinkingConfig: { thinkingBudget: 0 },
+            },
+          }),
+        }
+      )
+
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text()
+        console.error('GEMINI ERROR', geminiRes.status, errText)
+        return json({ error: 'Gemini API error', status: geminiRes.status, details: errText }, 502)
+      }
+
+      const geminiData = await geminiRes.json()
+
+      // Gemini 2.5 with thinking=0: pick the non-thought part, fallback to last part
+      const parts   = geminiData?.candidates?.[0]?.content?.parts ?? []
+      const rawText = (parts.find((p: any) => !p.thought)?.text ?? parts[parts.length - 1]?.text ?? '') as string
+      console.log('GEMINI RAW', rawText.slice(0, 200))
+
+      if (!rawText) return json({ error: 'Gemini returned empty response', raw: geminiData }, 502)
+
+      // Extract the JSON object directly — handles fenced and unfenced responses
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) return json({ error: 'No JSON object found in Gemini response', raw: rawText.slice(0, 500) }, 502)
+
+      let parsed: any
+      try {
+        parsed = JSON.parse(jsonMatch[0])
+      } catch {
+        return json({ error: 'Failed to parse Gemini response', raw: rawText.slice(0, 500) }, 502)
+      }
+
+      return json({
+        recommendations: parsed.recommendations ?? [],
+        analyst_note:    parsed.analyst_note    ?? '',
+        generated_at:    new Date().toISOString(),
+        model:           'gemini-2.5-flash',
+        portfolio_context: {
+          risk_profile:       riskProfile,
+          volatility_regime,
+          positions_count,
+          alpha: +alpha.toFixed(2),
+        },
+      })
+    }
+
     return json({ error: `Unknown action: ${action}` }, 400)
 
   } catch (err: any) {
