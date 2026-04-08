@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { BORDER, CARD, GOLD, MUTED, mono, sans, TXT } from '@/src/portfolio/tokens';
+import { BORDER, BORDER_HI, CARD, GOLD, MUTED, mono, sans, TXT } from '@/src/market/tokens';
 import type { Sector } from '../types';
 
 // Color-codes a % change: deep red → neutral → deep green
@@ -83,22 +83,33 @@ const styles = StyleSheet.create({
   },
   goldBar: {
     width: 3,
-    height: 18,
+    height: 16,
     backgroundColor: GOLD,
-    borderRadius: 2,
+    borderRadius: 1,
+    shadowColor: GOLD,
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
   },
   sectionTitle: {
-    fontFamily: 'Georgia',
-    fontSize: 16,
-    color: '#EEE8DC',
-    letterSpacing: 0.5,
+    fontFamily: sans,
+    fontSize: 15,
+    color: TXT,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   card: {
     backgroundColor: CARD,
-    borderRadius: 14,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: BORDER,
+    borderTopWidth: 1,
+    borderTopColor: BORDER_HI,
     padding: 12,
+    shadowColor: GOLD,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
   },
   legend: {
     flexDirection: 'row',
@@ -118,11 +129,11 @@ const styles = StyleSheet.create({
   cell: {
     width: '30%',
     flexGrow: 1,
-    borderRadius: 8,
+    borderRadius: 4,
     padding: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(65,72,87,0.7)',
   },
   cellName: {
     fontFamily: sans,

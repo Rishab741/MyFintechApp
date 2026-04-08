@@ -2,9 +2,8 @@ import React, { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { LineChart } from 'react-native-wagmi-charts';
 import {
-  BG, BORDER, CARD, GOLD, GOLD_D, GREEN, MUTED, mono, RED, sans, TXT, TXT2,
-} from '@/src/portfolio/tokens';
-import { width } from '@/src/portfolio/tokens';
+  BG, BORDER, CARD, GOLD, GOLD_D, GREEN, MUTED, mono, RED, TXT, TXT2, width,
+} from '@/src/market/tokens';
 import type { ChartPoint, MarketIndex, Period } from '../types';
 
 interface Props {
@@ -162,11 +161,15 @@ export function MarketChart({
 const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: CARD,
-    borderRadius: 16,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: BORDER,
     overflow: 'hidden',
-    marginBottom: 20,
+    marginBottom: 16,
+    shadowColor: GOLD,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
   },
   header: {
     flexDirection: 'row',
@@ -176,19 +179,19 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   indexName: {
-    fontFamily: sans,
-    fontSize: 11,
+    fontFamily: mono,
+    fontSize: 9,
     color: MUTED,
     textTransform: 'uppercase',
-    letterSpacing: 1.5,
+    letterSpacing: 2,
     marginBottom: 4,
   },
   price: {
     fontFamily: mono,
-    fontSize: 26,
+    fontSize: 28,
     color: TXT,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   change: {
     fontFamily: mono,
@@ -268,11 +271,15 @@ const styles = StyleSheet.create({
     color: MUTED,
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 3,
     overflow: 'hidden',
   },
   periodTabActive: {
     color: GOLD,
     backgroundColor: GOLD_D,
+    shadowColor: GOLD,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
   },
 });

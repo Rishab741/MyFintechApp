@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import {
-  BORDER, CARD, CARD2, GOLD, GREEN, GREEN_D, MUTED, mono, RED, RED_D, sans, TXT, TXT2,
-} from '@/src/portfolio/tokens';
+  BORDER, BORDER_HI, CARD, GOLD, GREEN, GREEN_D, MUTED, mono, RED, RED_D, sans, TXT, TXT2,
+} from '@/src/market/tokens';
 import type { Mover } from '../types';
 
 function MoverRow({ item, index, up }: { item: Mover; index: number; up: boolean }) {
@@ -117,24 +117,34 @@ const styles = StyleSheet.create({
   },
   goldBar: {
     width: 3,
-    height: 18,
+    height: 16,
     backgroundColor: GOLD,
-    borderRadius: 2,
+    borderRadius: 1,
+    shadowColor: GOLD,
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
   },
   sectionTitle: {
-    fontFamily: 'Georgia',
-    fontSize: 16,
-    color: '#EEE8DC',
-    letterSpacing: 0.5,
+    fontFamily: sans,
+    fontSize: 15,
+    color: TXT,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   card: {
     backgroundColor: CARD,
-    borderRadius: 14,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: BORDER,
-    borderTopWidth: 2,
+    borderTopWidth: 1,
+    borderTopColor: BORDER_HI,
     marginBottom: 12,
     overflow: 'hidden',
+    shadowColor: GOLD,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
   },
   cardHeader: {
     flexDirection: 'row',
@@ -150,7 +160,7 @@ const styles = StyleSheet.create({
     fontFamily: mono,
     fontSize: 10,
     color: TXT2,
-    letterSpacing: 1.5,
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
   row: {
@@ -159,7 +169,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.03)',
+    borderBottomColor: 'rgba(65,72,87,0.4)',
   },
   ticker: {
     fontFamily: mono,
