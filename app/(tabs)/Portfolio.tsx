@@ -119,6 +119,7 @@ export default function PortfolioScreen() {
         snapValues, chartPortfolio, chartBench,
         periodReturn, sp500Return, vsMarket, dailyReturns,
         todayChange, todayChangePct, allocSegs, performers, risk, chartLabels,
+        fetchError,
     } = usePortfolioData();
 
     const isUp = todayChangePct >= 0;
@@ -152,6 +153,13 @@ export default function PortfolioScreen() {
                     <Text style={{ fontSize: 18, color: SUB }}>⟳</Text>
                 </TouchableOpacity>
             </Animated.View>
+
+            {/* ── Fetch error banner ── */}
+            {fetchError && (
+                <View style={s.errorBanner}>
+                    <Text style={s.errorBannerTxt}>⚠ {fetchError}</Text>
+                </View>
+            )}
 
             {/* ── Loading ── */}
             {loading ? (
@@ -516,7 +524,10 @@ const s = StyleSheet.create({
     // Loading / empty
     centred:    { flex: 1, alignItems: 'center', justifyContent: 'center',
                   paddingHorizontal: 36, gap: 10 },
-    loadingTxt: { color: MUTED, fontSize: 12, fontFamily: mono, letterSpacing: 1, marginTop: 10 },
+    loadingTxt:    { color: MUTED, fontSize: 12, fontFamily: mono, letterSpacing: 1, marginTop: 10 },
+    errorBanner:   { marginHorizontal: 16, marginBottom: 4, backgroundColor: 'rgba(255,113,108,0.12)',
+                     borderWidth: 1, borderColor: 'rgba(255,113,108,0.35)', borderRadius: 4, padding: 10 },
+    errorBannerTxt:{ color: RED, fontSize: 11, fontFamily: mono, letterSpacing: 0.3 },
     emptyTitle: { color: TXT, fontSize: 20, fontWeight: '700', fontFamily: sans },
     emptySub:   { color: MUTED, fontSize: 13, textAlign: 'center', lineHeight: 22 },
     emptyBtn:   { marginTop: 20, backgroundColor: GOLD_D, borderWidth: 1, borderColor: GOLD_B,

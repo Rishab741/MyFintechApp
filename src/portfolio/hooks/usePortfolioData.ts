@@ -4,8 +4,8 @@ import { autoTriggerDataset } from '@/src/services/mlPipeline';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated } from 'react-native';
 import { SP500, getUnits, getTicker, getCurrency, getCategory, filterByPeriod, normalize100, computeRiskMetrics } from '../helpers';
-import { HoldingsData, Snapshot, Period, AllocSeg, PerformerItem, RiskMetrics } from '../types';
-import { GOLD, PURPLE, BLUE, ORANGE, TEAL } from '../tokens';
+import { HoldingsData, Snapshot, Period, AllocSeg, PerformerItem } from '../types';
+import { PURPLE, BLUE, ORANGE, TEAL } from '../tokens';
 
 export interface PortfolioDataResult {
     // state
@@ -43,6 +43,7 @@ export interface PortfolioDataResult {
     performers: { top: PerformerItem[]; bottom: PerformerItem[] };
     risk: ReturnType<typeof computeRiskMetrics>;
     chartLabels: string[];
+    fetchError: string | null;
 }
 
 export function usePortfolioData(): PortfolioDataResult {
@@ -54,6 +55,7 @@ export function usePortfolioData(): PortfolioDataResult {
     const [userName,    setUserName]    = useState('');
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [period,      setPeriod]      = useState<Period>('ALL');
+    const [fetchError,  setFetchError]  = useState<string | null>(null);
 
     const { brokerageConnected } = useConnectionStore();
     const headerAnim = useRef(new Animated.Value(0)).current;
@@ -95,13 +97,22 @@ export function usePortfolioData(): PortfolioDataResult {
             const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
                 body: { action: 'snaptrade_get_holdings', user_id: userId },
             });
-            if (!error && data?.holdings) {
+            if (error) {
+                setFetchError(error.message ?? 'Failed to refresh holdings');
+                return;
+            }
+            if (data?.holdings) {
                 setHoldings(data.holdings);
                 setLastUpdated(new Date());
+                setFetchError(null);
                 // Fire-and-forget: regenerate ML dataset (debounced to once per 6 h)
                 autoTriggerDataset(userId);
+            } else if (data?.error) {
+                setFetchError(data.error);
             }
-        } catch {}
+        } catch (e: any) {
+            setFetchError(e?.message ?? 'Failed to refresh holdings');
+        }
     };
 
     const onRefresh = useCallback(async () => {
@@ -223,6 +234,6 @@ export function usePortfolioData(): PortfolioDataResult {
         positions, balances, currency, cash, totalPos, totalVal, totalPnl,
         filteredSnaps, snapValues, benchValues, chartPortfolio, chartBench,
         periodReturn, sp500Return, vsMarket, dailyReturns, todayChange, todayChangePct,
-        allocSegs, performers, risk, chartLabels,
+        allocSegs, performers, risk, chartLabels, fetchError,
     };
 }
