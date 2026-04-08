@@ -35,7 +35,7 @@ import {
 import { fmtCurrency, fmt2, sign, getTicker } from '@/src/portfolio/helpers';
 
 // ─── Allocation bar row ────────────────────────────────────────────────────────
-const ALLOC_COLORS = ['#00E5FF', '#6366F1', '#A78BFA', '#14B8A6', '#FB923C', '#F472B6'];
+const ALLOC_COLORS = ['#8ff5ff', '#ac89ff', '#ff6b98', '#00E09A', '#FFA500', '#a5abbd'];
 
 const AllocRow: React.FC<{ label: string; pct: number; color: string; value: string }> =
     ({ label, pct, color, value }) => (
@@ -49,10 +49,10 @@ const AllocRow: React.FC<{ label: string; pct: number; color: string; value: str
 );
 const al = StyleSheet.create({
     row:   { marginBottom: 12 },
-    label: { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2, marginBottom: 6 },
-    track: { height: 5, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 3,
+    label: { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2.5, marginBottom: 6 },
+    track: { height: 4, backgroundColor: 'rgba(65,72,87,0.5)', borderRadius: 2,
              overflow: 'hidden', marginBottom: 4 },
-    fill:  { height: '100%', borderRadius: 3, opacity: 0.85 },
+    fill:  { height: '100%', borderRadius: 2, opacity: 0.88 },
     pct:   { fontSize: 11, fontWeight: '700', fontFamily: mono },
 });
 
@@ -68,9 +68,11 @@ const InsightBanner: React.FC<{ title: string; body: string }> = ({ title, body 
 );
 const ib = StyleSheet.create({
     wrap:  { backgroundColor: `${GOLD}0A`, borderWidth: 1, borderColor: `${GOLD}22`,
-             borderRadius: 10, padding: 12, flexDirection: 'row', gap: 10, marginBottom: 16 },
-    dot:   { width: 6, height: 6, borderRadius: 3, backgroundColor: GOLD, marginTop: 4 },
-    title: { color: GOLD_L, fontSize: 12, fontWeight: '700', fontFamily: sans, marginBottom: 3 },
+             borderLeftWidth: 3, borderLeftColor: GOLD,
+             borderRadius: 4, padding: 12, flexDirection: 'row', gap: 10, marginBottom: 16 },
+    dot:   { width: 6, height: 6, borderRadius: 3, backgroundColor: GOLD, marginTop: 4,
+             shadowColor: GOLD, shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } },
+    title: { color: GOLD_L, fontSize: 12, fontWeight: '700', fontFamily: sans, marginBottom: 3, letterSpacing: 0.1 },
     body:  { color: TXT2, fontSize: 11, lineHeight: 17 },
 });
 
@@ -92,10 +94,10 @@ const RiskScore: React.FC<{ score: number; label: string }> = ({ score, label })
 };
 const rs = StyleSheet.create({
     wrap:       { flexDirection: 'row', alignItems: 'center', gap: 14 },
-    hex:        { width: 64, height: 64, borderRadius: 12, borderWidth: 2,
+    hex:        { width: 64, height: 64, borderRadius: 6, borderWidth: 1,
                   alignItems: 'center', justifyContent: 'center' },
     num:        { fontSize: 26, fontWeight: '800', fontFamily: sans },
-    scoreLabel: { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2, marginBottom: 2 },
+    scoreLabel: { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2.5, marginBottom: 2 },
     riskName:   { fontSize: 14, fontWeight: '700', fontFamily: sans, marginBottom: 3 },
     updated:    { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 1 },
 });
@@ -436,76 +438,79 @@ export default function PortfolioScreen() {
 
 const s = StyleSheet.create({
     root:   { flex: 1, backgroundColor: BG },
-    glow1:  { position: 'absolute', top: -80, right: -80, width: 280, height: 280,
-               borderRadius: 140, backgroundColor: 'rgba(0,229,255,0.04)' },
-    glow2:  { position: 'absolute', top: 320, left: -80, width: 220, height: 220,
-               borderRadius: 110, backgroundColor: 'rgba(99,102,241,0.05)' },
+    glow1:  { position: 'absolute', top: -100, right: -100, width: 300, height: 300,
+               borderRadius: 150, backgroundColor: 'rgba(143,245,255,0.05)' },
+    glow2:  { position: 'absolute', top: 340, left: -80, width: 220, height: 220,
+               borderRadius: 110, backgroundColor: 'rgba(172,137,255,0.05)' },
 
     // Nav
     nav:        { flexDirection: 'row', alignItems: 'center', gap: 12,
                   paddingHorizontal: 18, paddingTop: Platform.OS === 'ios' ? 58 : 40,
                   paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: BORDER },
-    backBtn:    { width: 36, height: 36, borderRadius: 10, backgroundColor: CARD2,
-                  borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
+    backBtn:    { width: 36, height: 36, borderRadius: 4, backgroundColor: CARD2,
+                  borderWidth: 1, borderColor: BORDER,
+                  shadowColor: GOLD, shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
+                  alignItems: 'center', justifyContent: 'center' },
     backArrow:  { color: GOLD, fontSize: 22, lineHeight: 24, marginTop: -2 },
-    navSup:     { color: MUTED, fontSize: 9, fontFamily: mono, letterSpacing: 2.5, marginBottom: 2 },
-    navTitle:   { color: TXT, fontSize: 15, fontWeight: '700', fontFamily: sans },
+    navSup:     { color: MUTED, fontSize: 9, fontFamily: mono, letterSpacing: 3, marginBottom: 2 },
+    navTitle:   { color: TXT, fontSize: 16, fontWeight: '800', fontFamily: sans, letterSpacing: -0.3 },
     liveChip:   { flexDirection: 'row', alignItems: 'center', gap: 5,
-                  backgroundColor: GREEN_D, borderRadius: 8, borderWidth: 1,
+                  backgroundColor: GREEN_D, borderRadius: 4, borderWidth: 1,
                   borderColor: `${GREEN}35`, paddingHorizontal: 8, paddingVertical: 4 },
-    liveDot:    { width: 5, height: 5, borderRadius: 3, backgroundColor: GREEN },
-    liveTxt:    { color: GREEN, fontSize: 9, fontFamily: mono, letterSpacing: 0.5 },
-    refreshBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: CARD2,
+    liveDot:    { width: 6, height: 6, borderRadius: 3, backgroundColor: GREEN,
+                  shadowColor: GREEN, shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } },
+    liveTxt:    { color: GREEN, fontSize: 9, fontFamily: mono, letterSpacing: 1 },
+    refreshBtn: { width: 36, height: 36, borderRadius: 4, backgroundColor: CARD2,
                   borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
 
     scroll: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 52 },
 
     // Hero card
-    heroCard:   { borderTopWidth: 2, borderTopColor: `${GOLD}50` },
-    heroLabel:  { color: MUTED, fontSize: 9, fontFamily: mono, letterSpacing: 3, marginBottom: 8 },
-    heroValue:  { color: TXT, fontSize: 36, fontWeight: '800', fontFamily: sans,
-                  letterSpacing: -0.5, marginBottom: 14 },
+    heroCard:   { borderTopWidth: 1, borderTopColor: `${GOLD}60` },
+    heroLabel:  { color: MUTED, fontSize: 9, fontFamily: mono, letterSpacing: 3.5, marginBottom: 8 },
+    heroValue:  { color: TXT, fontSize: 38, fontWeight: '800', fontFamily: sans,
+                  letterSpacing: -1, marginBottom: 14 },
     heroRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 18 },
     changePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12,
-                  paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
-    changeTxt:  { fontSize: 13, fontWeight: '700', fontFamily: sans },
-    heroSub:    { color: SUB, fontSize: 12, fontFamily: sans },
-    quickRow:   { flexDirection: 'row', backgroundColor: `${CARD2}`, borderRadius: 12,
+                  paddingVertical: 6, borderRadius: 4, borderWidth: 1 },
+    changeTxt:  { fontSize: 13, fontWeight: '700', fontFamily: mono },
+    heroSub:    { color: MUTED, fontSize: 12, fontFamily: sans },
+    quickRow:   { flexDirection: 'row', backgroundColor: CARD2, borderRadius: 4,
                   borderWidth: 1, borderColor: BORDER, padding: 14 },
     quickCell:  { flex: 1, alignItems: 'center' },
-    qLabel:     { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 1.5, marginBottom: 5 },
+    qLabel:     { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2, marginBottom: 5 },
     qVal:       { color: TXT2, fontSize: 12, fontWeight: '700', fontFamily: mono },
-    qDiv:       { width: 1, backgroundColor: BORDER, marginHorizontal: 6, alignSelf: 'stretch' },
+    qDiv:       { width: 1, backgroundColor: 'rgba(65,72,87,0.6)', marginHorizontal: 6, alignSelf: 'stretch' },
 
     // Rebalance button
-    rebalanceBtn: { marginTop: 4, borderWidth: 1, borderColor: `${GOLD}30`,
-                    borderRadius: 8, paddingVertical: 12, alignItems: 'center',
+    rebalanceBtn: { marginTop: 8, borderWidth: 1, borderColor: `${GOLD}35`,
+                    borderRadius: 4, paddingVertical: 13, alignItems: 'center',
                     backgroundColor: GOLD_D },
-    rebalanceTxt: { color: GOLD, fontSize: 11, fontWeight: '700', fontFamily: mono, letterSpacing: 2 },
+    rebalanceTxt: { color: GOLD, fontSize: 11, fontWeight: '800', fontFamily: mono, letterSpacing: 2.5 },
 
     // Chart
     chartSub:  { color: MUTED, fontSize: 11, fontFamily: sans, marginBottom: 14, marginTop: -8 },
     returnRow: { flexDirection: 'row', marginBottom: 18 },
-    returnDiv: { width: 1, backgroundColor: BORDER, marginHorizontal: 12, alignSelf: 'stretch' },
+    returnDiv: { width: 1, backgroundColor: 'rgba(65,72,87,0.6)', marginHorizontal: 12, alignSelf: 'stretch' },
     chartLabel:{ color: MUTED, fontSize: 9, fontFamily: mono },
     legendRow: { flexDirection: 'row', gap: 16, marginTop: 12 },
     legendItem:{ flexDirection: 'row', alignItems: 'center', gap: 6 },
-    legendDot: { width: 8, height: 8, borderRadius: 4 },
+    legendDot: { width: 7, height: 7, borderRadius: 3 },
     legendDash:{ width: 14, height: 1.5, borderRadius: 1 },
     legendTxt: { color: MUTED, fontSize: 10, fontFamily: sans },
 
     // Holdings
-    viewAllBtn: { marginTop: 6, paddingVertical: 12, alignItems: 'center',
-                  borderTopWidth: 1, borderTopColor: BORDER },
-    viewAllTxt: { color: GOLD, fontSize: 11, fontWeight: '700', fontFamily: mono, letterSpacing: 1.5 },
+    viewAllBtn: { marginTop: 6, paddingVertical: 13, alignItems: 'center',
+                  borderTopWidth: 1, borderTopColor: 'rgba(65,72,87,0.6)' },
+    viewAllTxt: { color: GOLD, fontSize: 11, fontWeight: '700', fontFamily: mono, letterSpacing: 2 },
     emptyMsg:   { color: MUTED, fontSize: 12, fontFamily: mono, textAlign: 'center',
                   paddingVertical: 16, letterSpacing: 0.5 },
 
     // Insights
-    insightDivider: { height: 1, backgroundColor: BORDER, marginVertical: 16 },
+    insightDivider: { height: 1, backgroundColor: 'rgba(65,72,87,0.6)', marginVertical: 16 },
 
     // Tags
-    tagPill:  { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+    tagPill:  { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3, borderWidth: 1 },
     tagMuted: { color: MUTED, fontSize: 10, fontFamily: mono },
 
     // Loading / empty
@@ -513,14 +518,14 @@ const s = StyleSheet.create({
                   paddingHorizontal: 36, gap: 10 },
     loadingTxt: { color: MUTED, fontSize: 12, fontFamily: mono, letterSpacing: 1, marginTop: 10 },
     emptyTitle: { color: TXT, fontSize: 20, fontWeight: '700', fontFamily: sans },
-    emptySub:   { color: SUB, fontSize: 13, textAlign: 'center', lineHeight: 22 },
+    emptySub:   { color: MUTED, fontSize: 13, textAlign: 'center', lineHeight: 22 },
     emptyBtn:   { marginTop: 20, backgroundColor: GOLD_D, borderWidth: 1, borderColor: GOLD_B,
-                  borderRadius: 12, paddingHorizontal: 28, paddingVertical: 14 },
+                  borderRadius: 4, paddingHorizontal: 28, paddingVertical: 14 },
     emptyBtnTxt:{ color: GOLD_L, fontSize: 14, fontWeight: '700', fontFamily: sans },
 
     // Footer
     footer:     { flexDirection: 'row', alignItems: 'center', gap: 10,
                   marginTop: 20, marginBottom: 8 },
-    footerLine: { flex: 1, height: 1, backgroundColor: BORDER },
-    footerTxt:  { color: MUTED, fontSize: 9, letterSpacing: 2, fontFamily: mono },
+    footerLine: { flex: 1, height: 1, backgroundColor: 'rgba(65,72,87,0.5)' },
+    footerTxt:  { color: MUTED, fontSize: 9, letterSpacing: 2.5, fontFamily: mono },
 });

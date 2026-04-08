@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { BORDER, GREEN, GREEN_D, RED, RED_D, MUTED, TXT, serif, mono } from '../tokens';
+import { BORDER, GREEN, GREEN_D, RED, RED_D, MUTED, TXT, sans, mono } from '../tokens';
 import { PerformerItem } from '../types';
 import { tickerColor, fmtCurrency, fmt2 } from '../helpers';
 import Card from './Card';
@@ -73,13 +73,13 @@ const PerformersSection: React.FC<Props> = ({ top, bottom }) => (
 
 export const perf = StyleSheet.create({
     row:     { flexDirection:'row', alignItems:'center', paddingVertical: 12, gap: 12 },
-    icon:    { width: 38, height: 38, borderRadius: 11, borderWidth: 1, alignItems:'center', justifyContent:'center' },
-    iconTxt: { fontSize: 15, fontWeight:'700', fontFamily: serif },
-    ticker:  { color: TXT, fontSize: 13, fontWeight:'700', fontFamily: serif },
+    icon:    { width: 38, height: 38, borderRadius: 6, borderWidth: 1, alignItems:'center', justifyContent:'center' },
+    iconTxt: { fontSize: 15, fontWeight:'700', fontFamily: sans },
+    ticker:  { color: TXT, fontSize: 13, fontWeight:'700', fontFamily: sans, letterSpacing: 0.2 },
     val:     { color: MUTED, fontSize: 11, marginTop: 2, fontFamily: mono },
-    badge:   { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+    badge:   { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 3 },
     pct:     { fontSize: 13, fontWeight:'700', fontFamily: mono },
-    tagPill: { paddingHorizontal:8, paddingVertical:3, borderRadius:6, borderWidth:1 },
+    tagPill: { paddingHorizontal:8, paddingVertical:3, borderRadius:3, borderWidth:1 },
 });
 
 export default PerformersSection;

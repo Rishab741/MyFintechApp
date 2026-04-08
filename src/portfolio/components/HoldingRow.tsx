@@ -57,19 +57,19 @@ const HoldingRow: React.FC<{ pos: Position; totalValue: number; index: number }>
 };
 
 export const hr = StyleSheet.create({
-    card:      { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD2, borderRadius: 14,
+    card:      { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD2, borderRadius: 6,
                  borderWidth: 1, borderColor: BORDER, padding: 14, marginBottom: 8, gap: 12, overflow: 'hidden' },
     accentBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
-    iconWrap:  { width: 44, height: 44, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    iconWrap:  { width: 44, height: 44, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     iconTxt:   { fontSize: 17, fontWeight: '700', fontFamily: sans },
     mid:       { flex: 1, gap: 3 },
-    ticker:    { color: TXT, fontSize: 14, fontWeight: '700', fontFamily: sans },
-    units:     { color: MUTED, fontSize: 10, fontFamily: mono },
-    allocBar:  { height: 2, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 1, overflow: 'hidden', marginTop: 3 },
-    allocFill: { height: '100%', borderRadius: 1, opacity: 0.7 },
+    ticker:    { color: TXT, fontSize: 14, fontWeight: '700', fontFamily: sans, letterSpacing: 0.2 },
+    units:     { color: MUTED, fontSize: 10, fontFamily: mono, letterSpacing: 0.3 },
+    allocBar:  { height: 2, backgroundColor: 'rgba(65,72,87,0.5)', borderRadius: 1, overflow: 'hidden', marginTop: 3 },
+    allocFill: { height: '100%', borderRadius: 1, opacity: 0.8 },
     right:     { alignItems: 'flex-end', gap: 5 },
     value:     { color: TXT, fontSize: 13, fontWeight: '700', fontFamily: mono },
-    badge:     { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+    badge:     { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3 },
     pct:       { fontSize: 11, fontWeight: '700', fontFamily: mono },
 });
 

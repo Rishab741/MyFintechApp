@@ -50,10 +50,10 @@ const RiskGrid: React.FC<Props> = ({ risk }) => (
 
 export const rg = StyleSheet.create({
     grid:  { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    cell:  { flex: 1, minWidth: '45%', borderRadius: 12, borderWidth: 1, padding: 14, gap: 5 },
-    label: { color: MUTED, fontSize: 8, letterSpacing: 1.5, fontFamily: sans },
-    val:   { fontSize: 22, fontWeight: '700', fontFamily: sans },
-    sub:   { color: MUTED, fontSize: 9, fontFamily: mono },
+    cell:  { flex: 1, minWidth: '45%', borderRadius: 4, borderWidth: 1, padding: 14, gap: 5 },
+    label: { color: MUTED, fontSize: 8, letterSpacing: 2, fontFamily: mono },
+    val:   { fontSize: 22, fontWeight: '800', fontFamily: sans },
+    sub:   { color: MUTED, fontSize: 9, fontFamily: mono, letterSpacing: 0.5 },
 });
 
 export default RiskGrid;
