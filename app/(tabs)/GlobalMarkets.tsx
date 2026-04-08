@@ -5,16 +5,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Linking, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, Path, Pattern } from 'react-native-svg';
 
-// ─── Tokens ───────────────────────────────────────────────────────────────────
-const BG='#070709',CARD='#0E0E14',CARD2='#141419',CARD3='#1A1A22';
-const BORDER='rgba(255,255,255,0.055)',BORDER_HI='rgba(255,255,255,0.11)';
-const CYAN='#00E5FF',CYAN_D='rgba(0,229,255,0.07)';
-const ORANGE='#FF5C1A';
+// ─── Tokens — Quantum Ledger Design System ────────────────────────────────────
+const BG='#070e1b',CARD='#11192a',CARD2='#0c1322',CARD3='#172031';
+const BORDER='#414857',BORDER_HI='rgba(143,245,255,0.22)';
+const CYAN='#8ff5ff',CYAN_D='rgba(143,245,255,0.07)';
+const PINK='#ff6b98',PINK_D='rgba(255,107,152,0.09)';
 const GREEN='#00E09A',GREEN_D='rgba(0,224,154,0.09)';
-const RED='#FF3D5C',RED_D='rgba(255,61,92,0.09)';
+const RED='#ff716c',RED_D='rgba(255,113,108,0.09)';
 const AMBER='#FFA500',AMBER_D='rgba(255,165,0,0.09)';
-const PURPLE='#B794F4',PURPLE_D='rgba(183,148,244,0.09)';
-const TXT='#EEF2FF',TXT2='#7A8FB5',MUTED='#3A4F70',SUB='#4A6090';
+const PURPLE='#ac89ff';
+const TXT='#e2e8fb',TXT2='#a5abbd',MUTED='#6f7586',SUB='#4A6090';
 
 const W=Dimensions.get('window').width,MAP_W=W-32,MAP_H=210;
 
@@ -385,7 +385,7 @@ const SectorRow:React.FC<{sector:LiveSector;maxAbs:number}>=({sector,maxAbs})=>{
 };
 const RegimeBlock:React.FC<{label:string;description:string;color:string;equityStance:string;bondStance:string;strategy:string;overweight:SectorAllocation[];underweight:SectorAllocation[];keyEtfs:string[]}>=
 ({label,description,color,equityStance,bondStance,strategy,overweight,underweight,keyEtfs})=>(
-  <View style={[g.card,{borderLeftWidth:3,borderLeftColor:color,borderRadius:0,borderTopRightRadius:12,borderBottomRightRadius:12}]}>
+  <View style={[g.card,{borderLeftWidth:3,borderLeftColor:color,borderRadius:0,borderTopRightRadius:6,borderBottomRightRadius:6}]}>
     <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:12}}>
       <View style={{width:6,height:6,borderRadius:3,backgroundColor:color}}/><Text style={[g.badgeTxt,{color,letterSpacing:2}]}>MACRO REGIME</Text>
     </View>
@@ -534,20 +534,20 @@ const g=StyleSheet.create({
   header:{paddingHorizontal:22,paddingTop:Platform.OS==='ios'?62:32,paddingBottom:20},
   hTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:20},
   liveRow:{flexDirection:'row',alignItems:'center',gap:7},
-  liveDot:{width:5,height:5,borderRadius:2.5,backgroundColor:CYAN,shadowColor:CYAN,shadowOpacity:1,shadowRadius:6,shadowOffset:{width:0,height:0}},
-  liveTxt:{color:CYAN,fontSize:9.5,fontFamily:mono,fontWeight:'800',letterSpacing:2},
-  hTitle:{color:TXT,fontSize:32,fontFamily:sans,fontWeight:'800',letterSpacing:-0.8,lineHeight:38},
+  liveDot:{width:6,height:6,borderRadius:3,backgroundColor:CYAN,shadowColor:CYAN,shadowOpacity:1,shadowRadius:10,shadowOffset:{width:0,height:0}},
+  liveTxt:{color:CYAN,fontSize:9.5,fontFamily:mono,fontWeight:'800',letterSpacing:2.5},
+  hTitle:{color:TXT,fontSize:34,fontFamily:sans,fontWeight:'800',letterSpacing:-1.2,lineHeight:40},
   hSub:{color:MUTED,fontSize:9,fontFamily:mono,letterSpacing:1.5},
-  iconBtn:{width:32,height:32,borderRadius:8,borderWidth:1,borderColor:BORDER_HI,backgroundColor:CARD2,alignItems:'center',justifyContent:'center'},
-  statCard:{flexDirection:'row',backgroundColor:CARD,borderRadius:12,borderWidth:1,borderColor:BORDER,marginHorizontal:16,marginBottom:12,padding:18},
+  iconBtn:{width:32,height:32,borderRadius:4,borderWidth:1,borderColor:BORDER_HI,backgroundColor:CARD2,alignItems:'center',justifyContent:'center',shadowColor:CYAN,shadowOpacity:0.12,shadowRadius:8,shadowOffset:{width:0,height:0}},
+  statCard:{flexDirection:'row',backgroundColor:CARD,borderRadius:6,borderWidth:1,borderColor:BORDER,borderTopColor:BORDER_HI,borderTopWidth:1,marginHorizontal:16,marginBottom:12,padding:18,shadowColor:CYAN,shadowOpacity:0.06,shadowRadius:12,shadowOffset:{width:0,height:0}},
   statHalf:{flex:1},statDiv:{width:1,minHeight:40,backgroundColor:BORDER_HI,marginHorizontal:16},
   statLbl:{color:MUTED,fontSize:7.5,fontFamily:mono,letterSpacing:1.5,marginBottom:7},
   statVal:{fontSize:14,fontFamily:mono,fontWeight:'800',letterSpacing:0.3},
-  mapCard:{backgroundColor:CARD,borderRadius:12,borderWidth:1,borderColor:BORDER,marginHorizontal:16,marginBottom:12,overflow:'hidden'},
+  mapCard:{backgroundColor:CARD,borderRadius:6,borderWidth:1,borderColor:BORDER,borderTopColor:BORDER_HI,borderTopWidth:1,marginHorizontal:16,marginBottom:12,overflow:'hidden',shadowColor:CYAN,shadowOpacity:0.06,shadowRadius:14,shadowOffset:{width:0,height:0}},
   mapFoot:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:14,paddingVertical:12,borderTopWidth:1,borderTopColor:BORDER},
   mapFootSub:{color:MUTED,fontSize:7.5,fontFamily:mono,letterSpacing:1.5,marginBottom:3},
   mapFootMain:{fontSize:18,fontFamily:sans,fontWeight:'700',color:TXT},
-  nodePanel:{borderTopWidth:1,backgroundColor:CARD2,padding:14},
+  nodePanel:{borderTopWidth:1,borderTopColor:BORDER,backgroundColor:CARD2,padding:14},
   nodePanelHead:{flexDirection:'row',alignItems:'center',marginBottom:12},
   nodePanelReg:{fontSize:10.5,fontFamily:mono,fontWeight:'800',letterSpacing:1.5},
   nodePanelCity:{color:MUTED,fontSize:8.5,fontFamily:mono,marginTop:2},
@@ -559,23 +559,23 @@ const g=StyleSheet.create({
   npDetail:{color:TXT2,fontSize:10.5,fontFamily:sans,lineHeight:16},
   sLabel:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:18,marginBottom:8,marginTop:8},
   sLabelL:{flexDirection:'row',alignItems:'center',gap:8},
-  sAcc:{width:2,height:12,backgroundColor:CYAN,borderRadius:1,opacity:0.7},
+  sAcc:{width:3,height:12,backgroundColor:CYAN,borderRadius:1,shadowColor:CYAN,shadowOpacity:0.8,shadowRadius:6,shadowOffset:{width:0,height:0}},
   sLabelTxt:{color:TXT2,fontSize:9.5,fontFamily:mono,letterSpacing:2,fontWeight:'700'},
   sLabelR:{color:MUTED,fontSize:9,fontFamily:mono,letterSpacing:0.5},
-  card:{backgroundColor:CARD,borderRadius:12,borderWidth:1,borderColor:BORDER,marginHorizontal:16,marginBottom:12,padding:16},
+  card:{backgroundColor:CARD,borderRadius:6,borderWidth:1,borderColor:BORDER,borderTopColor:BORDER_HI,borderTopWidth:1,marginHorizontal:16,marginBottom:12,padding:16,shadowColor:CYAN,shadowOpacity:0.05,shadowRadius:10,shadowOffset:{width:0,height:0}},
   dataRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingVertical:4},
   dataLbl:{color:TXT,fontSize:13.5,fontFamily:sans,fontWeight:'600'},
   dataSub:{color:MUTED,fontSize:8.5,fontFamily:mono,marginTop:2,letterSpacing:0.3},
   dataVal:{fontSize:15,fontFamily:mono,fontWeight:'700'},dataChg:{fontSize:10,fontFamily:mono,marginTop:2},
-  rowDiv:{height:1,backgroundColor:BORDER,marginVertical:10},
-  divider:{height:1,backgroundColor:BORDER,marginVertical:12},
+  rowDiv:{height:1,backgroundColor:'rgba(65,72,87,0.6)',marginVertical:10},
+  divider:{height:1,backgroundColor:'rgba(65,72,87,0.6)',marginVertical:12},
   idxRow:{flexDirection:'row',alignItems:'center',paddingVertical:9},
   idxName:{color:TXT,fontSize:13,fontFamily:sans,fontWeight:'700'},
   idxSub:{color:MUTED,fontSize:8.5,fontFamily:mono,letterSpacing:0.5,marginTop:2},
   idxVal:{fontSize:16,fontFamily:mono,fontWeight:'800'},
-  idxBadge:{paddingHorizontal:7,paddingVertical:3,borderRadius:4,borderWidth:1},
+  idxBadge:{paddingHorizontal:7,paddingVertical:3,borderRadius:3,borderWidth:1},
   idxBadgeTxt:{fontSize:7.5,fontFamily:mono,fontWeight:'800',letterSpacing:1},
-  statusPill:{paddingHorizontal:8,paddingVertical:3,borderRadius:4,borderWidth:1},
+  statusPill:{paddingHorizontal:8,paddingVertical:3,borderRadius:3,borderWidth:1},
   statusPillTxt:{fontSize:7.5,fontFamily:mono,fontWeight:'800',letterSpacing:1},
   yRow:{flexDirection:'row',alignItems:'center',gap:10},
   yTerm:{color:MUTED,fontSize:10.5,fontFamily:mono,width:28,letterSpacing:1},
@@ -583,7 +583,7 @@ const g=StyleSheet.create({
   yFill:{height:'100%' as any,borderRadius:3.5,opacity:0.88},
   yVal:{fontSize:12.5,fontFamily:mono,fontWeight:'700',width:52,textAlign:'right'},
   warnBox:{borderWidth:1,borderRadius:7,padding:10},warnTxt:{fontSize:11,fontFamily:sans,lineHeight:16},
-  sigCard:{backgroundColor:CARD,borderRadius:10,borderWidth:1,borderColor:BORDER,borderLeftWidth:3,marginHorizontal:16,marginBottom:7,padding:14},
+  sigCard:{backgroundColor:CARD,borderRadius:6,borderWidth:1,borderColor:BORDER,borderTopColor:BORDER_HI,borderTopWidth:1,borderLeftWidth:3,marginHorizontal:16,marginBottom:7,padding:14},
   sigTop:{flexDirection:'row',gap:6,flexWrap:'wrap',marginBottom:9,alignItems:'center'},
   sevIco:{fontSize:9,marginRight:1},
   badge:{paddingHorizontal:7,paddingVertical:3,borderRadius:4},
@@ -595,13 +595,13 @@ const g=StyleSheet.create({
   tacticBox:{flexDirection:'row',alignItems:'flex-start',borderWidth:1,borderRadius:6,padding:9},
   tacticLbl:{fontSize:8.5,fontFamily:mono,fontWeight:'800',letterSpacing:1,marginTop:1,flexShrink:0},
   tacticTxt:{color:TXT2,fontSize:11,fontFamily:sans,lineHeight:17,flex:1},
-  ctaBtn:{backgroundColor:ORANGE,marginHorizontal:16,marginBottom:18,marginTop:4,borderRadius:10,paddingVertical:16,alignItems:'center',shadowColor:ORANGE,shadowOpacity:0.35,shadowRadius:16,shadowOffset:{width:0,height:6},elevation:8},
+  ctaBtn:{backgroundColor:PINK,marginHorizontal:16,marginBottom:18,marginTop:4,borderRadius:4,paddingVertical:16,alignItems:'center',shadowColor:PINK,shadowOpacity:0.40,shadowRadius:20,shadowOffset:{width:0,height:6},elevation:8},
   ctaBtnTxt:{color:'#fff',fontSize:12.5,fontFamily:mono,fontWeight:'800',letterSpacing:2},
-  tabs:{flexDirection:'row',marginHorizontal:16,marginBottom:8,backgroundColor:CARD,borderRadius:9,borderWidth:1,borderColor:BORDER,padding:3},
-  tab:{flex:1,paddingVertical:8,borderRadius:7,alignItems:'center'},
-  tabActive:{backgroundColor:CARD3,borderWidth:1,borderColor:BORDER_HI},
+  tabs:{flexDirection:'row',marginHorizontal:16,marginBottom:8,backgroundColor:CARD2,borderRadius:4,borderWidth:1,borderColor:BORDER,padding:3},
+  tab:{flex:1,paddingVertical:8,borderRadius:3,alignItems:'center'},
+  tabActive:{backgroundColor:CARD3,borderWidth:1,borderColor:BORDER_HI,shadowColor:CYAN,shadowOpacity:0.15,shadowRadius:8,shadowOffset:{width:0,height:0}},
   tabTxt:{color:MUTED,fontSize:9.5,fontFamily:mono,letterSpacing:0.8},
-  tabTxtActive:{color:TXT,fontWeight:'700'},
+  tabTxtActive:{color:CYAN,fontWeight:'700'},
   regName:{fontSize:21,fontFamily:sans,fontWeight:'800',color:TXT,marginBottom:7,lineHeight:27},
   regDesc:{color:TXT2,fontSize:11.5,fontFamily:sans,lineHeight:18,marginBottom:14},
   stratBox:{flexDirection:'row',alignItems:'flex-start',borderWidth:1,borderRadius:7,padding:10},
