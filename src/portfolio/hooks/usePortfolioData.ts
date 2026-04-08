@@ -101,6 +101,14 @@ export function usePortfolioData(): PortfolioDataResult {
                 setFetchError(error.message ?? 'Failed to refresh holdings');
                 return;
             }
+            if (data?.error === 'brokerage_auth_expired') {
+                // Authorization expired — edge function already cleared the DB row.
+                // Reset local state so the UI shows the reconnect prompt.
+                setConnected(false);
+                setHoldings(null);
+                setFetchError(data.message ?? 'Brokerage authorization expired. Please reconnect.');
+                return;
+            }
             if (data?.holdings) {
                 setHoldings(data.holdings);
                 setLastUpdated(new Date());
@@ -108,7 +116,7 @@ export function usePortfolioData(): PortfolioDataResult {
                 // Fire-and-forget: regenerate ML dataset (debounced to once per 6 h)
                 autoTriggerDataset(userId);
             } else if (data?.error) {
-                setFetchError(data.error);
+                setFetchError(data.message ?? data.error);
             }
         } catch (e: any) {
             setFetchError(e?.message ?? 'Failed to refresh holdings');

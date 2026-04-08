@@ -1,108 +1,173 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Link, Tabs } from 'expo-router';
-import React from 'react';
-import { Platform, Pressable } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur'; // Added the missing import
+import { Tabs } from 'expo-router';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
 
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
-  color: string;
-}) {
-  return <FontAwesome size={22} style={{ marginBottom: -3 }} {...props} />;
+// ─── Design Tokens ──────────────────────────────────────────────────────────
+const BG = '#04070F';
+const CYAN = '#8FF5FF';
+const TXT = '#F8FAFC';
+const MUTED = '#64748B';
+const DOCK_BG = 'rgba(15, 23, 42, 0.85)';
+const mono = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
+
+const TABS = [
+  { name: 'index',         label: 'Profile',   icon: 'account-outline',    iconActive: 'account' },
+  { name: 'Market',        label: 'Markets',   icon: 'chart-line',         iconActive: 'chart-line' },
+  { name: 'Portfolio',     label: 'Vault',     icon: 'chart-donut',        iconActive: 'chart-donut' },
+  { name: 'Holdings',      label: 'Assets',    icon: 'view-grid-outline',  iconActive: 'view-grid' },
+  { name: 'Insights',      label: 'AI',        icon: 'brain',              iconActive: 'brain' },
+  { name: 'GlobalMarkets', label: 'Macro',     icon: 'earth',              iconActive: 'earth' },
+  { name: 'two',           label: 'Setup',     icon: 'tune-variant',       iconActive: 'tune-variant' },
+];
+
+const TabButton = ({ tab, active, onPress }: { tab: any, active: boolean, onPress: () => void }) => {
+  const expansion = useRef(new Animated.Value(active ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(expansion, {
+      toValue: active ? 1 : 0,
+      friction: 8,
+      tension: 40,
+      useNativeDriver: false,
+    }).start();
+  }, [active]);
+
+  const animatedWidth = expansion.interpolate({
+    inputRange: [0, 1],
+    outputRange: [42, 95],
+  });
+
+  const animatedOpacity = expansion.interpolate({
+    inputRange: [0.7, 1],
+    outputRange: [0, 1],
+  });
+
+  return (
+    <Pressable onPress={onPress}>
+      <Animated.View style={[tb.inner, { width: animatedWidth, backgroundColor: active ? 'rgba(143, 245, 255, 0.12)' : 'transparent' }]}>
+        <MaterialCommunityIcons
+          name={active ? tab.iconActive : tab.icon}
+          size={20}
+          color={active ? CYAN : MUTED}
+        />
+        {active && (
+          <Animated.Text numberOfLines={1} style={[tb.label, { opacity: animatedOpacity }]}>
+            {tab.label}
+          </Animated.Text>
+        )}
+      </Animated.View>
+    </Pressable>
+  );
+};
+
+function CustomTabBar({ state, navigation }: any) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[bar.wrapper, { bottom: insets.bottom + 12 }]}>
+      {/* Container wraps the BlurView to ensure the border-radius 
+        and shadows are applied correctly across platforms 
+      */}
+      <View style={bar.container}>
+        <BlurView intensity={Platform.OS === 'ios' ? 30 : 100} tint="dark" style={bar.blurPadding}>
+          <View style={bar.row}>
+            {state.routes.map((route: any, index: number) => {
+              const tab = TABS.find(t => t.name === route.name);
+              if (!tab) return null;
+              const active = state.index === index;
+
+              return (
+                <TabButton
+                  key={route.key}
+                  tab={tab}
+                  active={active}
+                  onPress={() => {
+                    const event = navigation.emit({ type: 'tabPress', target: route.key });
+                    if (!active && !event.defaultPrevented) navigation.navigate(route.name);
+                  }}
+                />
+              );
+            })}
+          </View>
+        </BlurView>
+      </View>
+    </View>
+  );
 }
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+const bar = StyleSheet.create({
+  wrapper: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    alignItems: 'center',
+  },
+  container: {
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: DOCK_BG,
+    overflow: 'hidden', // Crucial for BlurView to respect borderRadius
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 15 },
+      android: { elevation: 8 },
+    }),
+  },
+  blurPadding: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+});
 
+const tb = StyleSheet.create({
+  inner: {
+    height: 42,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 4,
+  },
+  label: {
+    color: CYAN,
+    fontSize: 11,
+    fontFamily: mono,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+});
+
+export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#A89CF5',
-        tabBarInactiveTintColor: '#475569',
-        tabBarStyle: {
-          backgroundColor: '#0C1019',
-          borderTopColor: 'rgba(255,255,255,0.07)',
-          borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 84 : 60,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 6,
-        },
-        tabBarLabelStyle: {
-          fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
-          fontSize: 10,
-          letterSpacing: 0.2,
-        },
         headerShown: useClientOnlyValue(false, true),
-        headerStyle: { backgroundColor: '#0C1019' },
-        headerTintColor: '#F1F5F9',
-        headerTitleStyle: {
-          fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
-          fontWeight: '600',
-        },
+        headerStyle: { backgroundColor: BG, borderBottomWidth: 0, elevation: 0 },
+        headerTintColor: TXT,
+        headerTitleStyle: { fontWeight: '700', fontSize: 18 },
+        tabBarStyle: { display: 'none' },
       }}
+      tabBar={(props) => <CustomTabBar {...props} />}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable>
-                {({ pressed }) => (
-                  <FontAwesome
-                    name="info-circle"
-                    size={22}
-                    color={Colors[colorScheme ?? 'light'].text}
-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="Market"
-        options={{
-          title: 'Markets',
-          headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="line-chart" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="Portfolio"
-        options={{
-          title: 'Portfolio',
-          headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="pie-chart" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="Insights"
-        options={{
-          title: 'Insights',
-          headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="bar-chart" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="GlobalMarkets"
-        options={{
-          title: 'Macro',
-          headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="globe" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="two"
-        options={{
-          title: 'Profile Setup',
-          tabBarIcon: ({ color }) => <TabBarIcon name="sliders" color={color} />,
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: 'VESTARA' }} />
+      <Tabs.Screen name="Market" options={{ headerShown: false }} />
+      <Tabs.Screen name="Portfolio" options={{ headerShown: false }} />
+      <Tabs.Screen name="Holdings" options={{ headerShown: false }} />
+      <Tabs.Screen name="Insights" options={{ headerShown: false }} />
+      <Tabs.Screen name="GlobalMarkets" options={{ headerShown: false }} />
+      <Tabs.Screen name="two" options={{ title: 'Settings' }} />
     </Tabs>
   );
 }

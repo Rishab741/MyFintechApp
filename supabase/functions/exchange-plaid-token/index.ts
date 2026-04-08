@@ -389,6 +389,22 @@ serve(async (req: Request) => {
         `userId=${user_id}&userSecret=${userData.user_secret}`
       )
 
+      console.log("Holdings status:", holdingsStatus, JSON.stringify(holdings))
+
+      if (holdingsStatus === 401 || holdingsStatus === 403) {
+        // Brokerage authorization has expired — clear the stale connection so
+        // the app can prompt the user to reconnect.
+        await supabaseAdmin
+          .from('snaptrade_connections')
+          .delete()
+          .eq('user_id', user_id)
+        console.log("Stale brokerage auth cleared from DB — user must reconnect")
+        return json({
+          error: "brokerage_auth_expired",
+          message: "Your brokerage authorization has expired. Please reconnect your account.",
+        }, 401)
+      }
+
       if (holdingsStatus !== 200) {
         return json({ error: "Failed to fetch holdings", details: holdings }, holdingsStatus)
       }
