@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { fetchQuotes, SECTOR_ETFS } from '@/src/market/service';
-import type { GlobalIntelligence, LiveSector } from './types';
+import type { GlobalIntelligence, LiveSector } from '../types';
 
 async function getGlobalIntelligence(): Promise<GlobalIntelligence> {
     const { data, error } = await supabase.functions.invoke('market-intelligence', {});
@@ -54,7 +54,7 @@ export function useGlobalMarkets() {
                 setIntelligence(intel);
             }
         } else {
-            setError(macroResult.reason?.message ?? 'Failed to load macro intelligence');
+            setError(macroResult.reason instanceof Error ? macroResult.reason.message : 'Failed to load macro intelligence');
         }
 
         if (sectorResult.status === 'fulfilled') {

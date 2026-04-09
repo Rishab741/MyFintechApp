@@ -1,8 +1,8 @@
-import { supabase } from '@/src/lib/supabase';
+import { useInvestmentProfile } from '@/src/investment-profile/hooks/useInvestmentProfile';
+import type { AssetClass, InvestmentProfile, RiskLevel } from '@/src/investment-profile/types';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Dimensions,
   Platform,
@@ -39,21 +39,6 @@ const TEAL        = '#14B8A6';
 
 const serif = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 const sans  = Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-type AssetClass = 'equities' | 'crypto' | 'etfs' | 'forex' | 'commodities' | 'bonds';
-type RiskLevel  = 'conservative' | 'moderate' | 'aggressive' | 'speculative';
-
-interface InvestmentProfile {
-  selectedExchanges: string[];
-  selectedAssetClasses: AssetClass[];
-  riskLevel: RiskLevel | '';
-  baseCurrency: string;
-}
-
-const defaultProfile: InvestmentProfile = {
-  selectedExchanges: [], selectedAssetClasses: [], riskLevel: '', baseCurrency: 'AUD',
-};
 
 // ─── Static data ─────────────────────────────────────────────────────────────
 const EXCHANGES = [
@@ -152,7 +137,7 @@ const xc = StyleSheet.create({
   badge:   { backgroundColor: GOLD_DIM, borderWidth: 1, borderColor: GOLD_BDR, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
   badgeTxt:{ color: GOLD, fontSize: 8, fontWeight: '800', letterSpacing: 1 },
   box:     { width: 26, height: 26, borderRadius: 8, borderWidth: 1.5, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
-  tick:    { color: '#0D0F1A', fontSize: 11, fontWeight: '900' },
+  tick:    { color: BG, fontSize: 11, fontWeight: '900' },
   desc:    { color: TXT_2, fontSize: 12.5, lineHeight: 19, marginBottom: 14 },
   meta:    { flexDirection: 'row', gap: 8 },
   pill:    { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
@@ -187,7 +172,7 @@ const at = StyleSheet.create({
   sub:   { color: TXT_3, fontSize: 9.5, textAlign: 'center', lineHeight: 13 },
 });
 
-// ─── Risk Card (horizontal rows, clean) ───────────────────────────────────────
+// ─── Risk Card ────────────────────────────────────────────────────────────────
 const RiskCard: React.FC<{ item: typeof RISK_LEVELS[0]; selected: boolean; onPress: () => void }> = ({ item, selected, onPress }) => {
   const scale = useRef(new Animated.Value(1)).current;
   return (
@@ -249,10 +234,10 @@ const su = StyleSheet.create({
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function InvestmentProfileScreen() {
-  const [profile,      setProfile]      = useState<InvestmentProfile>(defaultProfile);
+  const { profile, isSaving, hasUnsaved, loadProfile, update, toggleExchange, toggleAsset, save } =
+    useInvestmentProfile();
+
   const [activeFilter, setActiveFilter] = useState('All');
-  const [isSaving,     setIsSaving]     = useState(false);
-  const [hasUnsaved,   setHasUnsaved]   = useState(false);
 
   const fade  = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(24)).current;
@@ -264,41 +249,6 @@ export default function InvestmentProfileScreen() {
       Animated.spring(slide, { toValue: 0, tension: 60, friction: 9, useNativeDriver: true }),
     ]).start();
   }, []);
-
-  const loadProfile = async () => {
-    const { data } = await supabase.auth.getUser();
-    if (data?.user?.user_metadata?.investment_profile) {
-      setProfile(data.user.user_metadata.investment_profile);
-    }
-  };
-
-  const update = (updates: Partial<InvestmentProfile>) => {
-    setProfile(p => ({ ...p, ...updates }));
-    setHasUnsaved(true);
-  };
-
-  const toggleExchange = (id: string) =>
-    update({ selectedExchanges: profile.selectedExchanges.includes(id)
-      ? profile.selectedExchanges.filter(e => e !== id)
-      : [...profile.selectedExchanges, id] });
-
-  const toggleAsset = (id: AssetClass) =>
-    update({ selectedAssetClasses: profile.selectedAssetClasses.includes(id)
-      ? profile.selectedAssetClasses.filter(a => a !== id)
-      : [...profile.selectedAssetClasses, id] });
-
-  const save = async () => {
-    if (isSaving) return;
-    setIsSaving(true);
-    try {
-      const { error } = await supabase.auth.updateUser({ data: { investment_profile: profile } });
-      if (error) throw error;
-      setHasUnsaved(false);
-      Alert.alert('Saved ✓', 'Your investment profile has been updated.');
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    } finally { setIsSaving(false); }
-  };
 
   const filterMap: Record<string, AssetClass> = { Crypto: 'crypto', Equities: 'equities', Forex: 'forex', Commodities: 'commodities' };
   const filteredEx = EXCHANGES.filter(ex => activeFilter === 'All' || ex.assetClasses.includes(filterMap[activeFilter]));
@@ -468,7 +418,7 @@ const s = StyleSheet.create({
   unsavedTxt:   { color: ORANGE, fontSize: 12, fontWeight: '600' },
   saveBtn:      { backgroundColor: GOLD, paddingVertical: 19, borderRadius: 18, alignItems: 'center', shadowColor: GOLD, shadowOpacity: 0.22, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
   saveBtnOff:   { backgroundColor: 'rgba(201,168,76,0.15)', shadowOpacity: 0 },
-  saveBtnTxt:   { color: '#0D0F1A', fontSize: 15, fontWeight: '800', letterSpacing: 0.6 },
+  saveBtnTxt:   { color: BG, fontSize: 15, fontWeight: '800', letterSpacing: 0.6 },
   saveBtnTxtOff:{ color: 'rgba(201,168,76,0.4)' },
 
   // Wordmark

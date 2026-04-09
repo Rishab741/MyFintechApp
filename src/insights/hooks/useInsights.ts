@@ -23,7 +23,6 @@ export function useInsights() {
         noDataset:  false,
     });
 
-    // Prevent state updates after unmount
     const mounted = useRef(true);
     useEffect(() => { return () => { mounted.current = false; }; }, []);
 
@@ -36,9 +35,8 @@ export function useInsights() {
         try {
             const insights = await getInsights(userId);
             if (mounted.current) setState(s => ({ ...s, data: insights, loading: false, refreshing: false }));
-        } catch (err: any) {
-            const msg: string = err.message ?? 'Unknown error';
-            // No dataset yet — offer to generate one
+        } catch (err: unknown) {
+            const msg: string = err instanceof Error ? err.message : 'Unknown error';
             if (msg.includes('No dataset') || msg.includes('generate_dataset')) {
                 if (mounted.current) setState(s => ({ ...s, loading: false, refreshing: false, noDataset: true, error: null }));
             } else {
@@ -47,16 +45,15 @@ export function useInsights() {
         }
     }, [userId]);
 
-    // Generate a fresh dataset then re-fetch insights
     const generateAndFetch = useCallback(async () => {
         if (!userId) return;
         setState(s => ({ ...s, loading: true, error: null, noDataset: false }));
         try {
             await generateDataset(userId);
             await fetchInsights(false);
-        } catch (err: any) {
+        } catch (err: unknown) {
             if (mounted.current)
-                setState(s => ({ ...s, loading: false, error: err.message ?? 'Failed to generate dataset' }));
+                setState(s => ({ ...s, loading: false, error: err instanceof Error ? err.message : 'Failed to generate dataset' }));
         }
     }, [userId, fetchInsights]);
 

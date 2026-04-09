@@ -1,20 +1,24 @@
 import type { LiveSector, MacroCategory, MacroSeverity, MacroSignal, SectorAllocation } from '@/src/global-markets/types';
-import { useGlobalMarkets } from '@/src/global-markets/useGlobalMarkets';
-import { mono, sans } from '@/src/portfolio/tokens';
+import { useGlobalMarkets } from '@/src/global-markets/hooks/useGlobalMarkets';
+import {
+  BG, BG2 as CARD2, CARD, CARD2 as CARD3,
+  BORDER,
+  GOLD as CYAN, GOLD_D as CYAN_D,
+  ORANGE as PINK, ORANGE_D as PINK_D,
+  GREEN, GREEN_D,
+  RED, RED_D,
+  AMBER, AMBER_D,
+  PURPLE,
+  TXT, TXT2, MUTED,
+  mono, sans,
+} from '@/src/market/tokens';
+// BORDER_HI and SUB have screen-specific values
+const BORDER_HI = 'rgba(143,245,255,0.22)';
+const SUB       = '#4A6090';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Linking, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, Path, Pattern } from 'react-native-svg';
 
-// ─── Tokens — Quantum Ledger Design System ────────────────────────────────────
-const BG='#070e1b',CARD='#11192a',CARD2='#0c1322',CARD3='#172031';
-const BORDER='#414857',BORDER_HI='rgba(143,245,255,0.22)';
-const CYAN='#8ff5ff',CYAN_D='rgba(143,245,255,0.07)';
-const PINK='#ff6b98',PINK_D='rgba(255,107,152,0.09)';
-const GREEN='#00E09A',GREEN_D='rgba(0,224,154,0.09)';
-const RED='#ff716c',RED_D='rgba(255,113,108,0.09)';
-const AMBER='#FFA500',AMBER_D='rgba(255,165,0,0.09)';
-const PURPLE='#ac89ff';
-const TXT='#e2e8fb',TXT2='#a5abbd',MUTED='#6f7586',SUB='#4A6090';
 
 const W=Dimensions.get('window').width,MAP_W=W-32,MAP_H=210;
 

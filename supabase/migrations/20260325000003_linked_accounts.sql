@@ -11,5 +11,5 @@ create table linked_accounts (
 
 -- Enable RLS for security
 alter table linked_accounts enable row level security;
-create policy "Users can see their own linked accounts" 
+create policy "Users can see their own linked accounts"
 on linked_accounts for select using (auth.uid() = user_id);

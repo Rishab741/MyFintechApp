@@ -29,8 +29,8 @@ export function useRecommendations() {
         try {
             const result = await getRecommendations(userId);
             if (mounted.current) setState({ data: result, loading: false, error: null });
-        } catch (err: any) {
-            const msg: string = err.message ?? 'Failed to generate recommendations';
+        } catch (err: unknown) {
+            const msg: string = err instanceof Error ? err.message : 'Failed to generate recommendations';
             if (mounted.current) setState({ data: null, loading: false, error: msg });
         }
     }, [userId]);

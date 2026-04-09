@@ -15,17 +15,20 @@ const MUTED = '#64748B';
 const DOCK_BG = 'rgba(15, 23, 42, 0.85)';
 const mono = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 
-const TABS = [
+const TABS: TabDef[] = [
   { name: 'index',         label: 'Profile',   icon: 'account-outline',    iconActive: 'account' },
   { name: 'Market',        label: 'Markets',   icon: 'chart-line',         iconActive: 'chart-line' },
   { name: 'Portfolio',     label: 'Vault',     icon: 'chart-donut',        iconActive: 'chart-donut' },
   { name: 'Holdings',      label: 'Assets',    icon: 'view-grid-outline',  iconActive: 'view-grid' },
   { name: 'Insights',      label: 'AI',        icon: 'brain',              iconActive: 'brain' },
   { name: 'GlobalMarkets', label: 'Macro',     icon: 'earth',              iconActive: 'earth' },
-  { name: 'two',           label: 'Setup',     icon: 'tune-variant',       iconActive: 'tune-variant' },
+  { name: 'InvestmentProfile', label: 'Setup', icon: 'tune-variant',       iconActive: 'tune-variant' },
 ];
 
-const TabButton = ({ tab, active, onPress }: { tab: any, active: boolean, onPress: () => void }) => {
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+interface TabDef { name: string; label: string; icon: IconName; iconActive: IconName; }
+
+const TabButton = ({ tab, active, onPress }: { tab: TabDef; active: boolean; onPress: () => void }) => {
   const expansion = useRef(new Animated.Value(active ? 1 : 0)).current;
 
   useEffect(() => {
@@ -167,7 +170,7 @@ export default function TabLayout() {
       <Tabs.Screen name="Holdings" options={{ headerShown: false }} />
       <Tabs.Screen name="Insights" options={{ headerShown: false }} />
       <Tabs.Screen name="GlobalMarkets" options={{ headerShown: false }} />
-      <Tabs.Screen name="two" options={{ title: 'Settings' }} />
+      <Tabs.Screen name="InvestmentProfile" options={{ headerShown: false }} />
     </Tabs>
   );
 }

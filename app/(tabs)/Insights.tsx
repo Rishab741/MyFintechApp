@@ -16,8 +16,8 @@ import {
     View,
 } from 'react-native';
 
-import { useInsights } from '@/src/insights/useInsights';
-import { useRecommendations } from '@/src/insights/useRecommendations';
+import { useInsights } from '@/src/insights/hooks/useInsights';
+import { useRecommendations } from '@/src/insights/hooks/useRecommendations';
 import {
     InsightSignal, InsightSeverity, InsightCategory,
     StockRecommendation, RecommendationAction, RecommendationType,

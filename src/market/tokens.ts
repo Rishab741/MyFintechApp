@@ -35,6 +35,10 @@ export const ORANGE_D = 'rgba(255,107,152,0.10)';
 export const TEAL     = '#8ff5ff';
 export const TEAL_D   = 'rgba(143,245,255,0.08)';
 
+// Amber (macro warning signals)
+export const AMBER    = '#FFA500';
+export const AMBER_D  = 'rgba(255,165,0,0.09)';
+
 // Text
 export const TXT      = '#e2e8fb';   // on_surface
 export const TXT2     = '#a5abbd';   // on_surface_variant
