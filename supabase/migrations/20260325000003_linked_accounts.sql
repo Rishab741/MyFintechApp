@@ -1,15 +1,30 @@
--- Create a table for linked investment accounts
-create table linked_accounts (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid references auth.users(id) not null,
-  provider_item_id text unique, -- The Plaid/SnapTrade Item ID
-  access_token text not null,   -- Encrypt this in production!
-  institution_name text,
-  status text default 'active',
-  last_synced timestamp with time zone default now()
-);
+-- =============================================================================
+-- linked_accounts: additive patch
+-- The table itself was created in 20260324000000_portfolio_schema.sql.
+-- This migration adds the columns and policy that were originally in the
+-- misplaced src/lib/Migrations/_create_linked_accounts.sql file.
+-- =============================================================================
 
--- Enable RLS for security
-alter table linked_accounts enable row level security;
-create policy "Users can see their own linked accounts"
-on linked_accounts for select using (auth.uid() = user_id);
+-- ── Add missing columns (idempotent) ─────────────────────────────────────────
+alter table public.linked_accounts
+  add column if not exists status      text        not null default 'active',
+  add column if not exists last_synced timestamptz not null default now();
+
+-- ── Additional RLS policy (idempotent guard) ──────────────────────────────────
+-- Migration 00000 already created a SELECT-only policy.
+-- This adds INSERT/UPDATE/DELETE coverage for the owning user.
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename  = 'linked_accounts'
+      and policyname = 'Users manage own linked_accounts'
+  ) then
+    create policy "Users manage own linked_accounts"
+      on public.linked_accounts
+      for all
+      using  (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end $$;
