@@ -16,9 +16,11 @@ from fastapi.responses import JSONResponse
 from config import get_settings
 from routers import health, portfolio, sync
 
-# ── Logging (basic config before settings load so startup errors are visible) ─
+# ── Settings (loaded once at import; all required vars must be present) ───────
+settings = get_settings()
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
 log = logging.getLogger("engine")
@@ -27,18 +29,7 @@ log = logging.getLogger("engine")
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Validate settings eagerly so missing env vars surface as a clear log
-    # message rather than a cryptic 502 from Railway.
-    try:
-        settings = get_settings()
-        # Re-apply log level from settings now that we know it loaded
-        logging.getLogger().setLevel(
-            getattr(logging, settings.log_level.upper(), logging.INFO)
-        )
-        log.info("Vestara Portfolio Engine starting up (log_level=%s)", settings.log_level)
-    except Exception as exc:
-        log.critical("Engine failed to load settings — check env vars: %s", exc)
-        raise
+    log.info("Vestara Portfolio Engine starting up")
     yield
     log.info("Vestara Portfolio Engine shutting down")
 
@@ -52,7 +43,7 @@ app = FastAPI(
         "Computes TWR, Sharpe, Beta, Drawdown, CAGR and exposure metrics "
         "from normalised portfolio time-series data."
     ),
-    docs_url="/docs" if settings.debug else None,   # disable Swagger in production
+    docs_url="/docs" if settings.debug else None,
     redoc_url=None,
     lifespan=lifespan,
 )
