@@ -16,9 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
-# Railway injects PORT as an environment variable.
-# Uvicorn reads it from the CMD; we expose 8000 as the default.
-EXPOSE 8000
+# Railway injects $PORT — do NOT hardcode EXPOSE here.
+# The start.sh script binds uvicorn to $PORT at runtime.
 
 COPY start.sh .
 RUN chmod +x start.sh
