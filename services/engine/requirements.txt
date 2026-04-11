@@ -1,0 +1,21 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# Supabase / database
+supabase==2.11.0
+postgrest==0.19.0
+
+# HTTP
+httpx==0.28.1
+
+# JWT validation
+python-jose[cryptography]==3.3.0
+
+# Financial math
+numpy==2.2.1
+scipy==1.15.0
+
+# Scheduling / utilities
+python-dateutil==2.9.0.post0
