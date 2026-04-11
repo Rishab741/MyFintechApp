@@ -1,30 +1,37 @@
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 from models.portfolio import HealthResponse
 from lib.supabase_client import get_db
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
 
+# Cached result of the last Supabase check — updated in the background
+# so the /health liveness probe always returns instantly (no DB round-trip).
+_last_supabase_status: str = "unknown"
 
-@router.get("/health", response_model=HealthResponse)
-async def health_check() -> HealthResponse:
-    """
-    Liveness + readiness probe.
-    Railway / load balancers poll this endpoint.
-    Returns 200 when the engine and its Supabase connection are healthy.
-    """
-    checks: dict[str, str] = {}
 
-    # ── Supabase connectivity ─────────────────────────────────────────────────
+def _check_supabase() -> None:
+    """Run in a background task — never blocks the health response."""
+    global _last_supabase_status
     try:
         db = get_db()
-        # Lightweight query — just checks the connection is alive
         db.table("assets").select("id").limit(1).execute()
-        checks["supabase"] = "ok"
+        _last_supabase_status = "ok"
     except Exception as exc:
-        log.error("Supabase health check failed: %s", exc)
-        checks["supabase"] = f"error: {exc}"
+        log.error("Supabase connectivity check failed: %s", exc)
+        _last_supabase_status = f"error: {exc}"
 
-    status = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
+
+@router.get("/health", response_model=HealthResponse)
+async def health_check(background_tasks: BackgroundTasks) -> HealthResponse:
+    """
+    Liveness + readiness probe.
+    Always returns 200 immediately — Supabase check runs in the background
+    so Railway's healthcheck never times out waiting for a DB round-trip.
+    The `checks.supabase` field shows the result of the *previous* probe.
+    """
+    background_tasks.add_task(_check_supabase)
+    checks = {"supabase": _last_supabase_status}
+    status = "ok" if _last_supabase_status in ("ok", "unknown") else "degraded"
     return HealthResponse(status=status, checks=checks)

@@ -16,11 +16,9 @@ from fastapi.responses import JSONResponse
 from config import get_settings
 from routers import health, portfolio, sync
 
-# ── Logging ───────────────────────────────────────────────────────────────────
-settings = get_settings()
-
+# ── Logging (basic config before settings load so startup errors are visible) ─
 logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
 log = logging.getLogger("engine")
@@ -29,7 +27,18 @@ log = logging.getLogger("engine")
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("Vestara Portfolio Engine starting up")
+    # Validate settings eagerly so missing env vars surface as a clear log
+    # message rather than a cryptic 502 from Railway.
+    try:
+        settings = get_settings()
+        # Re-apply log level from settings now that we know it loaded
+        logging.getLogger().setLevel(
+            getattr(logging, settings.log_level.upper(), logging.INFO)
+        )
+        log.info("Vestara Portfolio Engine starting up (log_level=%s)", settings.log_level)
+    except Exception as exc:
+        log.critical("Engine failed to load settings — check env vars: %s", exc)
+        raise
     yield
     log.info("Vestara Portfolio Engine shutting down")
 

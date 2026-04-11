@@ -133,33 +133,9 @@ async def sync_prices(
     )
 
 
-# ── POST /sync/compute/{user_id} ─────────────────────────────────────────────
-@router.post("/compute/{user_id}", response_model=ComputeResult)
-async def compute_metrics(
-    user_id: str,
-    _: Annotated[None, Depends(require_service)],
-) -> ComputeResult:
-    """
-    Recompute all 8 period performance_cache rows for a single user.
-    Called after every new portfolio snapshot + nightly by pg_cron.
-    """
-    computed_periods = await _run_compute(user_id)
-
-    write_audit_log(
-        event_type="sync.compute",
-        actor_id=user_id,
-        resource="performance_cache",
-        metadata={"periods": computed_periods},
-    )
-
-    return ComputeResult(
-        user_id=user_id,
-        periods_computed=computed_periods,
-        computed_at=datetime.now(tz=timezone.utc),
-    )
-
-
 # ── POST /sync/compute/all ────────────────────────────────────────────────────
+# IMPORTANT: this route must be registered BEFORE /compute/{user_id} so that
+# FastAPI does not match the literal string "all" as a path parameter.
 @router.post("/compute/all", response_model=dict)
 async def compute_all(
     _: Annotated[None, Depends(require_service)],
@@ -199,6 +175,32 @@ async def compute_all(
         "errors":         fails,
         "computed_at":    datetime.now(tz=timezone.utc).isoformat(),
     }
+
+
+# ── POST /sync/compute/{user_id} ─────────────────────────────────────────────
+@router.post("/compute/{user_id}", response_model=ComputeResult)
+async def compute_metrics(
+    user_id: str,
+    _: Annotated[None, Depends(require_service)],
+) -> ComputeResult:
+    """
+    Recompute all 8 period performance_cache rows for a single user.
+    Called after every new portfolio snapshot + nightly by pg_cron.
+    """
+    computed_periods = await _run_compute(user_id)
+
+    write_audit_log(
+        event_type="sync.compute",
+        actor_id=user_id,
+        resource="performance_cache",
+        metadata={"periods": computed_periods},
+    )
+
+    return ComputeResult(
+        user_id=user_id,
+        periods_computed=computed_periods,
+        computed_at=datetime.now(tz=timezone.utc),
+    )
 
 
 # ── Core computation logic ────────────────────────────────────────────────────
