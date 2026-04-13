@@ -165,13 +165,13 @@ async def _compute_metrics_for_user(user_id: str, period: Period) -> Performance
 
     # Benchmark
     bench_returns  = await _get_benchmark_returns(times)
-    bench_total    = sum(bench_returns)   # approximate benchmark total return
+    bench_total    = sum(bench_returns)   # chain-linked benchmark holding-period return
     rf_daily       = settings.risk_free_rate_daily
 
     beta        = compute_beta(daily_returns, bench_returns)
     correlation = compute_correlation(daily_returns, bench_returns)
 
-    # Annualise portfolio and benchmark returns for Jensen's alpha
+    # Annualise both series for Jensen's alpha (alpha needs annualised inputs)
     portfolio_ann = (1 + twr) ** (365.0 / days) - 1 if days > 0 else 0.0
     benchmark_ann = (1 + bench_total) ** (365.0 / days) - 1 if days > 0 else 0.0
     alpha = compute_alpha(portfolio_ann, benchmark_ann, beta, settings.risk_free_rate_annual)
@@ -199,7 +199,7 @@ async def _compute_metrics_for_user(user_id: str, period: Period) -> Performance
         cvar_95=round(compute_cvar(daily_returns), 6),
         win_rate=round(compute_win_rate(daily_returns), 4),
         benchmark_symbol=settings.default_benchmark,
-        benchmark_return=round(bench_total, 6),
+        benchmark_return=round(benchmark_ann, 6),
         alpha=round(alpha, 6),
         beta=round(beta, 4),
         correlation=round(correlation, 4),

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -58,6 +59,27 @@ settings = get_settings()
 router = APIRouter(tags=["sync"])
 
 ALL_PERIODS: list[Period] = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"]
+
+
+def _safe(v: float) -> float:
+    """
+    Sanitize a float before it enters the DB payload.
+
+    Two failure modes this guards against:
+      1. NaN / ±inf  — Python produces these from 0-std-dev Sharpe, empty
+                        Sortino, or log(0). They serialise to invalid JSON
+                        (PGRST102 'Empty or invalid json').
+      2. Extreme magnitude — CAGR on a 1-day window annualises with a ×365
+                        exponent and can reach millions, overflowing
+                        NUMERIC(10,6) columns (PG error 22003).
+                        The migration below widens those columns, but this
+                        clamp is a belt-and-suspenders guard that also makes
+                        the stored numbers human-readable.
+    """
+    if math.isnan(v) or math.isinf(v):
+        return 0.0
+    # Clamp to a range that fits any NUMERIC column we use
+    return max(min(v, 9_999_999.0), -9_999_999.0)
 
 
 # ── POST /sync/prices/{user_id} ───────────────────────────────────────────────
@@ -270,23 +292,23 @@ async def _run_compute(user_id: str) -> list[Period]:
 
             upsert_performance_cache(user_id, {
                 "period":           period,
-                "total_return":     round(twr, 6),
-                "cagr":             round(cagr, 6),
-                "daily_return_avg": round(sum(daily_returns) / len(daily_returns), 6) if daily_returns else 0.0,
-                "sharpe_ratio":     round(sharpe, 4),
-                "sortino_ratio":    round(sortino, 4),
-                "max_drawdown":     round(max_dd, 6),
+                "total_return":     _safe(round(twr, 6)),
+                "cagr":             _safe(round(cagr, 6)),
+                "daily_return_avg": _safe(round(sum(daily_returns) / len(daily_returns), 6)) if daily_returns else 0.0,
+                "sharpe_ratio":     _safe(round(sharpe, 4)),
+                "sortino_ratio":    _safe(round(sortino, 4)),
+                "max_drawdown":     _safe(round(max_dd, 6)),
                 "drawdown_days":    dd_days,
-                "volatility":       round(volatility, 6),
-                "var_95":           round(var_95, 6),
-                "win_rate":         round(win_rate, 4),
+                "volatility":       _safe(round(volatility, 6)),
+                "var_95":           _safe(round(var_95, 6)),
+                "win_rate":         _safe(round(win_rate, 4)),
                 "benchmark_symbol": settings.default_benchmark,
-                "benchmark_return": round(bench_total, 6),
-                "alpha":            round(alpha, 6),
-                "beta":             round(beta, 4),
+                "benchmark_return": _safe(round(benchmark_ann, 6)),
+                "alpha":            _safe(round(alpha, 6)),
+                "beta":             _safe(round(beta, 4)),
                 "total_value":      round(total_val, 2),
                 "position_count":   len(holdings),
-                "cash_pct":         round(cash_pct, 4),
+                "cash_pct":         _safe(round(cash_pct, 4)),
             })
             computed.append(period)
 
