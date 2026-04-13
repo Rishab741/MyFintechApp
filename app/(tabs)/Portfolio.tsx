@@ -19,16 +19,18 @@ import {
 } from 'react-native';
 
 import { usePortfolioData } from '@/src/portfolio/hooks/usePortfolioData';
-import { LineChart, DonutChart, ReturnsHistogram, DrawdownChart } from '@/src/portfolio/charts';
+import { usePerformanceMetrics } from '@/src/portfolio/hooks/usePerformanceMetrics';
+import type { Period as EnginePeriod } from '@/src/services/engineClient';
+import { LineChart, ReturnsHistogram, DrawdownChart } from '@/src/portfolio/charts';
 import {
     Metric, PeriodTabs, SHead, Card, HoldingRow,
     PerformersSection, RiskGrid,
 } from '@/src/portfolio/components';
 import {
-    BG, CARD, CARD2, BORDER, BORDER2,
+    BG, CARD2, BORDER,
     GOLD, GOLD_L, GOLD_D, GOLD_B,
     GREEN, GREEN_D, RED, RED_D,
-    BLUE, BLUE_D, PURPLE, PURPLE_D,
+    PURPLE, PURPLE_D,
     TXT, TXT2, MUTED, SUB,
     sans, mono, CHART_W,
 } from '@/src/portfolio/tokens';
@@ -38,7 +40,7 @@ import { fmtCurrency, fmt2, sign, getTicker } from '@/src/portfolio/helpers';
 const ALLOC_COLORS = ['#8ff5ff', '#ac89ff', '#ff6b98', '#00E09A', '#FFA500', '#a5abbd'];
 
 const AllocRow: React.FC<{ label: string; pct: number; color: string; value: string }> =
-    ({ label, pct, color, value }) => (
+    ({ label, pct, color }) => (
     <View style={al.row}>
         <Text style={al.label}>{label.toUpperCase()}</Text>
         <View style={al.track}>
@@ -121,6 +123,15 @@ export default function PortfolioScreen() {
         todayChange, todayChangePct, allocSegs, performers, risk, chartLabels,
         fetchError,
     } = usePortfolioData();
+
+    // Engine metrics — prefer over client-computed values when available.
+    // Falls back gracefully: cache → engine → local computation.
+    const { data: metrics, source: metricsSource } = usePerformanceMetrics(period as EnginePeriod);
+
+    // Display values: engine wins when present, local computation is the fallback
+    const displayReturn      = metrics ? metrics.twr * 100              : periodReturn;
+    const displayBenchReturn = metrics ? metrics.benchmark_return * 100 : sp500Return;
+    const displayAlpha       = metrics ? metrics.alpha * 100            : vsMarket;
 
     const isUp = todayChangePct >= 0;
 
@@ -260,36 +271,52 @@ export default function PortfolioScreen() {
                     <Card>
                         <SHead
                             title="Historical Performance"
-                            right={<Text style={s.tagMuted}>vs S&P 500</Text>}
+                            right={
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    {metricsSource && (
+                                        <View style={[s.tagPill, {
+                                            backgroundColor: metricsSource === 'cache' ? GREEN_D : GOLD_D,
+                                            borderColor: metricsSource === 'cache' ? `${GREEN}35` : `${GOLD}35`,
+                                        }]}>
+                                            <Text style={{ color: metricsSource === 'cache' ? GREEN : GOLD, fontSize: 8, fontFamily: mono, letterSpacing: 1 }}>
+                                                {metricsSource === 'cache' ? '⚡ CACHE' : '⚙ ENGINE'}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    <Text style={s.tagMuted}>vs S&P 500</Text>
+                                </View>
+                            }
                         />
-                        <Text style={s.chartSub}>Simulated real-time tracking of aggregate assets</Text>
+                        <Text style={s.chartSub}>
+                            {metrics ? 'Engine-computed · TWR method' : 'Simulated real-time tracking of aggregate assets'}
+                        </Text>
 
                         <PeriodTabs selected={period} onChange={setPeriod} />
 
                         <View style={s.returnRow}>
                             <Metric
-                                label="Your Return"
-                                value={`${sign(periodReturn)}${fmt2(periodReturn)}%`}
-                                color={periodReturn >= 0 ? GREEN : RED}
+                                label={metrics ? 'TWR' : 'Your Return'}
+                                value={`${sign(displayReturn)}${fmt2(Math.abs(displayReturn))}%`}
+                                color={displayReturn >= 0 ? GREEN : RED}
                             />
                             <View style={s.returnDiv} />
                             <Metric
-                                label="S&P 500"
-                                value={`${sign(sp500Return)}${fmt2(sp500Return)}%`}
+                                label={metrics?.benchmark_symbol ?? 'S&P 500'}
+                                value={`${sign(displayBenchReturn)}${fmt2(Math.abs(displayBenchReturn))}%`}
                                 color={SUB}
                             />
                             <View style={s.returnDiv} />
                             <Metric
                                 label="Alpha"
-                                value={`${sign(vsMarket)}${fmt2(vsMarket)}%`}
-                                color={vsMarket >= 0 ? GREEN : RED}
-                                sub={vsMarket >= 0 ? 'outperforming' : 'lagging'}
+                                value={`${sign(displayAlpha)}${fmt2(Math.abs(displayAlpha))}%`}
+                                color={displayAlpha >= 0 ? GREEN : RED}
+                                sub={displayAlpha >= 0 ? 'outperforming' : 'lagging'}
                             />
                         </View>
 
                         <LineChart
                             series={[
-                                { values: chartPortfolio, color: periodReturn >= 0 ? GREEN : RED, width: 2.5 },
+                                { values: chartPortfolio, color: displayReturn >= 0 ? GREEN : RED, width: 2.5 },
                                 { values: chartBench, color: MUTED, width: 1.5, opacity: 0.35 },
                             ]}
                             w={CHART_W} h={130}
@@ -305,12 +332,12 @@ export default function PortfolioScreen() {
 
                         <View style={s.legendRow}>
                             <View style={s.legendItem}>
-                                <View style={[s.legendDot, { backgroundColor: periodReturn >= 0 ? GREEN : RED }]} />
+                                <View style={[s.legendDot, { backgroundColor: displayReturn >= 0 ? GREEN : RED }]} />
                                 <Text style={s.legendTxt}>Portfolio</Text>
                             </View>
                             <View style={s.legendItem}>
                                 <View style={[s.legendDash, { backgroundColor: MUTED }]} />
-                                <Text style={s.legendTxt}>S&P 500 (ref)</Text>
+                                <Text style={s.legendTxt}>{metrics?.benchmark_symbol ?? 'S&P 500'} (ref)</Text>
                             </View>
                         </View>
                     </Card>
@@ -351,30 +378,34 @@ export default function PortfolioScreen() {
                             }
                         />
 
-                        {risk && (
-                            <>
-                                <RiskScore
-                                    score={Math.round(Math.min(Math.max((risk.annStd / 40) * 100, 10), 99))}
-                                    label={risk.annStd > 30 ? 'Aggressive' : risk.annStd > 15 ? 'Moderate' : 'Conservative'}
-                                />
-
-                                <View style={s.insightDivider} />
-
-                                <View style={{ flexDirection: 'row' }}>
-                                    <StatPair
-                                        label="SHARPE RATIO"
-                                        value={fmt2(risk.sharpe)}
-                                        color={risk.sharpe >= 1 ? GREEN : risk.sharpe >= 0 ? GOLD : RED}
+                        {(risk || metrics) && (() => {
+                            const vol    = metrics ? metrics.volatility * 100 : risk!.annStd;
+                            const sharpe = metrics ? metrics.sharpe_ratio     : risk!.sharpe;
+                            return (
+                                <>
+                                    <RiskScore
+                                        score={Math.round(Math.min(Math.max((vol / 40) * 100, 10), 99))}
+                                        label={vol > 30 ? 'Aggressive' : vol > 15 ? 'Moderate' : 'Conservative'}
                                     />
-                                    <View style={s.returnDiv} />
-                                    <StatPair
-                                        label="ALPHA YTD"
-                                        value={`${sign(vsMarket)}${fmt2(vsMarket)}%`}
-                                        color={vsMarket >= 0 ? GREEN : RED}
-                                    />
-                                </View>
-                            </>
-                        )}
+
+                                    <View style={s.insightDivider} />
+
+                                    <View style={{ flexDirection: 'row' }}>
+                                        <StatPair
+                                            label="SHARPE RATIO"
+                                            value={fmt2(sharpe)}
+                                            color={sharpe >= 1 ? GREEN : sharpe >= 0 ? GOLD : RED}
+                                        />
+                                        <View style={s.returnDiv} />
+                                        <StatPair
+                                            label="ALPHA"
+                                            value={`${sign(displayAlpha)}${fmt2(Math.abs(displayAlpha))}%`}
+                                            color={displayAlpha >= 0 ? GREEN : RED}
+                                        />
+                                    </View>
+                                </>
+                            );
+                        })()}
                     </Card>
 
                     {/* ── Returns Histogram ── */}
@@ -406,10 +437,17 @@ export default function PortfolioScreen() {
                     )}
 
                     {/* ── Risk Metrics ── */}
-                    {risk && (
+                    {(risk || metrics) && (
                         <Card>
-                            <SHead title="Risk Analysis" />
-                            <RiskGrid risk={risk} />
+                            <SHead
+                                title="Risk Analysis"
+                                right={metrics && (
+                                    <View style={[s.tagPill, { backgroundColor: GOLD_D, borderColor: `${GOLD}35` }]}>
+                                        <Text style={{ color: GOLD, fontSize: 9, fontWeight: '700', fontFamily: mono }}>ENGINE</Text>
+                                    </View>
+                                )}
+                            />
+                            <RiskGrid risk={risk ?? { mean: 0, stddev: 0, annStd: 0, sharpe: 0, var95: 0, winRate: 0 }} engineMetrics={metrics} />
                         </Card>
                     )}
 
