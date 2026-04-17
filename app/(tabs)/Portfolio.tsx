@@ -1,10 +1,10 @@
 /**
- * Portfolio.tsx — Vestara Quantum Dashboard
- * Theme: Deep navy · Electric cyan · Sharp-but-refined cards
+ * Portfolio.tsx — Vestara Quantum Dashboard (orchestrator)
+ * Sticky net-worth hero + internal tab bar (Overview | Performance | Risk | Positions)
  */
 
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -21,99 +21,35 @@ import {
 import { usePortfolioData } from '@/src/portfolio/hooks/usePortfolioData';
 import { usePerformanceMetrics } from '@/src/portfolio/hooks/usePerformanceMetrics';
 import type { Period as EnginePeriod } from '@/src/services/engineClient';
-import { LineChart, ReturnsHistogram, DrawdownChart } from '@/src/portfolio/charts';
-import {
-    Metric, PeriodTabs, SHead, Card, HoldingRow,
-    PerformersSection, RiskGrid,
-} from '@/src/portfolio/components';
+
+import OverviewTab     from '@/src/portfolio/components/tabs/OverviewTab';
+import PerformanceTab  from '@/src/portfolio/components/tabs/PerformanceTab';
+import RiskTab         from '@/src/portfolio/components/tabs/RiskTab';
+import PositionsTab    from '@/src/portfolio/components/tabs/PositionsTab';
+
+import Card from '@/src/portfolio/components/Card';
 import {
     BG, CARD2, BORDER,
-    GOLD, GOLD_L, GOLD_D, GOLD_B,
+    GOLD, GOLD_D, GOLD_B, GOLD_L,
     GREEN, GREEN_D, RED, RED_D,
-    PURPLE, PURPLE_D,
-    TXT, TXT2, MUTED, SUB,
-    sans, mono, CHART_W,
+    MUTED, SUB, TXT, TXT2,
+    sans, mono,
 } from '@/src/portfolio/tokens';
-import { fmtCurrency, fmt2, sign, getTicker } from '@/src/portfolio/helpers';
+import { fmtCurrency, fmt2, sign } from '@/src/portfolio/helpers';
+import type { AllocSeg } from '@/src/portfolio/types';
 
-// ─── Allocation bar row ────────────────────────────────────────────────────────
-const ALLOC_COLORS = ['#8ff5ff', '#ac89ff', '#ff6b98', '#00E09A', '#FFA500', '#a5abbd'];
+// ─── Internal tab definition ──────────────────────────────────────────────────
+type InternalTab = 'overview' | 'performance' | 'risk' | 'positions';
+const TABS: { key: InternalTab; label: string }[] = [
+    { key: 'overview',     label: 'Overview'    },
+    { key: 'performance',  label: 'Performance' },
+    { key: 'risk',         label: 'Risk'        },
+    { key: 'positions',    label: 'Positions'   },
+];
 
-const AllocRow: React.FC<{ label: string; pct: number; color: string; value: string }> =
-    ({ label, pct, color }) => (
-    <View style={al.row}>
-        <Text style={al.label}>{label.toUpperCase()}</Text>
-        <View style={al.track}>
-            <View style={[al.fill, { width: `${Math.min(pct, 100)}%`, backgroundColor: color }]} />
-        </View>
-        <Text style={[al.pct, { color }]}>{fmt2(pct)}%</Text>
-    </View>
-);
-const al = StyleSheet.create({
-    row:   { marginBottom: 12 },
-    label: { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2.5, marginBottom: 6 },
-    track: { height: 4, backgroundColor: 'rgba(65,72,87,0.5)', borderRadius: 2,
-             overflow: 'hidden', marginBottom: 4 },
-    fill:  { height: '100%', borderRadius: 2, opacity: 0.88 },
-    pct:   { fontSize: 11, fontWeight: '700', fontFamily: mono },
-});
-
-// ─── Insight alert banner ──────────────────────────────────────────────────────
-const InsightBanner: React.FC<{ title: string; body: string }> = ({ title, body }) => (
-    <View style={ib.wrap}>
-        <View style={ib.dot} />
-        <View style={{ flex: 1 }}>
-            <Text style={ib.title}>{title}</Text>
-            <Text style={ib.body}>{body}</Text>
-        </View>
-    </View>
-);
-const ib = StyleSheet.create({
-    wrap:  { backgroundColor: `${GOLD}0A`, borderWidth: 1, borderColor: `${GOLD}22`,
-             borderLeftWidth: 3, borderLeftColor: GOLD,
-             borderRadius: 4, padding: 12, flexDirection: 'row', gap: 10, marginBottom: 16 },
-    dot:   { width: 6, height: 6, borderRadius: 3, backgroundColor: GOLD, marginTop: 4,
-             shadowColor: GOLD, shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } },
-    title: { color: GOLD_L, fontSize: 12, fontWeight: '700', fontFamily: sans, marginBottom: 3, letterSpacing: 0.1 },
-    body:  { color: TXT2, fontSize: 11, lineHeight: 17 },
-});
-
-// ─── Hex risk score ────────────────────────────────────────────────────────────
-const RiskScore: React.FC<{ score: number; label: string }> = ({ score, label }) => {
-    const color = score >= 75 ? RED : score >= 50 ? GOLD : GREEN;
-    return (
-        <View style={rs.wrap}>
-            <View style={[rs.hex, { borderColor: `${color}40`, backgroundColor: `${color}10` }]}>
-                <Text style={[rs.num, { color }]}>{score}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={rs.scoreLabel}>RISK SCORE</Text>
-                <Text style={[rs.riskName, { color }]}>{label}</Text>
-                <Text style={rs.updated}>UPDATED 2M AGO</Text>
-            </View>
-        </View>
-    );
-};
-const rs = StyleSheet.create({
-    wrap:       { flexDirection: 'row', alignItems: 'center', gap: 14 },
-    hex:        { width: 64, height: 64, borderRadius: 6, borderWidth: 1,
-                  alignItems: 'center', justifyContent: 'center' },
-    num:        { fontSize: 26, fontWeight: '800', fontFamily: sans },
-    scoreLabel: { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2.5, marginBottom: 2 },
-    riskName:   { fontSize: 14, fontWeight: '700', fontFamily: sans, marginBottom: 3 },
-    updated:    { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 1 },
-});
-
-// ─── Stat pair ─────────────────────────────────────────────────────────────────
-const StatPair: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = TXT }) => (
-    <View style={{ flex: 1 }}>
-        <Text style={{ color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2, marginBottom: 4 }}>{label}</Text>
-        <Text style={{ color, fontSize: 18, fontWeight: '700', fontFamily: sans }}>{value}</Text>
-    </View>
-);
-
-// ─── Main screen ───────────────────────────────────────────────────────────────
 export default function PortfolioScreen() {
+    const [activeTab, setActiveTab] = useState<InternalTab>('overview');
+
     const {
         loading, refreshing, connected, userName, lastUpdated,
         period, setPeriod, headerAnim, onRefresh,
@@ -124,16 +60,19 @@ export default function PortfolioScreen() {
         fetchError,
     } = usePortfolioData();
 
-    // Engine metrics — prefer over client-computed values when available.
-    // Falls back gracefully: cache → engine → local computation.
     const { data: metrics, source: metricsSource } = usePerformanceMetrics(period as EnginePeriod);
 
-    // Display values: engine wins when present, local computation is the fallback
-    const displayReturn      = metrics ? metrics.twr * 100              : periodReturn;
-    const displayBenchReturn = metrics ? metrics.benchmark_return * 100 : sp500Return;
-    const displayAlpha       = metrics ? metrics.alpha * 100            : vsMarket;
+    const displayReturn  = metrics ? metrics.twr * 100              : periodReturn;
+    const displayBench   = metrics ? metrics.benchmark_return * 100 : sp500Return;
+    const displayAlpha   = metrics ? metrics.alpha * 100            : vsMarket;
 
     const isUp = todayChangePct >= 0;
+
+    // Build AllocSeg list with pct for OverviewTab
+    const allocSegsWithPct: AllocSeg[] = allocSegs.map(seg => ({
+        ...seg,
+        pct: totalVal > 0 ? (seg.value / totalVal) * 100 : 0,
+    }));
 
     return (
         <View style={s.root}>
@@ -165,7 +104,6 @@ export default function PortfolioScreen() {
                 </TouchableOpacity>
             </Animated.View>
 
-            {/* ── Fetch error banner ── */}
             {fetchError && (
                 <View style={s.errorBanner}>
                     <Text style={s.errorBannerTxt}>⚠ {fetchError}</Text>
@@ -179,7 +117,6 @@ export default function PortfolioScreen() {
                     <Text style={s.loadingTxt}>Syncing portfolio…</Text>
                 </View>
 
-            /* ── Not connected ── */
             ) : !connected ? (
                 <View style={s.centred}>
                     <Text style={{ fontSize: 48, marginBottom: 18 }}>📡</Text>
@@ -192,7 +129,6 @@ export default function PortfolioScreen() {
                     </TouchableOpacity>
                 </View>
 
-            /* ── Dashboard ── */
             ) : (
                 <ScrollView
                     contentContainerStyle={s.scroll}
@@ -201,8 +137,7 @@ export default function PortfolioScreen() {
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GOLD} />
                     }
                 >
-
-                    {/* ── Net Worth ── */}
+                    {/* ── Net Worth hero card ── */}
                     <Card glow={GOLD} style={s.heroCard}>
                         <Text style={s.heroLabel}>NET WORTH VALUE</Text>
                         <Text style={s.heroValue}>{fmtCurrency(totalVal, currency)}</Text>
@@ -220,253 +155,88 @@ export default function PortfolioScreen() {
                             </Text>
                         </View>
 
-                        {/* Quick stats row */}
                         <View style={s.quickRow}>
-                            <View style={s.quickCell}>
-                                <Text style={s.qLabel}>POSITIONS</Text>
-                                <Text style={s.qVal}>{positions.length}</Text>
-                            </View>
+                            <QuickCell label="POSITIONS" value={String(positions.length)} />
                             <View style={s.qDiv} />
-                            <View style={s.quickCell}>
-                                <Text style={s.qLabel}>CASH</Text>
-                                <Text style={s.qVal}>{fmtCurrency(cash, currency)}</Text>
-                            </View>
+                            <QuickCell label="CASH"      value={fmtCurrency(cash, currency)} />
                             <View style={s.qDiv} />
-                            <View style={s.quickCell}>
-                                <Text style={s.qLabel}>INVESTED</Text>
-                                <Text style={s.qVal}>{fmtCurrency(totalPos, currency)}</Text>
-                            </View>
+                            <QuickCell label="INVESTED"  value={fmtCurrency(totalPos, currency)} />
                             {totalPnl !== 0 && <>
                                 <View style={s.qDiv} />
-                                <View style={s.quickCell}>
-                                    <Text style={s.qLabel}>TOTAL P&L</Text>
-                                    <Text style={[s.qVal, { color: totalPnl >= 0 ? GREEN : RED }]}>
-                                        {sign(totalPnl)}{fmtCurrency(Math.abs(totalPnl), currency)}
-                                    </Text>
-                                </View>
+                                <QuickCell
+                                    label="TOTAL P&L"
+                                    value={`${sign(totalPnl)}${fmtCurrency(Math.abs(totalPnl), currency)}`}
+                                    color={totalPnl >= 0 ? GREEN : RED}
+                                />
                             </>}
                         </View>
                     </Card>
 
-                    {/* ── Asset Allocation (bars) ── */}
-                    {allocSegs.length > 0 && (
-                        <Card>
-                            <SHead title="Asset Allocation" />
-                            {allocSegs.map((seg, i) => (
-                                <AllocRow
-                                    key={i}
-                                    label={seg.label}
-                                    pct={(seg.value / totalVal) * 100}
-                                    color={ALLOC_COLORS[i % ALLOC_COLORS.length]}
-                                    value={fmtCurrency(seg.value, currency)}
-                                />
-                            ))}
-                            <TouchableOpacity style={s.rebalanceBtn}>
-                                <Text style={s.rebalanceTxt}>REBALANCE PORTFOLIO</Text>
-                            </TouchableOpacity>
-                        </Card>
-                    )}
-
-                    {/* ── Historical Performance ── */}
-                    <Card>
-                        <SHead
-                            title="Historical Performance"
-                            right={
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    {metricsSource && (
-                                        <View style={[s.tagPill, {
-                                            backgroundColor: metricsSource === 'cache' ? GREEN_D : GOLD_D,
-                                            borderColor: metricsSource === 'cache' ? `${GREEN}35` : `${GOLD}35`,
-                                        }]}>
-                                            <Text style={{ color: metricsSource === 'cache' ? GREEN : GOLD, fontSize: 8, fontFamily: mono, letterSpacing: 1 }}>
-                                                {metricsSource === 'cache' ? '⚡ CACHE' : '⚙ ENGINE'}
-                                            </Text>
-                                        </View>
-                                    )}
-                                    <Text style={s.tagMuted}>vs S&P 500</Text>
-                                </View>
-                            }
-                        />
-                        <Text style={s.chartSub}>
-                            {metrics ? 'Engine-computed · TWR method' : 'Simulated real-time tracking of aggregate assets'}
-                        </Text>
-
-                        <PeriodTabs selected={period} onChange={setPeriod} />
-
-                        <View style={s.returnRow}>
-                            <Metric
-                                label={metrics ? 'TWR' : 'Your Return'}
-                                value={`${sign(displayReturn)}${fmt2(Math.abs(displayReturn))}%`}
-                                color={displayReturn >= 0 ? GREEN : RED}
-                            />
-                            <View style={s.returnDiv} />
-                            <Metric
-                                label={metrics?.benchmark_symbol ?? 'S&P 500'}
-                                value={`${sign(displayBenchReturn)}${fmt2(Math.abs(displayBenchReturn))}%`}
-                                color={SUB}
-                            />
-                            <View style={s.returnDiv} />
-                            <Metric
-                                label="Alpha"
-                                value={`${sign(displayAlpha)}${fmt2(Math.abs(displayAlpha))}%`}
-                                color={displayAlpha >= 0 ? GREEN : RED}
-                                sub={displayAlpha >= 0 ? 'outperforming' : 'lagging'}
-                            />
-                        </View>
-
-                        <LineChart
-                            series={[
-                                { values: chartPortfolio, color: displayReturn >= 0 ? GREEN : RED, width: 2.5 },
-                                { values: chartBench, color: MUTED, width: 1.5, opacity: 0.35 },
-                            ]}
-                            w={CHART_W} h={130}
-                        />
-
-                        {chartLabels[0] && (
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                                {chartLabels.map((l, i) => (
-                                    <Text key={i} style={s.chartLabel}>{l}</Text>
-                                ))}
-                            </View>
-                        )}
-
-                        <View style={s.legendRow}>
-                            <View style={s.legendItem}>
-                                <View style={[s.legendDot, { backgroundColor: displayReturn >= 0 ? GREEN : RED }]} />
-                                <Text style={s.legendTxt}>Portfolio</Text>
-                            </View>
-                            <View style={s.legendItem}>
-                                <View style={[s.legendDash, { backgroundColor: MUTED }]} />
-                                <Text style={s.legendTxt}>{metrics?.benchmark_symbol ?? 'S&P 500'} (ref)</Text>
-                            </View>
-                        </View>
-                    </Card>
-
-                    {/* ── Top Holdings ── */}
-                    <Card>
-                        <SHead
-                            title="Top Holdings"
-                            right={
-                                <View style={[s.tagPill, { backgroundColor: GOLD_D, borderColor: `${GOLD}35` }]}>
-                                    <Text style={{ color: GOLD, fontSize: 10 }}>⚡</Text>
-                                </View>
-                            }
-                        />
-                        {positions.length > 0
-                            ? positions.slice(0, 4).map((pos, i) => (
-                                <HoldingRow key={`${getTicker(pos.symbol)}-${i}`} pos={pos} totalValue={totalPos} index={i} />
-                            ))
-                            : <Text style={s.emptyMsg}>No positions · pull to refresh</Text>
-                        }
-                        {positions.length > 4 && (
-                            <TouchableOpacity style={s.viewAllBtn}>
-                                <Text style={s.viewAllTxt}>VIEW ALL HOLDINGS  →</Text>
-                            </TouchableOpacity>
-                        )}
-                    </Card>
-
-                    {/* ── Quantum Insights ── */}
-                    <Card>
-                        <SHead title="Quantum Insights" />
-
-                        <InsightBanner
-                            title="Exposure Alert"
-                            body={
-                                allocSegs.length > 0
-                                    ? `Your portfolio is concentrated in ${allocSegs[0]?.label ?? 'one asset class'}. Consider rebalancing towards diversified holdings.`
-                                    : 'Connect your brokerage to receive AI-powered portfolio insights.'
-                            }
-                        />
-
-                        {(risk || metrics) && (() => {
-                            const vol    = metrics ? metrics.volatility * 100 : risk!.annStd;
-                            const sharpe = metrics ? metrics.sharpe_ratio     : risk!.sharpe;
+                    {/* ── Internal tab bar ── */}
+                    <View style={s.tabBar}>
+                        {TABS.map(tab => {
+                            const active = activeTab === tab.key;
                             return (
-                                <>
-                                    <RiskScore
-                                        score={Math.round(Math.min(Math.max((vol / 40) * 100, 10), 99))}
-                                        label={vol > 30 ? 'Aggressive' : vol > 15 ? 'Moderate' : 'Conservative'}
-                                    />
-
-                                    <View style={s.insightDivider} />
-
-                                    <View style={{ flexDirection: 'row' }}>
-                                        <StatPair
-                                            label="SHARPE RATIO"
-                                            value={fmt2(sharpe)}
-                                            color={sharpe >= 1 ? GREEN : sharpe >= 0 ? GOLD : RED}
-                                        />
-                                        <View style={s.returnDiv} />
-                                        <StatPair
-                                            label="ALPHA"
-                                            value={`${sign(displayAlpha)}${fmt2(Math.abs(displayAlpha))}%`}
-                                            color={displayAlpha >= 0 ? GREEN : RED}
-                                        />
-                                    </View>
-                                </>
+                                <TouchableOpacity
+                                    key={tab.key}
+                                    style={[s.tabBtn, active && s.tabBtnActive]}
+                                    onPress={() => setActiveTab(tab.key)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[s.tabTxt, active && s.tabTxtActive]}>
+                                        {tab.label}
+                                    </Text>
+                                    {active && <View style={s.tabIndicator} />}
+                                </TouchableOpacity>
                             );
-                        })()}
-                    </Card>
+                        })}
+                    </View>
 
-                    {/* ── Returns Histogram ── */}
-                    <Card>
-                        <SHead
-                            title="Returns Distribution"
-                            right={
-                                <View style={[s.tagPill, { backgroundColor: PURPLE_D, borderColor: `${PURPLE}35` }]}>
-                                    <Text style={{ color: PURPLE, fontSize: 9, fontWeight: '700', fontFamily: mono }}>HISTOGRAM</Text>
-                                </View>
-                            }
+                    {/* ── Active tab content ── */}
+                    {activeTab === 'overview' && (
+                        <OverviewTab
+                            totalVal={totalVal}
+                            totalPos={totalPos}
+                            totalPnl={totalPnl}
+                            cash={cash}
+                            currency={currency}
+                            positions={positions}
+                            allocSegs={allocSegsWithPct}
                         />
-                        <ReturnsHistogram returns={dailyReturns} w={CHART_W} h={90} />
-                    </Card>
-
-                    {/* ── Drawdown ── */}
-                    {snapValues.length >= 3 && (
-                        <Card>
-                            <SHead
-                                title="Drawdown Analysis"
-                                right={
-                                    <View style={[s.tagPill, { backgroundColor: RED_D, borderColor: `${RED}35` }]}>
-                                        <Text style={{ color: RED, fontSize: 9, fontWeight: '700', fontFamily: mono }}>UNDERWATER</Text>
-                                    </View>
-                                }
-                            />
-                            <DrawdownChart values={snapValues} w={CHART_W} h={90} />
-                        </Card>
                     )}
 
-                    {/* ── Risk Metrics ── */}
-                    {(risk || metrics) && (
-                        <Card>
-                            <SHead
-                                title="Risk Analysis"
-                                right={metrics && (
-                                    <View style={[s.tagPill, { backgroundColor: GOLD_D, borderColor: `${GOLD}35` }]}>
-                                        <Text style={{ color: GOLD, fontSize: 9, fontWeight: '700', fontFamily: mono }}>ENGINE</Text>
-                                    </View>
-                                )}
-                            />
-                            <RiskGrid risk={risk ?? { mean: 0, stddev: 0, annStd: 0, sharpe: 0, var95: 0, winRate: 0 }} engineMetrics={metrics} />
-                        </Card>
+                    {activeTab === 'performance' && (
+                        <PerformanceTab
+                            period={period}
+                            onPeriodChange={setPeriod}
+                            chartPortfolio={chartPortfolio}
+                            chartBench={chartBench}
+                            chartLabels={chartLabels}
+                            dailyReturns={dailyReturns}
+                            displayReturn={displayReturn}
+                            displayBench={displayBench}
+                            displayAlpha={displayAlpha}
+                            metrics={metrics}
+                            metricsSource={metricsSource}
+                        />
                     )}
 
-                    {/* ── All Performers ── */}
-                    <PerformersSection top={performers.top} bottom={performers.bottom} />
+                    {activeTab === 'risk' && (
+                        <RiskTab
+                            risk={risk}
+                            metrics={metrics}
+                            snapValues={snapValues}
+                            displayAlpha={displayAlpha}
+                        />
+                    )}
 
-                    {/* ── All Holdings ── */}
-                    {positions.length > 4 && (
-                        <>
-                            <SHead
-                                title={`All Holdings · ${positions.length} assets`}
-                                right={
-                                    <Text style={s.tagMuted}>{fmtCurrency(totalPos, currency)}</Text>
-                                }
-                            />
-                            {positions.slice(4).map((pos, i) => (
-                                <HoldingRow key={`${getTicker(pos.symbol)}-extra-${i}`} pos={pos} totalValue={totalPos} index={i + 4} />
-                            ))}
-                        </>
+                    {activeTab === 'positions' && (
+                        <PositionsTab
+                            positions={positions}
+                            performers={performers}
+                            totalPos={totalPos}
+                            currency={currency}
+                        />
                     )}
 
                     {/* ── Footer ── */}
@@ -475,12 +245,18 @@ export default function PortfolioScreen() {
                         <Text style={s.footerTxt}>VESTARA  ·  LIVE DATA  ·  SNAPTRADE</Text>
                         <View style={s.footerLine} />
                     </View>
-
                 </ScrollView>
             )}
         </View>
     );
 }
+
+const QuickCell: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = TXT2 }) => (
+    <View style={s.quickCell}>
+        <Text style={s.qLabel}>{label}</Text>
+        <Text style={[s.qVal, { color }]}>{value}</Text>
+    </View>
+);
 
 const s = StyleSheet.create({
     root:   { flex: 1, backgroundColor: BG },
@@ -509,6 +285,10 @@ const s = StyleSheet.create({
     refreshBtn: { width: 36, height: 36, borderRadius: 4, backgroundColor: CARD2,
                   borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
 
+    errorBanner:    { marginHorizontal: 16, marginTop: 8, backgroundColor: 'rgba(255,113,108,0.12)',
+                      borderWidth: 1, borderColor: 'rgba(255,113,108,0.35)', borderRadius: 4, padding: 10 },
+    errorBannerTxt: { color: '#ff716c', fontSize: 11, fontFamily: mono, letterSpacing: 0.3 },
+
     scroll: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 52 },
 
     // Hero card
@@ -525,52 +305,29 @@ const s = StyleSheet.create({
                   borderWidth: 1, borderColor: BORDER, padding: 14 },
     quickCell:  { flex: 1, alignItems: 'center' },
     qLabel:     { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2, marginBottom: 5 },
-    qVal:       { color: TXT2, fontSize: 12, fontWeight: '700', fontFamily: mono },
+    qVal:       { fontSize: 12, fontWeight: '700', fontFamily: mono },
     qDiv:       { width: 1, backgroundColor: 'rgba(65,72,87,0.6)', marginHorizontal: 6, alignSelf: 'stretch' },
 
-    // Rebalance button
-    rebalanceBtn: { marginTop: 8, borderWidth: 1, borderColor: `${GOLD}35`,
-                    borderRadius: 4, paddingVertical: 13, alignItems: 'center',
-                    backgroundColor: GOLD_D },
-    rebalanceTxt: { color: GOLD, fontSize: 11, fontWeight: '800', fontFamily: mono, letterSpacing: 2.5 },
-
-    // Chart
-    chartSub:  { color: MUTED, fontSize: 11, fontFamily: sans, marginBottom: 14, marginTop: -8 },
-    returnRow: { flexDirection: 'row', marginBottom: 18 },
-    returnDiv: { width: 1, backgroundColor: 'rgba(65,72,87,0.6)', marginHorizontal: 12, alignSelf: 'stretch' },
-    chartLabel:{ color: MUTED, fontSize: 9, fontFamily: mono },
-    legendRow: { flexDirection: 'row', gap: 16, marginTop: 12 },
-    legendItem:{ flexDirection: 'row', alignItems: 'center', gap: 6 },
-    legendDot: { width: 7, height: 7, borderRadius: 3 },
-    legendDash:{ width: 14, height: 1.5, borderRadius: 1 },
-    legendTxt: { color: MUTED, fontSize: 10, fontFamily: sans },
-
-    // Holdings
-    viewAllBtn: { marginTop: 6, paddingVertical: 13, alignItems: 'center',
-                  borderTopWidth: 1, borderTopColor: 'rgba(65,72,87,0.6)' },
-    viewAllTxt: { color: GOLD, fontSize: 11, fontWeight: '700', fontFamily: mono, letterSpacing: 2 },
-    emptyMsg:   { color: MUTED, fontSize: 12, fontFamily: mono, textAlign: 'center',
-                  paddingVertical: 16, letterSpacing: 0.5 },
-
-    // Insights
-    insightDivider: { height: 1, backgroundColor: 'rgba(65,72,87,0.6)', marginVertical: 16 },
-
-    // Tags
-    tagPill:  { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3, borderWidth: 1 },
-    tagMuted: { color: MUTED, fontSize: 10, fontFamily: mono },
+    // Internal tab bar
+    tabBar:         { flexDirection: 'row', marginBottom: 16, backgroundColor: CARD2,
+                      borderRadius: 6, borderWidth: 1, borderColor: BORDER, padding: 3, gap: 2 },
+    tabBtn:         { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 4,
+                      position: 'relative' },
+    tabBtnActive:   { backgroundColor: GOLD_D, borderWidth: 1, borderColor: GOLD_B },
+    tabTxt:         { color: MUTED, fontSize: 10, fontWeight: '600', fontFamily: mono, letterSpacing: 0.5 },
+    tabTxtActive:   { color: GOLD },
+    tabIndicator:   { position: 'absolute', bottom: 0, left: '20%', right: '20%',
+                      height: 2, backgroundColor: GOLD, borderRadius: 1 },
 
     // Loading / empty
-    centred:    { flex: 1, alignItems: 'center', justifyContent: 'center',
-                  paddingHorizontal: 36, gap: 10 },
-    loadingTxt:    { color: MUTED, fontSize: 12, fontFamily: mono, letterSpacing: 1, marginTop: 10 },
-    errorBanner:   { marginHorizontal: 16, marginBottom: 4, backgroundColor: 'rgba(255,113,108,0.12)',
-                     borderWidth: 1, borderColor: 'rgba(255,113,108,0.35)', borderRadius: 4, padding: 10 },
-    errorBannerTxt:{ color: RED, fontSize: 11, fontFamily: mono, letterSpacing: 0.3 },
-    emptyTitle: { color: TXT, fontSize: 20, fontWeight: '700', fontFamily: sans },
-    emptySub:   { color: MUTED, fontSize: 13, textAlign: 'center', lineHeight: 22 },
-    emptyBtn:   { marginTop: 20, backgroundColor: GOLD_D, borderWidth: 1, borderColor: GOLD_B,
-                  borderRadius: 4, paddingHorizontal: 28, paddingVertical: 14 },
-    emptyBtnTxt:{ color: GOLD_L, fontSize: 14, fontWeight: '700', fontFamily: sans },
+    centred:     { flex: 1, alignItems: 'center', justifyContent: 'center',
+                   paddingHorizontal: 36, gap: 10 },
+    loadingTxt:  { color: MUTED, fontSize: 12, fontFamily: mono, letterSpacing: 1, marginTop: 10 },
+    emptyTitle:  { color: TXT, fontSize: 20, fontWeight: '700', fontFamily: sans },
+    emptySub:    { color: MUTED, fontSize: 13, textAlign: 'center', lineHeight: 22 },
+    emptyBtn:    { marginTop: 20, backgroundColor: GOLD_D, borderWidth: 1, borderColor: GOLD_B,
+                   borderRadius: 4, paddingHorizontal: 28, paddingVertical: 14 },
+    emptyBtnTxt: { color: GOLD_L, fontSize: 14, fontWeight: '700', fontFamily: sans },
 
     // Footer
     footer:     { flexDirection: 'row', alignItems: 'center', gap: 10,
