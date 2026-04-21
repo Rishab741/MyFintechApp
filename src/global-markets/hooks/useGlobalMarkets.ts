@@ -1,23 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/src/lib/supabase';
-import { fetchQuotes, SECTOR_ETFS } from '@/src/market/service';
 import type { GlobalIntelligence, LiveSector } from '../types';
 
+// Sectors are now returned by the edge function (server-side Yahoo Finance call).
+// This avoids client-side rate-limiting and IP blocks that cause 0% for all sectors.
 async function getGlobalIntelligence(): Promise<GlobalIntelligence> {
     const { data, error } = await supabase.functions.invoke('market-intelligence', {});
     if (error) throw new Error(error.message);
     if (data?.error) throw new Error(data.error);
     return data as GlobalIntelligence;
-}
-
-async function getLiveSectors(): Promise<LiveSector[]> {
-    const symbols   = SECTOR_ETFS.map(s => s.etf);
-    const quotes    = await fetchQuotes(symbols);
-    const quoteMap  = new Map(quotes.map(q => [q.symbol, q]));
-    return SECTOR_ETFS.map(({ name, etf }) => {
-        const q = quoteMap.get(etf);
-        return { name, etf, changePct: q?.changePct ?? 0, price: q?.price ?? 0 };
-    }).sort((a, b) => b.changePct - a.changePct);
 }
 
 export function useGlobalMarkets() {
@@ -39,28 +30,24 @@ export function useGlobalMarkets() {
         setError(null);
         setNeedsSetup(false);
 
-        const [macroResult, sectorResult] = await Promise.allSettled([
-            getGlobalIntelligence(),
-            getLiveSectors(),
-        ]);
+        try {
+            const intel = await getGlobalIntelligence();
+            if (!mounted.current) return;
 
-        if (!mounted.current) return;
-
-        if (macroResult.status === 'fulfilled') {
-            const intel = macroResult.value;
             if (intel.needs_setup) {
                 setNeedsSetup(true);
+                // sectors may still be present even when FRED key is missing
+                if (intel.sectors?.length) setSectors(intel.sectors);
             } else {
                 setIntelligence(intel);
+                setSectors(intel.sectors ?? []);
             }
-        } else {
-            setError(macroResult.reason instanceof Error ? macroResult.reason.message : 'Failed to load macro intelligence');
+        } catch (e) {
+            if (!mounted.current) return;
+            setError(e instanceof Error ? e.message : 'Failed to load macro intelligence');
         }
 
-        if (sectorResult.status === 'fulfilled') {
-            setSectors(sectorResult.value);
-        }
-
+        if (!mounted.current) return;
         setLoading(false);
         setRefreshing(false);
     }, []);

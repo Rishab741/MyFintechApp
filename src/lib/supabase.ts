@@ -10,13 +10,27 @@ const SecureStoreAdapter = {
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
+// ─── Validate env vars at startup ────────────────────────────────────────────
+// Using non-null assertion on undefined crashes the app silently before any
+// error boundary can catch it. Fail loudly with a readable message instead.
+const supabaseUrl     = process.env.EXPO_PUBLIC_SUPABASE_URL     ?? '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+if (__DEV__ && (!supabaseUrl || !supabaseAnonKey)) {
+  console.error(
+    '[Supabase] Missing environment variables.\n' +
+    'Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your .env file.\n' +
+    'For EAS builds, add them via: eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value <url>'
+  );
+}
+
 // ─── Supabase client ─────────────────────────────────────────────────────────
 // PKCE flow prevents auth-code interception attacks on mobile.
 // autoRefreshToken silently rotates the JWT before it expires using the
 // long-lived refresh token (configured via Dashboard → Auth → Token lifetime).
 export const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL!,
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       storage:            SecureStoreAdapter,
@@ -30,7 +44,7 @@ export const supabase = createClient(
 
 // ─── Proactive refresh on app foreground ─────────────────────────────────────
 // When the app has been backgrounded the JS runtime is paused, so the
-// internal refresh timer never fires.  Force a refresh on every foreground
+// internal refresh timer never fires. Force a refresh on every foreground
 // so the user always has a valid token ready — zero perceived latency.
 let _appState: AppStateStatus = AppState.currentState;
 

@@ -16,10 +16,17 @@ export default function RootLayout() {
 
   // ── 1. Hydrate session on cold start + listen for all future changes ────────
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setInitialized(true);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        setInitialized(true);
+      })
+      .catch(() => {
+        // Supabase unreachable (bad env vars, offline) — unblock the router
+        // so the user lands on the login screen rather than an infinite spinner.
+        setSession(null);
+        setInitialized(true);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {

@@ -4,7 +4,7 @@ import {
   BG, BG2 as CARD2, CARD, CARD2 as CARD3,
   BORDER,
   GOLD as CYAN, GOLD_D as CYAN_D,
-  ORANGE as PINK, ORANGE_D as PINK_D,
+  ORANGE as PINK,
   GREEN, GREEN_D,
   RED, RED_D,
   AMBER, AMBER_D,
@@ -431,8 +431,41 @@ export default function GlobalMarketsScreen(){
   const [sigTab,setSigTab]=useState<'all'|'critical'|'positive'>('all');
   const skP=useSkPulse();
   if(loading) return <View style={g.root}><StatusBar barStyle="light-content" backgroundColor={BG}/><SkScreen p={skP}/></View>;
-  if(needsSetup) return <View style={g.root}><StatusBar barStyle="light-content" backgroundColor={BG}/><View style={g.header}><Text style={g.liveTxt}>LIVE ENVIRONMENT</Text><Text style={g.hTitle}>Global Markets{'\n'}Overview</Text></View><SetupScreen/></View>;
-  if(error&&!intelligence) return <View style={[g.root,{alignItems:'center',justifyContent:'center',padding:28}]}><StatusBar barStyle="light-content" backgroundColor={BG}/><Text style={[g.setupTitle,{color:RED}]}>Failed to Load</Text><Text style={g.setupBody}>{error}</Text><TouchableOpacity style={g.ctaBtn} onPress={onRefresh}><Text style={g.ctaBtnTxt}>RETRY</Text></TouchableOpacity></View>;
+
+  // Full error with no data at all
+  if(error&&!intelligence&&!sectors.length) return (
+    <View style={[g.root,{alignItems:'center',justifyContent:'center',padding:28}]}>
+      <StatusBar barStyle="light-content" backgroundColor={BG}/>
+      <Text style={[g.setupTitle,{color:RED}]}>Failed to Load</Text>
+      <Text style={g.setupBody}>{error}</Text>
+      <TouchableOpacity style={g.ctaBtn} onPress={onRefresh}><Text style={g.ctaBtnTxt}>RETRY</Text></TouchableOpacity>
+    </View>
+  );
+
+  // FRED key missing — show sector data with a setup notice at the top
+  if(needsSetup) {
+    const maxAbsSetup=sectors.reduce((m,s)=>Math.max(m,Math.abs(s.changePct)),0);
+    return (
+      <View style={g.root}>
+        <StatusBar barStyle="light-content" backgroundColor={BG}/>
+        <ScrollView style={g.scroll} contentContainerStyle={g.scrollContent} showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={CYAN} colors={[CYAN]}/>}>
+          <View style={g.header}>
+            <Text style={g.liveTxt}>LIVE ENVIRONMENT</Text>
+            <Text style={g.hTitle}>Global Markets{'\n'}Overview</Text>
+          </View>
+          <SetupScreen/>
+          {sectors.length>0&&(
+            <>
+              <SLabel title="LIVE SECTOR PERFORMANCE" right="Today"/>
+              <View style={g.card}>{sectors.map((sec,i)=><React.Fragment key={sec.etf}><SectorRow sector={sec} maxAbs={maxAbsSetup}/>{i<sectors.length-1&&<View style={g.rowDiv}/>}</React.Fragment>)}</View>
+            </>
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
+
   if(!intelligence) return null;
   const {macro,regime,signals}=intelligence;
   const maxAbs=sectors.reduce((m,s)=>Math.max(m,Math.abs(s.changePct)),0);

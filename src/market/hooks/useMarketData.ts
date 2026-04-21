@@ -8,28 +8,39 @@ import {
   SECTOR_ETFS,
 } from '../service';
 import type { ChartPoint, MarketIndex, MarketStatus, Mover, Period, Quote, Sector } from '../types';
-import { GREEN, RED } from '@/src/portfolio/tokens';
+import { GREEN } from '@/src/portfolio/tokens';
+import { supabase } from '@/src/lib/supabase';
 
 // ─── Market status based on NYSE hours (ET = UTC-5 / UTC-4 DST) ──────────────
-function getMarketStatus(): MarketStatus {
-  const now = new Date();
-  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const day = et.getDay(); // 0=Sun, 6=Sat
-  const h = et.getHours();
-  const m = et.getMinutes();
-  const mins = h * 60 + m;
+// Avoids toLocaleString(timeZone) which is unreliable on Android < 10.
+// Instead, compute ET offset manually: ET = UTC-5 (EST) or UTC-4 (EDT).
+function getEasternMinutes(): { dayOfWeek: number; minutesInDay: number } {
+  const now     = new Date();
+  const utcMs   = now.getTime() + now.getTimezoneOffset() * 60_000; // to UTC ms
+  // Determine DST: EDT (UTC-4) is active from 2nd Sun in March → 1st Sun in November
+  const year = now.getUTCFullYear();
+  const dstStart = new Date(Date.UTC(year, 2,  1)); // 1 Mar UTC
+  dstStart.setUTCDate(8 - (dstStart.getUTCDay() || 7)); // 2nd Sunday in March (UTC)
+  const dstEnd   = new Date(Date.UTC(year, 10, 1)); // 1 Nov UTC
+  dstEnd.setUTCDate(1 + ((7 - dstEnd.getUTCDay()) % 7));  // 1st Sunday in November (UTC)
 
-  if (day === 0 || day === 6) {
-    return { label: 'CLOSED', isOpen: false, color: '#4A5468' };
-  }
-  if (mins >= 240 && mins < 570)  return { label: 'PRE-MARKET',   isOpen: false, color: '#C9A84C' };
-  if (mins >= 570 && mins < 960)  return { label: 'MARKET OPEN',  isOpen: true,  color: GREEN     };
-  if (mins >= 960 && mins < 1200) return { label: 'AFTER-HOURS',  isOpen: false, color: '#C084FC' };
+  const isDST    = utcMs >= dstStart.getTime() && utcMs < dstEnd.getTime();
+  const etMs     = utcMs - (isDST ? 4 : 5) * 3_600_000;
+  const etDate   = new Date(etMs);
+  return { dayOfWeek: etDate.getUTCDay(), minutesInDay: etDate.getUTCHours() * 60 + etDate.getUTCMinutes() };
+}
+
+function getMarketStatus(): MarketStatus {
+  const { dayOfWeek: day, minutesInDay: mins } = getEasternMinutes();
+
+  if (day === 0 || day === 6)      return { label: 'CLOSED',       isOpen: false, color: '#4A5468' };
+  if (mins >= 240 && mins < 570)   return { label: 'PRE-MARKET',   isOpen: false, color: '#C9A84C' };
+  if (mins >= 570 && mins < 960)   return { label: 'MARKET OPEN',  isOpen: true,  color: GREEN     };
+  if (mins >= 960 && mins < 1200)  return { label: 'AFTER-HOURS',  isOpen: false, color: '#C084FC' };
   return { label: 'CLOSED', isOpen: false, color: '#4A5468' };
 }
 
-const INDEX_SYMBOLS  = INDEX_CONFIG.map(c => c.symbol);
-const SECTOR_SYMBOLS = SECTOR_ETFS.map(s => s.etf);
+const INDEX_SYMBOLS = INDEX_CONFIG.map(c => c.symbol);
 
 export function useMarketData() {
   const [indices,       setIndices]       = useState<MarketIndex[]>([]);
@@ -59,15 +70,24 @@ export function useMarketData() {
     }));
   }, []);
 
-  // ── Load sector performance ────────────────────────────────────────────────
+  // ── Load sector performance via edge function (avoids Yahoo Finance client-side block) ──
+  // Falls back to 0% placeholders if the edge function fails so the grid stays visible.
   const loadSectors = useCallback(async () => {
-    const quotes = await fetchQuotes(SECTOR_SYMBOLS);
-    const quoteMap = new Map(quotes.map(q => [q.symbol, q]));
-    const s: Sector[] = SECTOR_ETFS.map(({ name, etf }) => {
-      const q = quoteMap.get(etf);
-      return { name, etf, change: q?.change ?? 0, changePct: q?.changePct ?? 0 };
-    });
-    setSectors(s);
+    const fallback: Sector[] = SECTOR_ETFS.map(({ name, etf }) => ({ name, etf, change: 0, changePct: 0 }));
+    try {
+      const { data, error } = await supabase.functions.invoke('market-intelligence', {
+        body: { action: 'sectors_only' },
+      });
+      if (!error && Array.isArray(data?.sectors) && data.sectors.length > 0) {
+        setSectors(data.sectors.map((sec: { name: string; etf: string; changePct: number }) => ({
+          name: sec.name, etf: sec.etf, change: 0, changePct: sec.changePct ?? 0,
+        })));
+      } else {
+        setSectors(fallback);
+      }
+    } catch {
+      setSectors(fallback);
+    }
   }, []);
 
   // ── Load movers ────────────────────────────────────────────────────────────

@@ -441,6 +441,54 @@ function generateMacroSignals(
   return signals
 }
 
+// ── Sector ETF list (mirrors src/market/service.ts SECTOR_ETFS) ───────────────
+const SECTOR_ETF_SYMBOLS = ['XLK','XLF','XLV','XLE','XLI','XLY','XLP','XLRE','XLB','XLU','XLC']
+const SECTOR_ETF_NAMES: Record<string, string> = {
+  XLK: 'Technology', XLF: 'Financials', XLV: 'Healthcare',
+  XLE: 'Energy',     XLI: 'Industrials', XLY: 'Cons. Disc.',
+  XLP: 'Cons. Staples', XLRE: 'Real Estate', XLB: 'Materials',
+  XLU: 'Utilities',  XLC: 'Comm. Svcs',
+}
+
+// Fetch sector ETF change percentages using the v8 chart API (per-symbol, query2).
+// The v7 batch quote API on query1 is blocked from Deno edge servers.
+// The v8 chart endpoint on query2 is the same API Yahoo Finance uses for its own
+// web charts — it works from server-side and has separate rate limits.
+async function fetchOneSector(etf: string): Promise<{ etf: string; changePct: number; price: number }> {
+  try {
+    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${etf}?interval=1d&range=2d`
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(8_000),
+    })
+    if (!res.ok) return { etf, changePct: 0, price: 0 }
+    const json = await res.json()
+    const meta = json?.chart?.result?.[0]?.meta
+    if (!meta) return { etf, changePct: 0, price: 0 }
+    const prev: number = meta.chartPreviousClose ?? meta.previousClose ?? 0
+    const curr: number = meta.regularMarketPrice ?? 0
+    const changePct = prev > 0 ? ((curr - prev) / prev) * 100 : 0
+    return { etf, changePct, price: curr }
+  } catch {
+    return { etf, changePct: 0, price: 0 }
+  }
+}
+
+async function fetchSectorQuotes(): Promise<Array<{ name: string; etf: string; changePct: number; price: number }>> {
+  const settled = await Promise.allSettled(SECTOR_ETF_SYMBOLS.map(fetchOneSector))
+  return SECTOR_ETF_SYMBOLS
+    .map((etf, i) => {
+      const r = settled[i]
+      const val = r.status === 'fulfilled' ? r.value : { etf, changePct: 0, price: 0 }
+      return { name: SECTOR_ETF_NAMES[etf] ?? etf, etf, changePct: val.changePct, price: val.price }
+    })
+    .sort((a, b) => b.changePct - a.changePct)
+}
+
 // ── Edge function entry ───────────────────────────────────────────────────────
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -450,7 +498,11 @@ serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
 
-  // ── Check cache ──
+  // ── Check macro cache (6h TTL) ──
+  // Sector quotes are fetched fresh every time (cached separately for 5 min
+  // so rapid refreshes don't hammer Yahoo Finance).
+  let cachedMacro: any = null
+  let cacheAgeMs  = Infinity
   try {
     const { data: cached } = await supabaseAdmin
       .from('market_intelligence_cache')
@@ -459,37 +511,60 @@ serve(async (req: Request) => {
       .single()
 
     if (cached) {
-      const ageMs = Date.now() - new Date(cached.fetched_at).getTime()
-      if (ageMs < CACHE_TTL_MS) {
-        return json({ ...(cached.data as object), cached: true, cache_age_min: Math.round(ageMs / 60_000) })
+      cacheAgeMs = Date.now() - new Date(cached.fetched_at).getTime()
+      if (cacheAgeMs < CACHE_TTL_MS) {
+        cachedMacro = cached.data
       }
     }
   } catch {
     // cache table may not exist yet — continue to fresh fetch
   }
 
+  // Fetch sectors in parallel (always fresh — 5-min server cache via headers)
+  const sectorsPromise = fetchSectorQuotes()
+
+  if (cachedMacro) {
+    // Macro is fresh from cache; still return live sector quotes
+    const sectors = await sectorsPromise
+    return json({
+      ...(cachedMacro as object),
+      sectors,
+      cached: true,
+      cache_age_min: Math.round(cacheAgeMs / 60_000),
+    })
+  }
+
   // ── FRED API key check ──
   const fredKey = Deno.env.get('FRED_API_KEY')
   if (!fredKey) {
+    // Still return sectors even without FRED key so sector screen works
+    const sectors = await sectorsPromise
     return json({
       needs_setup: true,
+      sectors,
       setup_instructions: [
         '1. Get a free FRED API key at: https://fred.stlouisfed.org/docs/api/api_key.html',
         '2. Run: npx supabase secrets set FRED_API_KEY=your_key',
         '3. Run: npx supabase functions deploy market-intelligence',
         '4. Run the SQL in the file header to create the cache table',
       ],
-    }, 503)
+    }, 200)
   }
 
-  // ── Fetch macro data from FRED in parallel ──
-  const [cpiSeries, fedRate, unemployment, yield10y, yield2y, vix] = await Promise.all([
-    fredSeries('CPIAUCSL', fredKey, 14),   // 14 months — need 13 for YoY + 1 buffer
-    fredLatest('FEDFUNDS', fredKey, 3),
-    fredLatest('UNRATE',   fredKey, 3),
-    fredLatest('DGS10',    fredKey, 10),   // daily — needs buffer for weekends
-    fredLatest('DGS2',     fredKey, 10),
-    fredLatest('VIXCLS',   fredKey, 10),
+  // ── Fetch macro + sectors in parallel ──
+  const [
+    [cpiSeries, fedRate, unemployment, yield10y, yield2y, vix],
+    sectors,
+  ] = await Promise.all([
+    Promise.all([
+      fredSeries('CPIAUCSL', fredKey, 14),   // 14 months — need 13 for YoY + 1 buffer
+      fredLatest('FEDFUNDS', fredKey, 3),
+      fredLatest('UNRATE',   fredKey, 3),
+      fredLatest('DGS10',    fredKey, 10),   // daily — needs buffer for weekends
+      fredLatest('DGS2',     fredKey, 10),
+      fredLatest('VIXCLS',   fredKey, 10),
+    ]),
+    sectorsPromise,
   ])
 
   // ── CPI year-over-year ──
@@ -522,16 +597,19 @@ serve(async (req: Request) => {
     },
     regime: { id: regimeId, ...regimeData },
     signals,
+    sectors,
     fetched_at: new Date().toISOString(),
     cached: false,
     cache_age_min: 0,
   }
 
-  // ── Persist to cache ──
+  // ── Persist macro to cache (sectors not cached — always fresh) ──
   try {
+    // Store without sectors in cache so they are always re-fetched live
+    const { sectors: _s, ...cachePayload } = result
     await supabaseAdmin
       .from('market_intelligence_cache')
-      .upsert({ singleton_key: 1, data: result, fetched_at: new Date().toISOString() })
+      .upsert({ singleton_key: 1, data: cachePayload, fetched_at: new Date().toISOString() })
   } catch {
     // Non-fatal — table may not exist
   }

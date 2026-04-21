@@ -3,16 +3,16 @@ import { useAuthStore } from '@/src/store/useAuthStore';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    Animated,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import ConnectInvestment from '../../components/ConnectInvestments';
 
@@ -371,7 +371,7 @@ export default function ProfileScreen() {
           title="Investment Profile"
           sub="Risk tolerance, asset classes & exchanges"
           accent={VIO}
-          onPress={() => router.push('/two')}
+          onPress={() => router.push('/(tabs)/InvestmentProfile')}
         />
 
         {/* ─── Connect accounts ─────────────────────────────── */}

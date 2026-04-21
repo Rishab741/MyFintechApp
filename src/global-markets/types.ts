@@ -47,6 +47,7 @@ export interface GlobalIntelligence {
     macro:        MacroIndicators;
     regime:       MacroRegime;
     signals:      MacroSignal[];
+    sectors:      LiveSector[];
     fetched_at:   string;
     cached:       boolean;
     cache_age_min:number;
