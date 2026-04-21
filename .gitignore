@@ -33,6 +33,7 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+services/engine/.env
 
 # typescript
 *.tsbuildinfo
@@ -40,3 +41,14 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# IDE / editor config (may contain API keys)
+.vscode/
+.mcp.json
+
+# Supabase CLI temp files
+supabase/.temp/
+
+# AI assistant notes
+Claude.md
+GEMINI.md
