@@ -202,22 +202,14 @@ serve(async (req: Request) => {
           await waitForRegistration(clientId, consumerKey, user_id)
 
         } else if (regData.code === '1012' || regData.code === 1012) {
-          console.log("1012 hit — listing all SnapTrade users to clean up...")
-          const { data: userList } = await snapTradeRequest(
-            clientId, consumerKey, 'GET', '/snapTrade/listUsers', null
+          // 1012 = this userId already exists in SnapTrade but we have no secret.
+          // Only delete THIS user — never wipe other users' accounts.
+          console.log("1012 hit — deleting and re-registering current user only...")
+          const { status: delStatus, data: delData } = await snapTradeRequest(
+            clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', { userId: user_id }
           )
-          console.log("Existing SnapTrade users:", JSON.stringify(userList))
-
-          if (Array.isArray(userList)) {
-            for (const existingUserId of userList) {
-              console.log(`Deleting SnapTrade user: ${existingUserId}`)
-              const { status: delStatus, data: delData } = await snapTradeRequest(
-                clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', { userId: existingUserId }
-              )
-              console.log(`Delete ${existingUserId}:`, delStatus, JSON.stringify(delData))
-              await waitForDeletion(clientId, consumerKey, existingUserId)
-            }
-          }
+          console.log(`Delete ${user_id}:`, delStatus, JSON.stringify(delData))
+          await waitForDeletion(clientId, consumerKey, user_id)
 
           console.log("Re-registering with correct userId...")
           const { status: retryStatus, data: retryData } = await snapTradeRequest(
@@ -286,8 +278,31 @@ serve(async (req: Request) => {
           return json({ redirect_uri: retryLoginData.redirectURI })
         }
 
-        console.log("Retry login also failed, clearing DB for next attempt...")
+        // Retry also failed — secret is stale. Auto-recover: delete, re-register,
+        // and return a fresh link in this same request so the user never sees an error.
+        console.log("Retry login failed — auto-recovering with fresh registration...")
         await supabaseAdmin.from('snaptrade_users').delete().eq('user_id', user_id)
+        await snapTradeRequest(clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', { userId: user_id })
+        await waitForDeletion(clientId, consumerKey, user_id)
+
+        const { status: freshRegStatus, data: freshRegData } = await snapTradeRequest(
+          clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId: user_id }
+        )
+        console.log("Fresh re-register response:", JSON.stringify(freshRegData))
+
+        if (freshRegStatus === 200 && freshRegData.userSecret) {
+          const freshSecret = freshRegData.userSecret
+          await supabaseAdmin.from('snaptrade_users').upsert({ user_id, user_secret: freshSecret })
+          await waitForRegistration(clientId, consumerKey, user_id)
+
+          const { status: freshLoginStatus, data: freshLoginData } = await snapTradeLogin(
+            clientId, consumerKey, user_id, freshSecret
+          )
+          console.log("Fresh login response:", JSON.stringify(freshLoginData))
+          if (freshLoginStatus === 200 && freshLoginData.redirectURI) {
+            return json({ redirect_uri: freshLoginData.redirectURI })
+          }
+        }
         return json({ error: "Session expired, please try connecting again" }, 401)
       }
 

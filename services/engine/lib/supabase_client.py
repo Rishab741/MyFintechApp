@@ -150,38 +150,44 @@ def update_holding_prices(
 ) -> None:
     """
     Update last_price and open_pnl on each holding whose symbol is in price_map.
-    Called after a successful price sync.
+    Uses a single SELECT + single bulk UPSERT instead of N×(SELECT+UPDATE).
     """
+    if not price_map:
+        return
+
     db = get_db()
     now_iso = datetime.now(tz=timezone.utc).isoformat()
 
-    for symbol, price in price_map.items():
-        if price <= 0:
-            continue
-        # Fetch the holding to compute open_pnl
-        res = (
-            db.table("holdings")
-            .select("id, quantity, avg_cost_basis")
-            .eq("user_id", user_id)
-            .eq("symbol", symbol)
-            .limit(1)
-            .execute()
-        )
-        if not res.data:
-            continue
-        row = res.data[0]
-        qty = float(row.get("quantity") or 0)
-        cost = float(row.get("avg_cost_basis") or price)
-        open_pnl = (price - cost) * qty
-        open_pnl_pct = (price / cost - 1) * 100 if cost > 0 else 0.0
+    # One query to fetch all relevant holdings for this user.
+    res = (
+        db.table("holdings")
+        .select("id, symbol, quantity, avg_cost_basis")
+        .eq("user_id", user_id)
+        .gt("quantity", 0)
+        .execute()
+    )
 
-        db.table("holdings").update({
+    updates: list[dict] = []
+    for row in (res.data or []):
+        price = price_map.get(row["symbol"])
+        if not price or price <= 0:
+            continue
+        qty  = float(row.get("quantity") or 0)
+        cost = float(row.get("avg_cost_basis") or price)
+        open_pnl     = (price - cost) * qty
+        open_pnl_pct = (price / cost - 1) * 100 if cost > 0 else 0.0
+        updates.append({
+            "id":            row["id"],
             "last_price":    price,
             "last_price_at": now_iso,
             "open_pnl":      round(open_pnl, 4),
             "open_pnl_pct":  round(open_pnl_pct, 4),
             "updated_at":    now_iso,
-        }).eq("id", row["id"]).execute()
+        })
+
+    # One bulk upsert for all updated rows.
+    if updates:
+        db.table("holdings").upsert(updates, on_conflict="id").execute()
 
 
 # ── Audit logging ─────────────────────────────────────────────────────────────

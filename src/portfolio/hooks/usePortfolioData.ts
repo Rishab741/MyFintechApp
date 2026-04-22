@@ -58,35 +58,51 @@ export function usePortfolioData(): PortfolioDataResult {
     const [fetchError,  setFetchError]  = useState<string | null>(null);
 
     const { brokerageConnected } = useConnectionStore();
-    const headerAnim = useRef(new Animated.Value(0)).current;
+    const headerAnim  = useRef(new Animated.Value(0)).current;
+    // Incremented each time init() is called. Any older in-flight call checks
+    // this before each state write and bails out if it's no longer the latest.
+    const initGen = useRef(0);
 
     const init = useCallback(async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        const meta = user.user_metadata;
-        setUserName(meta?.full_name ?? meta?.name ?? user.email?.split('@')[0] ?? 'Investor');
+        const gen = ++initGen.current;
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (gen !== initGen.current) return;
+            if (!user) { setLoading(false); return; }
+            const meta = user.user_metadata;
+            setUserName(meta?.full_name ?? meta?.name ?? user.email?.split('@')[0] ?? 'Investor');
 
-        const { data: conn } = await supabase
-            .from('snaptrade_connections').select('account_id').eq('user_id', user.id).maybeSingle();
-        if (!conn?.account_id) { setConnected(false); setLoading(false); return; }
-        setConnected(true);
+            const { data: conn } = await supabase
+                .from('snaptrade_connections').select('account_id').eq('user_id', user.id).maybeSingle();
+            if (gen !== initGen.current) return;
+            if (!conn?.account_id) { setConnected(false); setLoading(false); return; }
+            setConnected(true);
 
-        const { data: latestSnap } = await supabase
-            .from('portfolio_snapshots').select('snapshot, captured_at')
-            .eq('user_id', user.id).order('captured_at', { ascending: false }).limit(1).single();
-        if (latestSnap?.snapshot) {
-            setHoldings(latestSnap.snapshot as HoldingsData);
-            setLastUpdated(new Date(latestSnap.captured_at));
+            // Parallelise the two snapshot queries — they are independent of each other.
+            const [latestSnapRes, histSnapsRes] = await Promise.all([
+                supabase
+                    .from('portfolio_snapshots').select('snapshot, captured_at')
+                    .eq('user_id', user.id).order('captured_at', { ascending: false }).limit(1).maybeSingle(),
+                supabase
+                    .from('portfolio_snapshots').select('snapshot, captured_at')
+                    .eq('user_id', user.id).order('captured_at', { ascending: true }).limit(90),
+            ]);
+            if (gen !== initGen.current) return;
+
+            if (latestSnapRes.data?.snapshot) {
+                setHoldings(latestSnapRes.data.snapshot as HoldingsData);
+                setLastUpdated(new Date(latestSnapRes.data.captured_at));
+            }
+            if (histSnapsRes.data) setSnapshots(histSnapsRes.data as Snapshot[]);
+
+            setLoading(false);
+            Animated.timing(headerAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+            fetchFresh(user.id);
+        } catch (e: any) {
+            if (gen !== initGen.current) return;
+            setFetchError(e?.message ?? 'Failed to load portfolio');
+            setLoading(false);
         }
-
-        const { data: histSnaps } = await supabase
-            .from('portfolio_snapshots').select('snapshot, captured_at')
-            .eq('user_id', user.id).order('captured_at', { ascending: true }).limit(90);
-        if (histSnaps) setSnapshots(histSnaps as Snapshot[]);
-
-        setLoading(false);
-        Animated.timing(headerAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-        fetchFresh(user.id);
     }, []);
 
     useEffect(() => { init(); }, [init]);
@@ -130,9 +146,11 @@ export function usePortfolioData(): PortfolioDataResult {
         setRefreshing(false);
     }, []);
 
-    // Real-time subscription
+    // Real-time subscription — unique channel name per mount so rapid
+    // navigation never hits "cannot add callbacks after subscribe()".
     useEffect(() => {
-        const sub = supabase.channel('portfolio_rt')
+        const channelName = `portfolio_rt_${Math.random().toString(36).slice(2)}`;
+        const sub = supabase.channel(channelName)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'portfolio_snapshots' }, p => {
                 if (p.new?.snapshot) {
                     setHoldings(p.new.snapshot as HoldingsData);

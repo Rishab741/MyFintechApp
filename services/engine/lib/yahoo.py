@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 
 import httpx
@@ -31,6 +32,12 @@ _HEADERS = {
 
 # Max symbols per batch quote request (Yahoo limit is ~500 but we stay safe)
 _BATCH_SIZE = 50
+
+# In-process benchmark cache: {"{symbol}:{period}": (fetched_at, returns_dict)}
+# Shared across all concurrent compute requests in the same worker process.
+# TTL of 1 hour — benchmark daily returns change at most once per trading day.
+_benchmark_cache: dict[str, tuple[float, dict[str, float]]] = {}
+_BENCHMARK_TTL_S = 3_600
 
 
 # ── Batch current quotes ──────────────────────────────────────────────────────
@@ -140,7 +147,17 @@ async def fetch_benchmark_returns(
     """
     Fetch daily percentage returns for the benchmark.
     Returns {date_str: daily_return} e.g. {"2026-01-15": 0.012}.
+    Results are cached in-process for 1 hour so that compute/all with 1 000+
+    users only hits Yahoo Finance once per worker rather than once per user.
     """
+    cache_key = f"{symbol}:{period}"
+    now = time.monotonic()
+    cached = _benchmark_cache.get(cache_key)
+    if cached is not None:
+        fetched_at, cached_returns = cached
+        if now - fetched_at < _BENCHMARK_TTL_S:
+            return cached_returns
+
     closes = await fetch_daily_closes(symbol, period)
     if len(closes) < 2:
         return {}
@@ -153,4 +170,5 @@ async def fetch_benchmark_returns(
             date_str = closes[i]["time"].strftime("%Y-%m-%d")
             returns[date_str] = (curr - prev) / prev
 
+    _benchmark_cache[cache_key] = (now, returns)
     return returns
