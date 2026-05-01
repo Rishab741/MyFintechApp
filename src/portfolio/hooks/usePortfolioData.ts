@@ -3,6 +3,7 @@ import { useConnectionStore } from '@/src/store/useConnectionStore';
 import { autoTriggerDataset } from '@/src/services/mlPipeline';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated } from 'react-native';
+import { create } from 'zustand';
 import { SP500, getUnits, getTicker, getCurrency, getCategory, filterByPeriod, normalize100, computeRiskMetrics } from '../helpers';
 import { HoldingsData, Snapshot, Period, AllocSeg, PerformerItem } from '../types';
 import { PURPLE, BLUE, ORANGE, TEAL } from '../tokens';
@@ -46,132 +47,210 @@ export interface PortfolioDataResult {
     fetchError: string | null;
 }
 
+// ── Shared state store ────────────────────────────────────────────────────────
+// A single Zustand store is shared across every component that calls
+// usePortfolioData(). This prevents two mounted tab screens (Assets + Vault)
+// from spawning independent fetch/subscription instances that race each other.
+
+interface SharedState {
+    holdings:    HoldingsData | null;
+    snapshots:   Snapshot[];
+    loading:     boolean;
+    connected:   boolean;
+    userName:    string;
+    lastUpdated: Date | null;
+    fetchError:  string | null;
+    setHoldings:    (v: HoldingsData | null) => void;
+    setSnapshots:   (v: Snapshot[]) => void;
+    setLoading:     (v: boolean) => void;
+    setConnected:   (v: boolean) => void;
+    setUserName:    (v: string) => void;
+    setLastUpdated: (v: Date | null) => void;
+    setFetchError:  (v: string | null) => void;
+}
+
+const useShared = create<SharedState>((set) => ({
+    holdings:    null,
+    snapshots:   [],
+    loading:     true,
+    connected:   false,
+    userName:    '',
+    lastUpdated: null,
+    fetchError:  null,
+    setHoldings:    (holdings)    => set({ holdings }),
+    setSnapshots:   (snapshots)   => set({ snapshots }),
+    setLoading:     (loading)     => set({ loading }),
+    setConnected:   (connected)   => set({ connected }),
+    setUserName:    (userName)    => set({ userName }),
+    setLastUpdated: (lastUpdated) => set({ lastUpdated }),
+    setFetchError:  (fetchError)  => set({ fetchError }),
+}));
+
+// ── Module-level lifecycle guards ─────────────────────────────────────────────
+// Tracks how many components are currently subscribed. The first mount starts
+// fetching / the RT subscription / the poll; the last unmount tears them down.
+let _subscriberCount = 0;
+let _fetchInFlight   = false;       // prevents concurrent snaptrade_get_holdings calls
+let _initGen         = 0;           // cancels stale init() calls
+let _cleanupRT: (() => void) | null = null;
+let _pollTimer: ReturnType<typeof setInterval> | null = null;
+
+// ── Module-level fetch helpers ────────────────────────────────────────────────
+// Defined outside the hook so they are truly singletons regardless of how many
+// components have called usePortfolioData().
+
+async function _fetchFresh(userId: string) {
+    if (_fetchInFlight) return;     // already in-flight, skip duplicate call
+    _fetchInFlight = true;
+    const {
+        setHoldings, setLastUpdated, setFetchError, setConnected,
+    } = useShared.getState();
+    try {
+        const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
+            body: { action: 'snaptrade_get_holdings', user_id: userId },
+        });
+        if (error) {
+            setFetchError(error.message ?? 'Failed to refresh holdings');
+            return;
+        }
+        if (data?.error === 'brokerage_auth_expired') {
+            setConnected(false);
+            setHoldings(null);
+            setFetchError(data.message ?? 'Brokerage authorization expired. Please reconnect.');
+            return;
+        }
+        if (data?.holdings) {
+            setHoldings(data.holdings);
+            setLastUpdated(new Date());
+            setFetchError(null);
+            autoTriggerDataset(userId);
+        } else if (data?.error) {
+            setFetchError(data.message ?? data.error);
+        }
+    } catch (e: any) {
+        setFetchError(e?.message ?? 'Failed to refresh holdings');
+    } finally {
+        _fetchInFlight = false;
+    }
+}
+
+async function _init(headerAnim: Animated.Value) {
+    const gen = ++_initGen;
+    const {
+        setHoldings, setSnapshots, setLoading, setConnected, setUserName,
+        setLastUpdated, setFetchError,
+    } = useShared.getState();
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (gen !== _initGen) return;
+        if (!user) { setLoading(false); return; }
+        const meta = user.user_metadata;
+        setUserName(meta?.full_name ?? meta?.name ?? user.email?.split('@')[0] ?? 'Investor');
+
+        const { data: conn } = await supabase
+            .from('snaptrade_connections').select('account_id').eq('user_id', user.id).maybeSingle();
+        if (gen !== _initGen) return;
+        if (!conn?.account_id) { setConnected(false); setLoading(false); return; }
+        setConnected(true);
+
+        const [latestSnapRes, histSnapsRes] = await Promise.all([
+            supabase
+                .from('portfolio_snapshots').select('snapshot, captured_at')
+                .eq('user_id', user.id).order('captured_at', { ascending: false }).limit(1).maybeSingle(),
+            supabase
+                .from('portfolio_snapshots').select('snapshot, captured_at')
+                .eq('user_id', user.id).order('captured_at', { ascending: true }).limit(90),
+        ]);
+        if (gen !== _initGen) return;
+
+        if (latestSnapRes.data?.snapshot) {
+            setHoldings(latestSnapRes.data.snapshot as HoldingsData);
+            setLastUpdated(new Date(latestSnapRes.data.captured_at));
+        }
+        if (histSnapsRes.data) setSnapshots(histSnapsRes.data as Snapshot[]);
+
+        setLoading(false);
+        Animated.timing(headerAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+        await _fetchFresh(user.id);
+    } catch (e: any) {
+        if (gen !== _initGen) return;
+        setFetchError(e?.message ?? 'Failed to load portfolio');
+        setLoading(false);
+    }
+}
+
+function _startSubscription() {
+    const channelName = `portfolio_rt_${Math.random().toString(36).slice(2)}`;
+    const sub = supabase.channel(channelName)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'portfolio_snapshots' }, p => {
+            if (p.new?.snapshot) {
+                const { setHoldings, setLastUpdated, setSnapshots, snapshots } = useShared.getState();
+                setHoldings(p.new.snapshot as HoldingsData);
+                setLastUpdated(new Date(p.new.captured_at));
+                setSnapshots([...snapshots.slice(-89), p.new as Snapshot]);
+            }
+        }).subscribe();
+    _cleanupRT = () => { supabase.removeChannel(sub); };
+}
+
+function _startPoll(userId: string) {
+    if (_pollTimer) clearInterval(_pollTimer);
+    _pollTimer = setInterval(() => { _fetchFresh(userId); }, 5 * 60 * 1000);
+}
+
+// ── Public hook ───────────────────────────────────────────────────────────────
+
 export function usePortfolioData(): PortfolioDataResult {
-    const [holdings,    setHoldings]    = useState<HoldingsData | null>(null);
-    const [snapshots,   setSnapshots]   = useState<Snapshot[]>([]);
-    const [loading,     setLoading]     = useState(true);
-    const [refreshing,  setRefreshing]  = useState(false);
-    const [connected,   setConnected]   = useState(false);
-    const [userName,    setUserName]    = useState('');
-    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-    const [period,      setPeriod]      = useState<Period>('ALL');
-    const [fetchError,  setFetchError]  = useState<string | null>(null);
+    // Per-component state — each screen keeps its own period and refresh flag
+    const [period,     setPeriod]     = useState<Period>('ALL');
+    const [refreshing, setRefreshing] = useState(false);
+    const headerAnim = useRef(new Animated.Value(0)).current;
+
+    // Shared state — single source of truth for both Assets and Vault screens
+    const {
+        holdings, snapshots, loading, connected, userName, lastUpdated, fetchError,
+    } = useShared();
 
     const { brokerageConnected } = useConnectionStore();
-    const headerAnim  = useRef(new Animated.Value(0)).current;
-    // Incremented each time init() is called. Any older in-flight call checks
-    // this before each state write and bails out if it's no longer the latest.
-    const initGen = useRef(0);
 
-    const init = useCallback(async () => {
-        const gen = ++initGen.current;
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (gen !== initGen.current) return;
-            if (!user) { setLoading(false); return; }
-            const meta = user.user_metadata;
-            setUserName(meta?.full_name ?? meta?.name ?? user.email?.split('@')[0] ?? 'Investor');
-
-            const { data: conn } = await supabase
-                .from('snaptrade_connections').select('account_id').eq('user_id', user.id).maybeSingle();
-            if (gen !== initGen.current) return;
-            if (!conn?.account_id) { setConnected(false); setLoading(false); return; }
-            setConnected(true);
-
-            // Parallelise the two snapshot queries — they are independent of each other.
-            const [latestSnapRes, histSnapsRes] = await Promise.all([
-                supabase
-                    .from('portfolio_snapshots').select('snapshot, captured_at')
-                    .eq('user_id', user.id).order('captured_at', { ascending: false }).limit(1).maybeSingle(),
-                supabase
-                    .from('portfolio_snapshots').select('snapshot, captured_at')
-                    .eq('user_id', user.id).order('captured_at', { ascending: true }).limit(90),
-            ]);
-            if (gen !== initGen.current) return;
-
-            if (latestSnapRes.data?.snapshot) {
-                setHoldings(latestSnapRes.data.snapshot as HoldingsData);
-                setLastUpdated(new Date(latestSnapRes.data.captured_at));
-            }
-            if (histSnapsRes.data) setSnapshots(histSnapsRes.data as Snapshot[]);
-
-            setLoading(false);
-            Animated.timing(headerAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-            fetchFresh(user.id);
-        } catch (e: any) {
-            if (gen !== initGen.current) return;
-            setFetchError(e?.message ?? 'Failed to load portfolio');
-            setLoading(false);
+    // First mount starts everything; last unmount tears it down.
+    useEffect(() => {
+        _subscriberCount++;
+        if (_subscriberCount === 1) {
+            _init(headerAnim);
+            _startSubscription();
         }
+        return () => {
+            _subscriberCount--;
+            if (_subscriberCount === 0) {
+                _cleanupRT?.();
+                _cleanupRT = null;
+                if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+            }
+        };
     }, []);
 
-    useEffect(() => { init(); }, [init]);
-    useEffect(() => { if (brokerageConnected && !connected) init(); }, [brokerageConnected]);
+    // Re-init when brokerage becomes connected (e.g. just finished SnapTrade portal)
+    useEffect(() => {
+        if (brokerageConnected && !connected) _init(headerAnim);
+    }, [brokerageConnected]);
 
-    const fetchFresh = async (userId: string) => {
-        try {
-            const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
-                body: { action: 'snaptrade_get_holdings', user_id: userId },
-            });
-            if (error) {
-                setFetchError(error.message ?? 'Failed to refresh holdings');
-                return;
-            }
-            if (data?.error === 'brokerage_auth_expired') {
-                // Authorization expired — edge function already cleared the DB row.
-                // Reset local state so the UI shows the reconnect prompt.
-                setConnected(false);
-                setHoldings(null);
-                setFetchError(data.message ?? 'Brokerage authorization expired. Please reconnect.');
-                return;
-            }
-            if (data?.holdings) {
-                setHoldings(data.holdings);
-                setLastUpdated(new Date());
-                setFetchError(null);
-                // Fire-and-forget: regenerate ML dataset (debounced to once per 6 h)
-                autoTriggerDataset(userId);
-            } else if (data?.error) {
-                setFetchError(data.message ?? data.error);
-            }
-        } catch (e: any) {
-            setFetchError(e?.message ?? 'Failed to refresh holdings');
-        }
-    };
+    // Start poll once connected (only from the first subscriber)
+    useEffect(() => {
+        if (!connected || _subscriberCount !== 1) return;
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            if (user) _startPoll(user.id);
+        });
+    }, [connected]);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) await fetchFresh(user.id);
+        if (user) await _fetchFresh(user.id);
         setRefreshing(false);
     }, []);
 
-    // Real-time subscription — unique channel name per mount so rapid
-    // navigation never hits "cannot add callbacks after subscribe()".
-    useEffect(() => {
-        const channelName = `portfolio_rt_${Math.random().toString(36).slice(2)}`;
-        const sub = supabase.channel(channelName)
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'portfolio_snapshots' }, p => {
-                if (p.new?.snapshot) {
-                    setHoldings(p.new.snapshot as HoldingsData);
-                    setLastUpdated(new Date(p.new.captured_at));
-                    setSnapshots(prev => [...prev.slice(-89), p.new as Snapshot]);
-                }
-            }).subscribe();
-        return () => { supabase.removeChannel(sub); };
-    }, []);
-
-    // 5-min background poll
-    useEffect(() => {
-        if (!connected) return;
-        const poll = setInterval(async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) fetchFresh(user.id);
-        }, 5 * 60 * 1000);
-        return () => clearInterval(poll);
-    }, [connected]);
-
-    // ── Derived ───────────────────────────────────────────────────────────────
+    // ── Derived (unchanged logic) ─────────────────────────────────────────────
     const positions = holdings?.positions ?? [];
     const balances  = holdings?.balances  ?? [];
     const currency  = getCurrency(balances[0]?.currency);
