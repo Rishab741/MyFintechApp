@@ -57,6 +57,9 @@ def build_merkle_root(hashes: list[str]) -> str:
 
     layer = [bytes.fromhex(h) for h in hashes]
 
+    if len(layer) == 1:
+        return hashlib.sha256(layer[0] + layer[0]).hexdigest()
+
     while len(layer) > 1:
         next_layer = []
         for i in range(0, len(layer), 2):

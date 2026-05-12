@@ -149,7 +149,7 @@ class TestLedgerIntegrity:
         hashes = ["a" * 64, "b" * 64, "c" * 64]
         original = build_merkle_root(hashes)
 
-        tampered = ["a" * 64, "x" * 64, "c" * 64]   # middle hash changed
+        tampered = ["a" * 64, "f" * 64, "c" * 64]   # middle hash changed
         modified = build_merkle_root(tampered)
 
         assert original != modified, "Merkle root did not change after tamper"
