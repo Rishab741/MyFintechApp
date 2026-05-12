@@ -58,3 +58,8 @@ services/engine/.venv/
 # AI assistant notes
 Claude.md
 GEMINI.md
+
+# Next.js webapp
+webapp/.next/
+webapp/node_modules/
+webapp/.env.local
