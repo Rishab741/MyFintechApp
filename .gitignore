@@ -49,6 +49,12 @@ services/engine/.env
 # Supabase CLI temp files
 supabase/.temp/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+services/engine/.venv/
+
 # AI assistant notes
 Claude.md
 GEMINI.md

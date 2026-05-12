@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import get_settings
-from routers import health, portfolio, sync
+from routers import health, ledger, portfolio, sync
 
 # ── Settings (loaded once at import; all required vars must be present) ───────
 settings = get_settings()
@@ -43,8 +43,8 @@ app = FastAPI(
         "Computes TWR, Sharpe, Beta, Drawdown, CAGR and exposure metrics "
         "from normalised portfolio time-series data."
     ),
-    docs_url="/docs" if settings.debug else None,
-    redoc_url=None,
+    docs_url="/docs",       # always on — needed for B2B client onboarding
+    redoc_url="/redoc",
     lifespan=lifespan,
 )
 
@@ -54,7 +54,7 @@ app.add_middleware(
     allow_origins=settings.origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Tenant-ID"],
 )
 
 # ── Global exception handler ──────────────────────────────────────────────────
@@ -67,6 +67,11 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
+# Unversioned health check — always at root so load balancers can probe it.
 app.include_router(health.router)
-app.include_router(portfolio.router, prefix="/portfolio")
-app.include_router(sync.router,      prefix="/sync")
+
+# Versioned API — all client-facing and B2B endpoints live under /v1/.
+# Future: /v2/ can be added without breaking existing integrations.
+app.include_router(portfolio.router, prefix="/v1/portfolio")
+app.include_router(sync.router,      prefix="/v1/sync")
+app.include_router(ledger.router,    prefix="/v1/ledger")

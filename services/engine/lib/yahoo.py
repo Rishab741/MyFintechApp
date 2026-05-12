@@ -30,8 +30,8 @@ _HEADERS = {
     "Accept":     "application/json",
 }
 
-# Max symbols per batch quote request (Yahoo limit is ~500 but we stay safe)
-_BATCH_SIZE = 50
+# Max concurrent v8 chart requests (v7 batch is blocked on server-side)
+_CONCURRENT_QUOTES = 20
 
 # In-process benchmark cache: {"{symbol}:{period}": (fetched_at, returns_dict)}
 # Shared across all concurrent compute requests in the same worker process.
@@ -43,43 +43,49 @@ _BENCHMARK_TTL_S = 3_600
 # ── Batch current quotes ──────────────────────────────────────────────────────
 async def fetch_quotes(symbols: list[str]) -> dict[str, float]:
     """
-    Fetch the latest market price for each symbol.
+    Fetch the latest market price for each symbol via the v8 chart endpoint.
+
+    The v7 batch quote API (query1) is blocked on server-side environments.
+    The v8 chart API (query2) is not rate-limited the same way and works
+    reliably. We fetch symbols concurrently with a semaphore to stay polite.
+
     Returns {symbol: price}.  Missing or failed symbols are omitted.
     """
     if not symbols:
         return {}
 
-    # De-duplicate and clean
     clean = list({s.upper().strip() for s in symbols if s})
-
     results: dict[str, float] = {}
+    sem = asyncio.Semaphore(_CONCURRENT_QUOTES)
+
+    async def _fetch_one(client: httpx.AsyncClient, sym: str) -> tuple[str, float | None]:
+        url = f"{BASE2}/v8/finance/chart/{sym}?interval=1d&range=1d"
+        async with sem:
+            try:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                data = resp.json()
+                meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
+                price = (
+                    meta.get("regularMarketPrice")
+                    or meta.get("chartPreviousClose")
+                    or meta.get("previousClose")
+                )
+                return sym, float(price) if price and float(price) > 0 else None
+            except Exception as exc:
+                log.debug("Yahoo v8 quote failed (%s): %s", sym, exc)
+                return sym, None
 
     async with httpx.AsyncClient(
         headers=_HEADERS,
         timeout=settings.yahoo_timeout_s,
         follow_redirects=True,
     ) as client:
-        for batch_start in range(0, len(clean), _BATCH_SIZE):
-            batch = clean[batch_start : batch_start + _BATCH_SIZE]
-            encoded = ",".join(batch)
-            url = (
-                f"{BASE1}/v7/finance/quote"
-                f"?symbols={encoded}"
-                f"&fields=regularMarketPrice,regularMarketPreviousClose"
-            )
-            try:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                data = resp.json()
-                for item in data.get("quoteResponse", {}).get("result", []):
-                    sym   = item.get("symbol", "")
-                    price = item.get("regularMarketPrice") or item.get("regularMarketPreviousClose")
-                    if sym and price and price > 0:
-                        results[sym.upper()] = float(price)
-            except Exception as exc:
-                log.warning("Yahoo batch quote failed (symbols=%s): %s", batch, exc)
-                # Continue with next batch rather than failing entire request
-                await asyncio.sleep(0.2)
+        pairs = await asyncio.gather(*[_fetch_one(client, s) for s in clean])
+
+    for sym, price in pairs:
+        if price is not None:
+            results[sym] = price
 
     return results
 
