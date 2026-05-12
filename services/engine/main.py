@@ -14,7 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import get_settings
-from routers import health, ledger, portfolio, sync
+from middleware.rate_limit import rate_limit_middleware
+from routers import audit, health, ledger, portfolio, sync, tenant
 
 # ── Settings (loaded once at import; all required vars must be present) ───────
 settings = get_settings()
@@ -48,6 +49,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── Rate limiting (before CORS so 429s are still CORS-safe) ──────────────────
+app.middleware("http")(rate_limit_middleware)
+
 # ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
@@ -75,3 +79,5 @@ app.include_router(health.router)
 app.include_router(portfolio.router, prefix="/v1/portfolio")
 app.include_router(sync.router,      prefix="/v1/sync")
 app.include_router(ledger.router,    prefix="/v1/ledger")
+app.include_router(tenant.router,    prefix="/v1/tenant")
+app.include_router(audit.router,     prefix="/v1/audit")
