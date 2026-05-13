@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { engine } from "@/lib/engine";
 import MetricCard from "@/components/ui/metric-card";
 import PortfolioChart from "@/components/charts/portfolio-chart";
-import { TrendingUp, Activity, Shield, Zap } from "lucide-react";
+import { TrendingUp, Activity, Shield, Zap, AlertTriangle } from "lucide-react";
 
 async function getJwt() {
   const { data } = await createClient().auth.getSession();
@@ -50,6 +50,18 @@ export default function DashboardOverview() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {/* Stale data warning — NAV and all metrics are unreliable when stale */}
+      {metrics?.is_data_stale && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border bg-yellow-500/10 border-yellow-500/20 text-yellow-400 text-sm">
+          <AlertTriangle size={16} className="shrink-0" />
+          <span>
+            Portfolio prices are <strong>{Math.round(metrics.snapshot_age_hours)}h old</strong> —
+            NAV and all derived metrics (TWR, Sharpe, Drawdown) may be incorrect.
+            Trigger a price sync to refresh.
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

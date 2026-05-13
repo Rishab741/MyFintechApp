@@ -6,17 +6,19 @@
 const BASE = process.env.NEXT_PUBLIC_ENGINE_URL ?? "http://localhost:8000";
 
 export interface PortfolioMetrics {
-  user_id:      string;
-  period:       string;
-  twr:          number | null;
-  cagr:         number | null;
-  sharpe:       number | null;
-  sortino:      number | null;
-  max_drawdown: number | null;
-  beta:         number | null;
-  alpha:        number | null;
-  volatility:   number | null;
-  computed_at:  string;
+  user_id:            string;
+  period:             string;
+  twr:                number | null;
+  cagr:               number | null;
+  sharpe:             number | null;
+  sortino:            number | null;
+  max_drawdown:       number | null;
+  beta:               number | null;
+  alpha:              number | null;
+  volatility:         number | null;
+  computed_at:        string;
+  snapshot_age_hours: number;
+  is_data_stale:      boolean;
 }
 
 export interface TenantProfile {

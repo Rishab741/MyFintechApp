@@ -183,6 +183,11 @@ async def _compute_metrics_for_user(user_id: str, period: Period) -> Performance
     cash_value    = float((cash_rows[-1].get("cash_value") or 0)) if cash_rows else 0.0
     cash_pct      = cash_value / total_value if total_value > 0 else 0.0
 
+    # Data freshness — stale when most recent snapshot is >24h old
+    latest_time       = times[-1]
+    snapshot_age_h    = (datetime.now(tz=timezone.utc) - latest_time).total_seconds() / 3600
+    is_stale          = snapshot_age_h > 24.0
+
     return PerformanceMetrics(
         period=period,
         total_return=round(period_return, 6),
@@ -208,6 +213,8 @@ async def _compute_metrics_for_user(user_id: str, period: Period) -> Performance
         cash_pct=round(cash_pct, 4),
         computed_at=datetime.now(tz=timezone.utc),
         data_points=len(values),
+        snapshot_age_hours=round(snapshot_age_h, 2),
+        is_data_stale=is_stale,
     )
 
 

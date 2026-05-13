@@ -9,9 +9,12 @@ and the price-sync pipeline.
 import logging
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 from config import get_settings
 from middleware.rate_limit import rate_limit_middleware
@@ -19,6 +22,20 @@ from routers import audit, health, ingest, ledger, portfolio, sync, tenant
 
 # ── Settings (loaded once at import; all required vars must be present) ───────
 settings = get_settings()
+
+# ── Sentry (no-op when SENTRY_DSN is blank) ───────────────────────────────────
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment="production" if not settings.debug else "development",
+        integrations=[
+            FastApiIntegration(),
+            LoggingIntegration(level=logging.WARNING, event_level=logging.ERROR),
+        ],
+        traces_sample_rate=0.05,   # 5% of requests traced — adjust per volume
+        profiles_sample_rate=0.01,
+        send_default_pii=False,    # GDPR: never send user PII to Sentry
+    )
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),

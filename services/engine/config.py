@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     default_benchmark: str = "SPY"
     risk_free_rate_annual: float = 0.045   # 4.5% — update when Fed rate changes
 
+    # ── Observability ─────────────────────────────────────────────────────────
+    sentry_dsn: str = ""   # leave blank to disable Sentry
+
     # ── Server ────────────────────────────────────────────────────────────────
     host: str = "0.0.0.0"
     port: int = 8000

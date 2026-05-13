@@ -55,6 +55,19 @@ class PerformanceMetrics(BaseModel):
     computed_at:      datetime
     data_points:      int = Field(description="Number of daily snapshots used")
 
+    # Data freshness — clients should surface a warning when is_data_stale is True
+    snapshot_age_hours: float = Field(
+        default=0.0,
+        description="Hours since the most recent snapshot was recorded",
+    )
+    is_data_stale: bool = Field(
+        default=False,
+        description=(
+            "True when the latest snapshot is >24h old. "
+            "Stale prices directly cause incorrect NAV and all derived metrics."
+        ),
+    )
+
 
 # ── Exposure ──────────────────────────────────────────────────────────────────
 class ExposureSegment(BaseModel):
