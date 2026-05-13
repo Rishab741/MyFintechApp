@@ -9,6 +9,7 @@ Checks (in order):
 from __future__ import annotations
 
 import os
+import sys
 
 def _load_env(path: str) -> None:
     if not os.path.exists(path):
@@ -24,6 +25,11 @@ def _load_env(path: str) -> None:
 
 # Engine-local .env (highest priority)
 _here = os.path.dirname(os.path.abspath(__file__))
+
+# Make `services/engine/` importable so unit tests can do:
+#   from calculations.returns import compute_twr
+if _here not in sys.path:
+    sys.path.insert(0, _here)
 _load_env(os.path.join(_here, ".env"))
 
 # Project root .env (fallback for SUPABASE_URL etc.)

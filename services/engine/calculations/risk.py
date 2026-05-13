@@ -31,7 +31,7 @@ def compute_sharpe(
 
     excess = r - rf_daily
     std = float(np.std(excess, ddof=1))
-    if std == 0:
+    if std < 1e-10:
         return 0.0
 
     return float(np.mean(excess) / std * math.sqrt(252))
