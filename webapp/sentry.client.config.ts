@@ -1,23 +1,26 @@
 import * as Sentry from "@sentry/nextjs";
 
+const isDev = process.env.NODE_ENV === "development";
+
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
-  // Capture 5% of sessions as replays (shows exactly what the user saw)
-  replaysSessionSampleRate: 0.05,
-  // Always capture replays when an error occurs
+  // 100% in dev so every request is visible; drop to 0.05 before production
+  tracesSampleRate: isDev ? 1.0 : 0.05,
+
+  // Always capture replays on errors; sample 5% of normal sessions
   replaysOnErrorSampleRate: 1.0,
+  replaysSessionSampleRate: isDev ? 1.0 : 0.05,
 
-  // Trace 5% of requests for performance monitoring
-  tracesSampleRate: 0.05,
+  // Print Sentry activity to the browser console in dev — remove before prod
+  debug: isDev,
 
-  // GDPR: do not send PII — no user emails, no IP addresses
   sendDefaultPii: false,
 
   integrations: [
     Sentry.replayIntegration({
-      maskAllText: true,        // mask all text content in replays
-      blockAllMedia: true,      // block all images/video in replays
+      maskAllText: !isDev,   // unmask in dev so you can read replays easily
+      blockAllMedia: false,
     }),
   ],
 });

@@ -32,9 +32,12 @@ if settings.sentry_dsn:
             FastApiIntegration(),
             LoggingIntegration(level=logging.WARNING, event_level=logging.ERROR),
         ],
-        traces_sample_rate=0.05,   # 5% of requests traced — adjust per volume
+        # 100 % locally so every request appears in Sentry during dev.
+        # Set to 0.05 in Railway via DEBUG=false (production guard above).
+        traces_sample_rate=1.0 if settings.debug else 0.05,
         profiles_sample_rate=0.01,
-        send_default_pii=False,    # GDPR: never send user PII to Sentry
+        send_default_pii=False,
+        debug=settings.debug,      # logs Sentry activity to stdout in dev
     )
 
 logging.basicConfig(
@@ -82,6 +85,9 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     log.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    # Explicitly capture here because FastAPI's exception_handler intercepts
+    # the exception before Sentry's middleware can see it automatically.
+    sentry_sdk.capture_exception(exc)
     return JSONResponse(
         status_code=500,
         content={"error": "internal_server_error", "detail": str(exc)},
