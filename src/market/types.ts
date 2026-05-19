@@ -50,3 +50,14 @@ export interface MarketStatus {
   isOpen: boolean;
   color: string;
 }
+
+export interface DetailedQuote extends Quote {
+  longName?: string;
+  trailingPE?: number;
+  forwardPE?: number;
+  trailingEps?: number;
+  beta?: number;
+  dividendYield?: number;  // as percentage (e.g. 0.44 = 0.44%)
+  priceToBook?: number;
+  averageDailyVolume3Month?: number;
+}

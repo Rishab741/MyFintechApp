@@ -1,4 +1,4 @@
-import type { ChartPoint, Mover, Quote, Period } from './types';
+import type { ChartPoint, DetailedQuote, Mover, Quote, Period } from './types';
 
 const BASE1 = 'https://query1.finance.yahoo.com';
 const BASE2 = 'https://query2.finance.yahoo.com';
@@ -108,6 +108,139 @@ export const SECTOR_ETFS = [
   { name: 'Utilities',     etf: 'XLU'  },
   { name: 'Comm. Svcs',    etf: 'XLC'  },
 ];
+
+// ─── Browseable stock universe by sector ─────────────────────────────────────
+export const STOCK_UNIVERSE: Record<string, Array<{ symbol: string; name: string }>> = {
+  Technology:   [
+    { symbol: 'AAPL',  name: 'Apple' },
+    { symbol: 'MSFT',  name: 'Microsoft' },
+    { symbol: 'NVDA',  name: 'NVIDIA' },
+    { symbol: 'GOOGL', name: 'Alphabet' },
+    { symbol: 'META',  name: 'Meta Platforms' },
+    { symbol: 'TSLA',  name: 'Tesla' },
+    { symbol: 'AMD',   name: 'AMD' },
+    { symbol: 'INTC',  name: 'Intel' },
+    { symbol: 'CRM',   name: 'Salesforce' },
+    { symbol: 'ORCL',  name: 'Oracle' },
+  ],
+  Financials:   [
+    { symbol: 'JPM',   name: 'JPMorgan Chase' },
+    { symbol: 'BAC',   name: 'Bank of America' },
+    { symbol: 'GS',    name: 'Goldman Sachs' },
+    { symbol: 'MS',    name: 'Morgan Stanley' },
+    { symbol: 'V',     name: 'Visa' },
+    { symbol: 'MA',    name: 'Mastercard' },
+    { symbol: 'WFC',   name: 'Wells Fargo' },
+    { symbol: 'BLK',   name: 'BlackRock' },
+  ],
+  Healthcare:   [
+    { symbol: 'JNJ',   name: 'Johnson & Johnson' },
+    { symbol: 'LLY',   name: 'Eli Lilly' },
+    { symbol: 'UNH',   name: 'UnitedHealth' },
+    { symbol: 'ABBV',  name: 'AbbVie' },
+    { symbol: 'PFE',   name: 'Pfizer' },
+    { symbol: 'MRK',   name: 'Merck' },
+    { symbol: 'TMO',   name: 'Thermo Fisher' },
+  ],
+  Energy:       [
+    { symbol: 'XOM',   name: 'ExxonMobil' },
+    { symbol: 'CVX',   name: 'Chevron' },
+    { symbol: 'COP',   name: 'ConocoPhillips' },
+    { symbol: 'SLB',   name: 'Schlumberger' },
+    { symbol: 'OXY',   name: 'Occidental Petroleum' },
+  ],
+  Consumer:     [
+    { symbol: 'WMT',   name: 'Walmart' },
+    { symbol: 'PG',    name: 'Procter & Gamble' },
+    { symbol: 'COST',  name: 'Costco' },
+    { symbol: 'HD',    name: 'Home Depot' },
+    { symbol: 'NKE',   name: 'Nike' },
+    { symbol: 'MCD',   name: "McDonald's" },
+    { symbol: 'KO',    name: 'Coca-Cola' },
+    { symbol: 'SBUX',  name: 'Starbucks' },
+  ],
+  Industrials:  [
+    { symbol: 'CAT',   name: 'Caterpillar' },
+    { symbol: 'BA',    name: 'Boeing' },
+    { symbol: 'GE',    name: 'GE Aerospace' },
+    { symbol: 'HON',   name: 'Honeywell' },
+    { symbol: 'LMT',   name: 'Lockheed Martin' },
+    { symbol: 'UPS',   name: 'UPS' },
+  ],
+  Crypto:       [
+    { symbol: 'BTC-USD', name: 'Bitcoin' },
+    { symbol: 'ETH-USD', name: 'Ethereum' },
+    { symbol: 'SOL-USD', name: 'Solana' },
+    { symbol: 'BNB-USD', name: 'BNB' },
+    { symbol: 'COIN',    name: 'Coinbase' },
+    { symbol: 'MSTR',    name: 'MicroStrategy' },
+  ],
+};
+
+// ─── RSI computation (14-period) from close prices ────────────────────────────
+export function computeRSI(data: ChartPoint[], period = 14): number | null {
+  if (data.length < period + 1) return null;
+  const prices = data.map(d => d.value);
+  const changes = prices.slice(1).map((p, i) => p - prices[i]);
+
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 0; i < period; i++) {
+    if (changes[i] > 0) avgGain += changes[i];
+    else avgLoss += Math.abs(changes[i]);
+  }
+  avgGain /= period;
+  avgLoss /= period;
+
+  for (let i = period; i < changes.length; i++) {
+    const c = changes[i];
+    avgGain = (avgGain * (period - 1) + Math.max(0, c)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.abs(Math.min(0, c))) / period;
+  }
+  if (avgLoss === 0) return 100;
+  return 100 - 100 / (1 + avgGain / avgLoss);
+}
+
+// ─── Detailed quote with fundamentals ────────────────────────────────────────
+export async function fetchDetailedQuote(symbol: string): Promise<DetailedQuote | null> {
+  const fields = [
+    'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+    'regularMarketDayHigh', 'regularMarketDayLow', 'regularMarketVolume',
+    'marketCap', 'shortName', 'longName', 'fiftyTwoWeekHigh', 'fiftyTwoWeekLow',
+    'regularMarketPreviousClose', 'trailingPE', 'forwardPE', 'trailingEps',
+    'beta', 'dividendYield', 'priceToBook', 'averageDailyVolume3Month',
+  ].join(',');
+  const url = `${BASE1}/v7/finance/quote?symbols=${encodeURIComponent(symbol)}&fields=${fields}`;
+  try {
+    const res = await fetch(url, { headers: HEADERS });
+    const json = await res.json();
+    const r = json?.quoteResponse?.result?.[0];
+    if (!r) return null;
+    return {
+      symbol:                   r.symbol ?? symbol,
+      shortName:                r.shortName ?? r.symbol ?? symbol,
+      longName:                 r.longName,
+      price:                    r.regularMarketPrice ?? 0,
+      change:                   r.regularMarketChange ?? 0,
+      changePct:                r.regularMarketChangePercent ?? 0,
+      dayHigh:                  r.regularMarketDayHigh ?? 0,
+      dayLow:                   r.regularMarketDayLow ?? 0,
+      volume:                   r.regularMarketVolume ?? 0,
+      marketCap:                r.marketCap,
+      fiftyTwoWeekHigh:         r.fiftyTwoWeekHigh,
+      fiftyTwoWeekLow:          r.fiftyTwoWeekLow,
+      previousClose:            r.regularMarketPreviousClose ?? 0,
+      trailingPE:               r.trailingPE,
+      forwardPE:                r.forwardPE,
+      trailingEps:              r.trailingEps,
+      beta:                     r.beta,
+      dividendYield:            r.dividendYield != null ? r.dividendYield * 100 : undefined,
+      priceToBook:              r.priceToBook,
+      averageDailyVolume3Month: r.averageDailyVolume3Month,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // ─── Major indices ────────────────────────────────────────────────────────────
 export const INDEX_CONFIG = [
