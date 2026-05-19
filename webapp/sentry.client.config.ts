@@ -12,8 +12,9 @@ Sentry.init({
   replaysOnErrorSampleRate: 1.0,
   replaysSessionSampleRate: isDev ? 1.0 : 0.05,
 
-  // Print Sentry activity to the browser console in dev — remove before prod
-  debug: isDev,
+  // debug: true requires the Sentry debug bundle which isn't included in prod builds.
+  // Keep it off to avoid the console warning.
+  debug: false,
 
   sendDefaultPii: false,
 

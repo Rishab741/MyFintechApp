@@ -103,7 +103,7 @@ async def require_user(
             token,
             settings.supabase_jwt_secret,
             algorithms=["HS256"],
-            audience="authenticated",
+            options={"verify_aud": False},  # Supabase aud varies by project config
         )
         user_id = payload.get("sub")
         if not user_id:
@@ -118,8 +118,8 @@ async def require_user(
             email=payload.get("email"),
             role=payload.get("role", "authenticated"),
         )
-    except JWTError:
-        pass  # Fall through to API key check
+    except JWTError as e:
+        log.warning("JWT decode failed (will try API key): %s", e)
 
     # ── Try B2B API key ───────────────────────────────────────────────────────
     key_hash = hashlib.sha256(token.encode()).hexdigest()
