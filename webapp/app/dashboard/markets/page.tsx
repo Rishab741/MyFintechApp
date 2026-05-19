@@ -334,14 +334,16 @@ function WsStatusBadge({ status }: { status: WsStatus }) {
     connected:   { label: "WS STREAMING",    cls: "text-cyan-300 border-cyan-500/30 bg-cyan-500/10" },
     reconnecting:{ label: "WS RECONNECTING", cls: "text-orange-400 border-orange-500/30 bg-orange-500/10" },
     error:       { label: "WS ERROR",        cls: "text-red-400 border-red-500/30 bg-red-500/10" },
+    failed:      { label: "WS FAILED",       cls: "text-red-500 border-red-600/30 bg-red-600/10" },
   };
   const { label, cls } = cfg[status];
   return (
     <span className={`flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded-full border ${cls}`}>
       {status === "connected" && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />}
-      {status === "connecting" || status === "reconnecting"
-        ? <span className="w-3 h-3 rounded-full border border-current border-t-transparent animate-spin" />
-        : null}
+      {(status === "connecting" || status === "reconnecting") && (
+        <span className="w-3 h-3 rounded-full border border-current border-t-transparent animate-spin" />
+      )}
+      {(status === "error" || status === "failed") && <span>✕</span>}
       {label}
     </span>
   );
