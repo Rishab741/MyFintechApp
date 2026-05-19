@@ -35,10 +35,25 @@ const config: Config = {
           "0%":   { backgroundColor: "rgba(239,68,68,0.25)" },
           "100%": { backgroundColor: "transparent" },
         },
+        ticker: {
+          "0%":   { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+        "slide-in-right": {
+          "0%":   { transform: "translateX(100%)", opacity: "0" },
+          "100%": { transform: "translateX(0)",    opacity: "1" },
+        },
+        "fade-in": {
+          "0%":   { opacity: "0", transform: "translateY(6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
-        "flash-green": "flash-green 0.6s ease-out",
-        "flash-red":   "flash-red 0.6s ease-out",
+        "flash-green":     "flash-green 0.6s ease-out",
+        "flash-red":       "flash-red 0.6s ease-out",
+        "ticker":          "ticker 40s linear infinite",
+        "slide-in-right":  "slide-in-right 0.25s ease-out",
+        "fade-in":         "fade-in 0.2s ease-out",
       },
     },
   },
