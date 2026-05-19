@@ -26,6 +26,20 @@ const config: Config = {
         sans: ["Inter", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "Fira Code", "monospace"],
       },
+      keyframes: {
+        "flash-green": {
+          "0%":   { backgroundColor: "rgba(16,185,129,0.25)" },
+          "100%": { backgroundColor: "transparent" },
+        },
+        "flash-red": {
+          "0%":   { backgroundColor: "rgba(239,68,68,0.25)" },
+          "100%": { backgroundColor: "transparent" },
+        },
+      },
+      animation: {
+        "flash-green": "flash-green 0.6s ease-out",
+        "flash-red":   "flash-red 0.6s ease-out",
+      },
     },
   },
   plugins: [],

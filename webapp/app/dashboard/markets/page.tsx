@@ -1,15 +1,25 @@
 "use client";
 
 import useSWR from "swr";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
-  RadialBarChart, RadialBar, ResponsiveContainer,
+  ResponsiveContainer,
   AreaChart, Area, Tooltip as RTooltip,
   BarChart, Bar, Cell, XAxis, YAxis,
 } from "recharts";
 import type { MarketSnapshot, Quote, Mover, SessionInfo, NewsItem } from "@/lib/alpha-vantage";
+import { useFinnhubWs, type WsStatus } from "@/hooks/use-finnhub-ws";
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
+
+// Finnhub symbol map: our internal key → Finnhub symbol
+const FH_SYMBOLS: Record<string, string> = {
+  SPY:    "SPY",
+  QQQ:    "QQQ",
+  GLD:    "GLD",
+  BTC:    "BINANCE:BTCUSDT",
+  // EUR/USD requires Finnhub premium — omit from WS, keep REST value
+};
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
 const pos  = (v: number) => v >= 0;
@@ -114,9 +124,13 @@ function FearGreedGauge({ score }: { score: number }) {
   );
 }
 
-function IndexCard({ q }: { q: Quote }) {
-  const spark = useMemo(() => sparkData(q), [q.symbol, q.price]);
-  const green = pos(q.changePct);
+function IndexCard({ q, isLive }: { q: Quote; isLive?: boolean }) {
+  const spark    = useMemo(() => sparkData(q), [q.symbol, q.price]); // eslint-disable-line react-hooks/exhaustive-deps
+  const green    = pos(q.changePct);
+  const prevRef  = useRef(q.price);
+  const flashDir = q.price > prevRef.current ? "up" : q.price < prevRef.current ? "down" : null;
+  prevRef.current = q.price;
+
   const displayPrice = q.symbol === "BTC"
     ? `$${q.price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
     : q.symbol === "EUR/USD"
@@ -126,16 +140,27 @@ function IndexCard({ q }: { q: Quote }) {
   return (
     <div className={`relative rounded-xl border p-4 overflow-hidden transition-all hover:scale-[1.02] cursor-default ${
       green ? "border-emerald-500/20 bg-emerald-500/5" : "border-red-500/20 bg-red-500/5"
-    }`} style={{ backdropFilter: "blur(12px)" }}>
+    } ${flashDir === "up" ? "animate-flash-green" : flashDir === "down" ? "animate-flash-red" : ""}`}
+      style={{ backdropFilter: "blur(12px)" }}>
       <div className="absolute inset-0 opacity-10" style={{ background: `radial-gradient(ellipse at top right, ${green ? "#10b981" : "#ef4444"} 0%, transparent 70%)` }} />
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-mono font-bold text-slate-400 tracking-wider">{q.symbol}</span>
-          <span className={`text-xs font-mono font-semibold px-1.5 py-0.5 rounded ${green ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"}`}>
-            {pct(q.changePct)}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {isLive && (
+              <span className="flex items-center gap-1 text-xs font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 rounded">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                LIVE
+              </span>
+            )}
+            <span className={`text-xs font-mono font-semibold px-1.5 py-0.5 rounded ${green ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"}`}>
+              {pct(q.changePct)}
+            </span>
+          </div>
         </div>
-        <div className="text-lg font-mono font-bold text-white mb-2">{displayPrice}</div>
+        <div className={`text-lg font-mono font-bold mb-2 transition-colors duration-300 ${
+          flashDir === "up" ? "text-emerald-300" : flashDir === "down" ? "text-red-300" : "text-white"
+        }`}>{displayPrice}</div>
         <div className="h-10">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={spark} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
@@ -300,6 +325,28 @@ function RegionHeatmap() {
   );
 }
 
+// ── WS status badge ───────────────────────────────────────────────────────────
+
+function WsStatusBadge({ status }: { status: WsStatus }) {
+  const cfg: Record<WsStatus, { label: string; cls: string }> = {
+    idle:        { label: "WS IDLE",         cls: "text-slate-500 border-slate-700 bg-slate-800/50" },
+    connecting:  { label: "WS CONNECTING…",  cls: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
+    connected:   { label: "WS STREAMING",    cls: "text-cyan-300 border-cyan-500/30 bg-cyan-500/10" },
+    reconnecting:{ label: "WS RECONNECTING", cls: "text-orange-400 border-orange-500/30 bg-orange-500/10" },
+    error:       { label: "WS ERROR",        cls: "text-red-400 border-red-500/30 bg-red-500/10" },
+  };
+  const { label, cls } = cfg[status];
+  return (
+    <span className={`flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded-full border ${cls}`}>
+      {status === "connected" && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />}
+      {status === "connecting" || status === "reconnecting"
+        ? <span className="w-3 h-3 rounded-full border border-current border-t-transparent animate-spin" />
+        : null}
+      {label}
+    </span>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function MarketsPage() {
@@ -307,9 +354,27 @@ export default function MarketsPage() {
     "/api/market", fetcher, { refreshInterval: 5 * 60 * 1000 }
   );
 
+  // Finnhub WebSocket — real-time price ticks
+  const { liveQuotes, status: wsStatus } = useFinnhubWs(Object.values(FH_SYMBOLS));
+
   const snap = data as MarketSnapshot | undefined;
   const fg   = snap ? fearGreed(snap.sectors) : 50;
   const { label: fgLabelStr, color: fgColor } = fgLabel(fg);
+
+  // Merge WebSocket ticks over REST quotes — WS price takes precedence when present
+  const mergedQuotes = useMemo<Record<string, Quote>>(() => {
+    if (!snap?.quotes) return {};
+    const out = { ...snap.quotes };
+    for (const [ourKey, fhSym] of Object.entries(FH_SYMBOLS)) {
+      const tick = liveQuotes[fhSym];
+      const base = out[ourKey];
+      if (!tick || !base) continue;
+      const change    = tick.price - base.previousClose;
+      const changePct = base.previousClose > 0 ? (change / base.previousClose) * 100 : 0;
+      out[ourKey] = { ...base, price: tick.price, change, changePct };
+    }
+    return out;
+  }, [snap?.quotes, liveQuotes]);
 
   const quoteList: [string, string][] = [
     ["S&P 500", "SPY"], ["NASDAQ", "QQQ"], ["Gold", "GLD"], ["Bitcoin", "BTC"], ["EUR/USD", "EURUSD"],
@@ -330,8 +395,9 @@ export default function MarketsPage() {
           <p className="text-xs text-slate-500 font-mono tracking-wider">Global Markets Intelligence</p>
         </div>
 
-        {/* Session badges */}
+        {/* Session badges + WS status */}
         <div className="flex items-center gap-2 flex-wrap">
+          <WsStatusBadge status={wsStatus} />
           {snap?.sessions.map((s, i) => <SessionBadge key={i} s={s} />) ?? (
             ["US", "EU", "ASIA", "FX"].map(l => (
               <div key={l} className="h-6 w-20 rounded-full bg-slate-800 animate-pulse" />
@@ -355,7 +421,9 @@ export default function MarketsPage() {
         {/* ── Index cards ──────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {quoteList.map(([name, sym]) => {
-            const q = snap?.quotes?.[sym];
+            const q      = mergedQuotes[sym] ?? snap?.quotes?.[sym];
+            const fhSym  = FH_SYMBOLS[sym];
+            const isLive = wsStatus === "connected" && !!fhSym && !!liveQuotes[fhSym];
             if (!q) return (
               <div key={sym} className="rounded-xl border border-slate-800 p-4 animate-pulse">
                 <div className="h-3 bg-slate-800 rounded mb-2 w-12" />
@@ -366,7 +434,7 @@ export default function MarketsPage() {
             return (
               <div key={sym}>
                 <p className="text-xs text-slate-600 font-mono mb-1 tracking-wider">{name}</p>
-                <IndexCard q={q} />
+                <IndexCard q={q} isLive={isLive} />
               </div>
             );
           })}
