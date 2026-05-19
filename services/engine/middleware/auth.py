@@ -4,7 +4,7 @@ Authentication middleware for the Vestara Portfolio Engine.
 Three authentication modes:
 
 1. USER AUTH — Supabase JWT from the mobile app / web dashboard.
-   Validated locally (no network round-trip). Extracts user_id from `sub`.
+   Validated via Supabase Auth API (works for HS256 and RS256 projects).
    Tenant is resolved via get_or_create_tenant() DB call (cached per process).
 
 2. API KEY AUTH — Bearer token for B2B licensees (RIAs, hedge funds).
@@ -23,7 +23,6 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
 
 from config import get_settings
 
@@ -97,29 +96,24 @@ async def require_user(
     """
     token = credentials.credentials
 
-    # ── Try Supabase JWT first ────────────────────────────────────────────────
+    # ── Try Supabase JWT via Auth API ────────────────────────────────────────
+    # Validates server-side — works for HS256 and RS256, no local secret needed.
     try:
-        payload = jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            options={"verify_aud": False},  # Supabase aud varies by project config
-        )
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token missing user identity.",
+        from lib.supabase_client import get_db
+        response = get_db().auth.get_user(token)
+        if response.user:
+            user      = response.user
+            tenant_id = _resolve_tenant(str(user.id))
+            return UserContext(
+                user_id=str(user.id),
+                tenant_id=tenant_id,
+                email=user.email,
+                role="authenticated",
             )
-        tenant_id = _resolve_tenant(user_id)
-        return UserContext(
-            user_id=user_id,
-            tenant_id=tenant_id,
-            email=payload.get("email"),
-            role=payload.get("role", "authenticated"),
-        )
-    except JWTError as e:
-        log.warning("JWT decode failed (will try API key): %s", e)
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.warning("Supabase JWT validation failed (will try API key): %s", e)
 
     # ── Try B2B API key ───────────────────────────────────────────────────────
     key_hash = hashlib.sha256(token.encode()).hexdigest()
