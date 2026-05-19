@@ -149,6 +149,53 @@ class ComputeResult(BaseModel):
     computed_at:      datetime
 
 
+# ── Portfolio Health Score ────────────────────────────────────────────────────
+class HealthScoreBreakdown(BaseModel):
+    diversification:    float = Field(description="0-30: based on effective number of positions")
+    risk_return:        float = Field(description="0-25: normalised Sharpe ratio")
+    drawdown_resilience: float = Field(description="0-25: inverse of max drawdown severity")
+    consistency:        float = Field(description="0-10: daily win rate")
+    cash_efficiency:    float = Field(description="0-10: low cash drag")
+
+
+class HealthScoreResponse(BaseModel):
+    score:     int              = Field(description="Composite health score 0-100")
+    grade:     str              = Field(description="Letter grade: A/B/C/D/F")
+    breakdown: HealthScoreBreakdown
+    insights:  list[str]        = Field(description="2-3 plain-English actionable observations")
+    computed_at: datetime
+
+
+# ── What-if Time Machine ──────────────────────────────────────────────────────
+class WhatIfRequest(BaseModel):
+    symbol:     str   = Field(description="Ticker to compare against, e.g. 'NVDA'")
+    amount:     float = Field(description="Hypothetical investment amount in USD")
+    start_date: str   = Field(description="Comparison start date YYYY-MM-DD")
+
+
+class WhatIfTimePoint(BaseModel):
+    date:         str
+    hypothetical: float
+    portfolio:    float
+    benchmark:    float
+
+
+class WhatIfResponse(BaseModel):
+    symbol:              str
+    amount_invested:     float
+    start_date:          str
+    end_date:            str
+    hypothetical_final:  float
+    hypothetical_return: float
+    hypothetical_cagr:   float
+    actual_return:       float
+    actual_cagr:         float
+    benchmark_return:    float
+    benchmark_cagr:      float
+    winner:              str    = Field(description="'hypothetical' | 'portfolio' | 'benchmark'")
+    time_series:         list[WhatIfTimePoint]
+
+
 # ── Health ────────────────────────────────────────────────────────────────────
 class HealthResponse(BaseModel):
     status:  Literal["ok", "degraded", "error"] = "ok"

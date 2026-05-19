@@ -5,17 +5,20 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard, TrendingUp, Upload, Key, BarChart2,
-  FileText, Shield, LogOut,
+  FileText, Shield, LogOut, Heart, Clock, Briefcase,
 } from "lucide-react";
 
 const NAV = [
-  { href: "/dashboard",          label: "Overview",     icon: LayoutDashboard },
-  { href: "/dashboard/portfolio", label: "Portfolio",    icon: TrendingUp      },
-  { href: "/dashboard/ingest",    label: "Import Data",  icon: Upload          },
-  { href: "/dashboard/ledger",    label: "Ledger",       icon: Shield          },
-  { href: "/dashboard/api-keys",  label: "API Keys",     icon: Key             },
-  { href: "/dashboard/usage",     label: "Usage",        icon: BarChart2       },
-  { href: "/dashboard/audit",     label: "Audit Log",    icon: FileText        },
+  { href: "/dashboard",                label: "Overview",      icon: LayoutDashboard },
+  { href: "/dashboard/health-score",   label: "Health Score",  icon: Heart           },
+  { href: "/dashboard/what-if",        label: "What-if",       icon: Clock           },
+  { href: "/dashboard/holdings",       label: "Holdings",      icon: Briefcase       },
+  { href: "/dashboard/portfolio",      label: "Analytics",     icon: TrendingUp      },
+  { href: "/dashboard/ingest",         label: "Import Data",   icon: Upload          },
+  { href: "/dashboard/ledger",         label: "Ledger",        icon: Shield          },
+  { href: "/dashboard/api-keys",       label: "API Keys",      icon: Key             },
+  { href: "/dashboard/usage",          label: "Usage",         icon: BarChart2       },
+  { href: "/dashboard/audit",          label: "Audit Log",     icon: FileText        },
 ];
 
 export default function Sidebar({ email }: { email: string }) {

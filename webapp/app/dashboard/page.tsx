@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { engine } from "@/lib/engine";
 import MetricCard from "@/components/ui/metric-card";
 import PortfolioChart from "@/components/charts/portfolio-chart";
-import { TrendingUp, Activity, Shield, Zap, AlertTriangle } from "lucide-react";
+import { TrendingUp, Activity, Shield, Zap, AlertTriangle, Heart } from "lucide-react";
+import Link from "next/link";
 
 async function getJwt() {
   const { data } = await createClient().auth.getSession();
@@ -33,6 +34,20 @@ function useUsage() {
   });
 }
 
+function useHistory() {
+  return useSWR("history-3m", async () => {
+    const jwt = await getJwt();
+    return engine.portfolio.history(jwt, "3M");
+  });
+}
+
+function useHealthScore() {
+  return useSWR("health-score", async () => {
+    const jwt = await getJwt();
+    return engine.portfolio.healthScore(jwt);
+  });
+}
+
 function pct(v: number | null) {
   if (v === null) return null;
   return `${(v * 100).toFixed(2)}%`;
@@ -42,6 +57,8 @@ export default function DashboardOverview() {
   const { data: metrics, isLoading: mLoading } = useMetrics();
   const { data: tenant }                        = useTenant();
   const { data: usage }                         = useUsage();
+  const { data: history }                       = useHistory();
+  const { data: healthScore }                   = useHealthScore();
 
   const twr = metrics?.twr !== undefined ? pct(metrics.twr) : null;
   const twrTrend = metrics?.twr !== undefined && metrics.twr !== null
@@ -118,6 +135,55 @@ export default function DashboardOverview() {
         <MetricCard label="Sortino"     value={metrics?.sortino ?? null}                                                         loading={mLoading} />
         <MetricCard label="Beta"        value={metrics?.beta ?? null}                                                            loading={mLoading} />
         <MetricCard label="Volatility"  value={pct(metrics?.volatility ?? null)}                                                  loading={mLoading} />
+      </div>
+
+      {/* Health Score + NAV Chart row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Health Score card */}
+        <Link href="/dashboard/health-score" className="block">
+          <div className="bg-card border border-border rounded-xl p-5 hover:border-accent/40 transition-colors h-full">
+            <div className="flex items-center gap-2 mb-3">
+              <Heart size={14} className="text-accent" />
+              <p className="text-xs text-muted font-medium uppercase tracking-wide">Portfolio Health</p>
+            </div>
+            {healthScore ? (
+              <>
+                <div className="flex items-end gap-2 mb-2">
+                  <span className="text-5xl font-bold text-white">{healthScore.score}</span>
+                  <span className="text-2xl font-semibold text-accent mb-1">/ 100</span>
+                  <span className={`text-xl font-bold mb-1 ml-auto ${
+                    healthScore.grade === "A" ? "text-positive" :
+                    healthScore.grade === "B" ? "text-positive" :
+                    healthScore.grade === "C" ? "text-yellow-400" :
+                    "text-negative"
+                  }`}>{healthScore.grade}</span>
+                </div>
+                <p className="text-xs text-muted line-clamp-2">{healthScore.insights[0]}</p>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <div className="h-12 w-32 bg-white/5 rounded animate-pulse" />
+                <div className="h-3 w-full bg-white/5 rounded animate-pulse" />
+              </div>
+            )}
+          </div>
+        </Link>
+
+        {/* NAV Chart — spans 2 columns */}
+        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5">
+          <p className="text-xs text-muted font-medium uppercase tracking-wide mb-3">
+            Portfolio NAV — 3 Months
+          </p>
+          {history?.nav_series && history.nav_series.length > 1 ? (
+            <PortfolioChart
+              data={history.nav_series.map(p => ({ time: p.time, total_value: p.total_value }))}
+            />
+          ) : (
+            <div className="h-40 flex items-center justify-center text-muted text-sm">
+              No NAV history available
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Ledger status banner */}

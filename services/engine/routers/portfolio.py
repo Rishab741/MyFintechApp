@@ -8,6 +8,7 @@ Data is read primarily from performance_cache and portfolio_snapshots_v2
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Annotated
@@ -38,14 +39,19 @@ from calculations.risk import (
 )
 from config import get_settings
 from lib.supabase_client import fetch_holdings, fetch_snapshots, write_audit_log
-from lib.yahoo import fetch_benchmark_returns
+from lib.yahoo import fetch_benchmark_returns, fetch_daily_closes
 from middleware.auth import UserContext, require_user
 from models.portfolio import (
     ExposureReport,
+    HealthScoreBreakdown,
+    HealthScoreResponse,
     NavPoint,
     PerformanceMetrics,
     Period,
     PortfolioHistory,
+    WhatIfRequest,
+    WhatIfResponse,
+    WhatIfTimePoint,
 )
 
 log = logging.getLogger(__name__)
@@ -295,4 +301,234 @@ async def get_history(
         nav_series=nav_series,
         benchmark_symbol=settings.default_benchmark,
         data_points=len(nav_series),
+    )
+
+
+# ── GET /portfolio/health-score ───────────────────────────────────────────────
+@router.get("/health-score", response_model=HealthScoreResponse)
+async def get_health_score(
+    user: Annotated[UserContext, Depends(require_user)],
+) -> HealthScoreResponse:
+    """
+    Return a 0-100 composite portfolio health score with sub-scores and insights.
+    Uses ALL-period metrics for the score (broadest available window).
+    """
+    raw_snaps = fetch_snapshots(user.user_id, limit=500)
+    if not raw_snaps:
+        raise HTTPException(status_code=404, detail="No portfolio history found.")
+
+    all_values = [float(s["total_value"] or 0) for s in raw_snaps]
+    all_times  = [
+        datetime.fromisoformat(s["time"].replace("Z", "+00:00"))
+        for s in raw_snaps
+    ]
+
+    daily_returns = compute_daily_returns(all_values)
+    max_dd, _     = compute_max_drawdown(all_values)
+    sharpe        = compute_sharpe(daily_returns, settings.risk_free_rate_daily)
+    win_rate      = compute_win_rate(daily_returns)
+
+    holdings  = fetch_holdings(user.user_id)
+    snap_last = raw_snaps[-1]
+    total_val = float(snap_last.get("total_value") or 0)
+    cash_val  = float(snap_last.get("cash_value") or 0)
+    cash_pct  = cash_val / total_val if total_val > 0 else 0.0
+
+    from calculations.exposure import compute_concentration_risk
+    concentration = compute_concentration_risk(holdings, total_val)
+    effective_n   = float(concentration.get("effective_n", 1))
+
+    # ── Sub-scores ────────────────────────────────────────────────────────────
+    s_diversification = min(30.0, effective_n / 10.0 * 30.0)
+    s_risk_return     = max(0.0, min(25.0, sharpe / 1.5 * 25.0))
+    s_drawdown        = max(0.0, min(25.0, (1.0 - abs(max_dd) / 0.5) * 25.0))
+    s_consistency     = max(0.0, min(10.0, (win_rate - 0.40) * 50.0))
+    s_cash_eff        = max(0.0, min(10.0, (1.0 - cash_pct / 0.30) * 10.0))
+
+    total_score = int(round(s_diversification + s_risk_return + s_drawdown + s_consistency + s_cash_eff))
+
+    grade = (
+        "A" if total_score >= 80 else
+        "B" if total_score >= 65 else
+        "C" if total_score >= 50 else
+        "D" if total_score >= 35 else
+        "F"
+    )
+
+    # ── Insights ──────────────────────────────────────────────────────────────
+    insights: list[str] = []
+    if effective_n < 5:
+        insights.append(
+            f"Your portfolio has low diversification (effective N = {effective_n:.1f}). "
+            "Adding uncorrelated positions reduces concentration risk."
+        )
+    if sharpe < 0.5:
+        insights.append(
+            f"Your Sharpe ratio of {sharpe:.2f} suggests returns aren't adequately "
+            "compensating for volatility. A target above 1.0 is considered healthy."
+        )
+    if abs(max_dd) > 0.25:
+        insights.append(
+            f"A max drawdown of {max_dd * 100:.1f}% is significant. "
+            "Broader diversification or defensive assets can cushion future drops."
+        )
+    if cash_pct > 0.20:
+        insights.append(
+            f"{cash_pct * 100:.0f}% cash is creating a drag on returns. "
+            "Consider deploying idle cash toward your target allocation."
+        )
+    if win_rate > 0.55 and len(insights) < 3:
+        insights.append(
+            f"Strong daily win rate ({win_rate * 100:.0f}%) reflects consistent positive momentum."
+        )
+    if not insights:
+        insights.append(
+            "Your portfolio is well-balanced across diversification, risk, and consistency."
+        )
+
+    write_audit_log(
+        event_type="portfolio.health_score.read",
+        actor_id=user.user_id,
+        resource="portfolio_snapshots_v2",
+    )
+
+    return HealthScoreResponse(
+        score=total_score,
+        grade=grade,
+        breakdown=HealthScoreBreakdown(
+            diversification=round(s_diversification, 2),
+            risk_return=round(s_risk_return, 2),
+            drawdown_resilience=round(s_drawdown, 2),
+            consistency=round(s_consistency, 2),
+            cash_efficiency=round(s_cash_eff, 2),
+        ),
+        insights=insights[:3],
+        computed_at=datetime.now(tz=timezone.utc),
+    )
+
+
+# ── POST /portfolio/what-if ───────────────────────────────────────────────────
+@router.post("/what-if", response_model=WhatIfResponse)
+async def what_if(
+    body: WhatIfRequest,
+    user: Annotated[UserContext, Depends(require_user)],
+) -> WhatIfResponse:
+    """
+    Compare a hypothetical single-ticker investment vs the user's actual portfolio
+    and SPY, all starting from start_date with the same dollar amount.
+    """
+    from datetime import date as date_type
+
+    try:
+        start_dt = datetime.strptime(body.start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="start_date must be YYYY-MM-DD")
+
+    now = datetime.now(tz=timezone.utc)
+    if start_dt >= now:
+        raise HTTPException(status_code=422, detail="start_date must be in the past")
+
+    symbol = body.symbol.upper().strip()
+
+    # ── Fetch historical closes for the ticker + SPY ──────────────────────────
+    hyp_closes, spy_closes = await asyncio.gather(
+        fetch_daily_closes(symbol, period="5y"),
+        fetch_daily_closes("SPY", period="5y"),
+    )
+
+    # Filter both to [start_date, today]
+    hyp_filtered = [c for c in hyp_closes if c["time"] >= start_dt]
+    spy_filtered  = [c for c in spy_closes  if c["time"] >= start_dt]
+
+    if len(hyp_filtered) < 2:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No price data for {symbol} from {body.start_date}. "
+                   "Try a later start date or check the ticker symbol."
+        )
+
+    hyp_start  = hyp_filtered[0]["close"]
+    hyp_end    = hyp_filtered[-1]["close"]
+    hyp_return = (hyp_end - hyp_start) / hyp_start
+    hyp_final  = round(body.amount * (1 + hyp_return), 2)
+    hyp_days   = max((hyp_filtered[-1]["time"] - hyp_filtered[0]["time"]).days, 1)
+    hyp_cagr   = compute_cagr(hyp_start, hyp_end, hyp_days)
+
+    spy_start  = spy_filtered[0]["close"] if spy_filtered else hyp_start
+    spy_end    = spy_filtered[-1]["close"] if spy_filtered else hyp_start
+    spy_return = (spy_end - spy_start) / spy_start if spy_start else 0.0
+    spy_cagr   = compute_cagr(spy_start, spy_end, hyp_days) if spy_filtered else 0.0
+
+    # ── Actual portfolio performance for the same window ─────────────────────
+    raw_snaps = fetch_snapshots(user.user_id, limit=500)
+    actual_return = 0.0
+    actual_cagr   = 0.0
+    port_series: dict[str, float] = {}   # date → normalised value
+
+    if raw_snaps:
+        all_values = [float(s["total_value"] or 0) for s in raw_snaps]
+        all_times  = [
+            datetime.fromisoformat(s["time"].replace("Z", "+00:00"))
+            for s in raw_snaps
+        ]
+        port_slice_vals, port_slice_times = slice_by_period(
+            all_values, all_times, "ALL"
+        )
+        # Further filter to start_date
+        filtered_pairs = [
+            (v, t) for v, t in zip(port_slice_vals, port_slice_times)
+            if t >= start_dt
+        ]
+        if len(filtered_pairs) >= 2:
+            p_vals = [p[0] for p in filtered_pairs]
+            p_times = [p[1] for p in filtered_pairs]
+            actual_return = compute_twr(p_vals)
+            port_days     = max((p_times[-1] - p_times[0]).days, 1)
+            actual_cagr   = compute_cagr(p_vals[0], p_vals[-1], port_days)
+            p_base        = p_vals[0]
+            for v, t in zip(p_vals, p_times):
+                port_series[t.strftime("%Y-%m-%d")] = round(body.amount * v / p_base, 2)
+
+    # ── Build normalised time series ──────────────────────────────────────────
+    hyp_base  = hyp_filtered[0]["close"]
+    spy_base  = spy_filtered[0]["close"] if spy_filtered else None
+    spy_map   = {c["time"].strftime("%Y-%m-%d"): c["close"] for c in spy_filtered}
+    time_series: list[WhatIfTimePoint] = []
+
+    for c in hyp_filtered:
+        d = c["time"].strftime("%Y-%m-%d")
+        hyp_val  = round(body.amount * c["close"] / hyp_base, 2)
+        port_val = port_series.get(d, 0.0)
+        spy_val  = round(body.amount * spy_map[d] / spy_base, 2) if (spy_base and d in spy_map) else 0.0
+        time_series.append(WhatIfTimePoint(date=d, hypothetical=hyp_val, portfolio=port_val, benchmark=spy_val))
+
+    # ── Determine winner ──────────────────────────────────────────────────────
+    returns = {
+        "hypothetical": hyp_return,
+        "portfolio":    actual_return,
+        "benchmark":    spy_return,
+    }
+    winner = max(returns, key=lambda k: returns[k])
+
+    write_audit_log(
+        event_type="portfolio.what_if.run",
+        actor_id=user.user_id,
+        resource="price_history",
+        metadata={"symbol": symbol, "start_date": body.start_date, "amount": body.amount},
+    )
+
+    return WhatIfResponse(
+        symbol=symbol,
+        amount_invested=body.amount,
+        start_date=body.start_date,
+        end_date=now.strftime("%Y-%m-%d"),
+        hypothetical_final=hyp_final,
+        hypothetical_return=round(hyp_return, 6),
+        hypothetical_cagr=round(hyp_cagr, 6),
+        actual_return=round(actual_return, 6),
+        actual_cagr=round(actual_cagr, 6),
+        benchmark_return=round(spy_return, 6),
+        benchmark_cagr=round(spy_cagr, 6),
+        winner=winner,
+        time_series=time_series,
     )

@@ -85,6 +85,79 @@ export interface CustodianInfo {
   supports_transactions: boolean;
 }
 
+export interface HealthScoreBreakdown {
+  diversification:     number;
+  risk_return:         number;
+  drawdown_resilience: number;
+  consistency:         number;
+  cash_efficiency:     number;
+}
+
+export interface HealthScoreResponse {
+  score:       number;
+  grade:       string;
+  breakdown:   HealthScoreBreakdown;
+  insights:    string[];
+  computed_at: string;
+}
+
+export interface WhatIfTimePoint {
+  date:         string;
+  hypothetical: number;
+  portfolio:    number;
+  benchmark:    number;
+}
+
+export interface WhatIfResponse {
+  symbol:              string;
+  amount_invested:     number;
+  start_date:          string;
+  end_date:            string;
+  hypothetical_final:  number;
+  hypothetical_return: number;
+  hypothetical_cagr:   number;
+  actual_return:       number;
+  actual_cagr:         number;
+  benchmark_return:    number;
+  benchmark_cagr:      number;
+  winner:              "hypothetical" | "portfolio" | "benchmark";
+  time_series:         WhatIfTimePoint[];
+}
+
+export interface PortfolioExposure {
+  by_asset_class: { asset_class: string; market_value: number; allocation_pct: number; position_count: number }[];
+  by_sector:      { sector: string; market_value: number; allocation_pct: number }[];
+  by_currency:    { currency: string; market_value: number; allocation_pct: number }[];
+  concentration: {
+    top_10_pct:       number;
+    top_3_pct:        number;
+    herfindahl_index: number;
+    effective_n:      number;
+    largest_position: { symbol: string; allocation_pct: number; market_value: number } | null;
+  };
+  position_count: number;
+  total_value:    number;
+  cash_value:     number;
+  invested_value: number;
+  cash_pct:       number;
+}
+
+export interface PortfolioNavPoint {
+  time:            string;
+  total_value:     number;
+  cash_value:      number;
+  invested_value:  number;
+  daily_return:    number | null;
+  benchmark_value: number | null;
+}
+
+export interface PortfolioHistory {
+  period:           string;
+  nav_series:       PortfolioNavPoint[];
+  benchmark_symbol: string;
+  data_points:      number;
+}
+
 // ── Fetch helper ──────────────────────────────────────────────────────────────
 
 async function engineFetch<T>(
@@ -112,6 +185,22 @@ export const engine = {
   portfolio: {
     metrics: (jwt: string, period = "1Y") =>
       engineFetch<PortfolioMetrics>(`/v1/portfolio/metrics?period=${period}`, jwt),
+
+    healthScore: (jwt: string) =>
+      engineFetch<HealthScoreResponse>("/v1/portfolio/health-score", jwt),
+
+    whatIf: (jwt: string, symbol: string, amount: number, startDate: string) =>
+      engineFetch<WhatIfResponse>("/v1/portfolio/what-if", jwt, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol, amount, start_date: startDate }),
+      }),
+
+    exposure: (jwt: string) =>
+      engineFetch<PortfolioExposure>("/v1/portfolio/exposure", jwt),
+
+    history: (jwt: string, period = "3M") =>
+      engineFetch<PortfolioHistory>(`/v1/portfolio/history?period=${period}`, jwt),
   },
 
   tenant: {
