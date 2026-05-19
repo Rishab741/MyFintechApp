@@ -336,7 +336,7 @@ function WsStatusBadge({ status }: { status: WsStatus }) {
     error:       { label: "WS ERROR",        cls: "text-red-400 border-red-500/30 bg-red-500/10" },
     failed:      { label: "WS FAILED",       cls: "text-red-500 border-red-600/30 bg-red-600/10" },
   };
-  const { label, cls } = cfg[status];
+  const { label, cls } = cfg[status] ?? cfg["error"];
   return (
     <span className={`flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded-full border ${cls}`}>
       {status === "connected" && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />}
