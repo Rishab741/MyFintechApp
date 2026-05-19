@@ -196,6 +196,20 @@ class WhatIfResponse(BaseModel):
     time_series:         list[WhatIfTimePoint]
 
 
+# ── Refresh ──────────────────────────────────────────────────────────────────
+class RefreshResult(BaseModel):
+    symbols_synced:    int
+    symbols_failed:    int
+    periods_computed:  list[str]
+    refreshed_at:      datetime
+
+class PipelineStatus(BaseModel):
+    snapshot_count:   int
+    holdings_count:   int
+    last_computed_at: datetime | None
+    last_synced_at:   datetime | None
+
+
 # ── Health ────────────────────────────────────────────────────────────────────
 class HealthResponse(BaseModel):
     status:  Literal["ok", "degraded", "error"] = "ok"

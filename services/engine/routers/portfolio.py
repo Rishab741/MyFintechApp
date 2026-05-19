@@ -38,8 +38,17 @@ from calculations.risk import (
     compute_win_rate,
 )
 from config import get_settings
-from lib.supabase_client import fetch_holdings, fetch_snapshots, write_audit_log
-from lib.yahoo import fetch_benchmark_returns, fetch_daily_closes
+from lib.supabase_client import (
+    fetch_all_active_symbols,
+    fetch_asset_by_symbol,
+    fetch_holdings,
+    fetch_snapshots,
+    update_holding_prices,
+    upsert_prices,
+    write_audit_log,
+    get_db,
+)
+from lib.yahoo import fetch_benchmark_returns, fetch_daily_closes, fetch_quotes
 from middleware.auth import UserContext, require_user
 from models.portfolio import (
     ExposureReport,
@@ -48,7 +57,9 @@ from models.portfolio import (
     NavPoint,
     PerformanceMetrics,
     Period,
+    PipelineStatus,
     PortfolioHistory,
+    RefreshResult,
     WhatIfRequest,
     WhatIfResponse,
     WhatIfTimePoint,
@@ -531,4 +542,123 @@ async def what_if(
         benchmark_cagr=round(spy_cagr, 6),
         winner=winner,
         time_series=time_series,
+    )
+
+
+# ── GET /portfolio/status ─────────────────────────────────────────────────────
+@router.get("/status", response_model=PipelineStatus)
+async def pipeline_status(
+    user: Annotated[UserContext, Depends(require_user)],
+) -> PipelineStatus:
+    """Return counts the pipeline UI needs to show current data state."""
+    db = get_db()
+
+    snap_res = (
+        db.table("portfolio_snapshots_v2")
+        .select("time", count="exact")
+        .eq("user_id", user.user_id)
+        .execute()
+    )
+    snapshot_count = snap_res.count or 0
+
+    hold_res = (
+        db.table("holdings")
+        .select("id", count="exact")
+        .eq("user_id", user.user_id)
+        .gt("quantity", 0)
+        .execute()
+    )
+    holdings_count = hold_res.count or 0
+
+    cache_res = (
+        db.table("performance_cache")
+        .select("computed_at")
+        .eq("user_id", user.user_id)
+        .order("computed_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    last_computed = None
+    if cache_res.data:
+        last_computed = datetime.fromisoformat(
+            cache_res.data[0]["computed_at"].replace("Z", "+00:00")
+        )
+
+    hold_price_res = (
+        db.table("holdings")
+        .select("last_price_at")
+        .eq("user_id", user.user_id)
+        .gt("quantity", 0)
+        .order("last_price_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    last_synced = None
+    if hold_price_res.data and hold_price_res.data[0].get("last_price_at"):
+        last_synced = datetime.fromisoformat(
+            hold_price_res.data[0]["last_price_at"].replace("Z", "+00:00")
+        )
+
+    return PipelineStatus(
+        snapshot_count=snapshot_count,
+        holdings_count=holdings_count,
+        last_computed_at=last_computed,
+        last_synced_at=last_synced,
+    )
+
+
+# ── POST /portfolio/refresh ───────────────────────────────────────────────────
+@router.post("/refresh", response_model=RefreshResult)
+async def refresh_portfolio(
+    user: Annotated[UserContext, Depends(require_user)],
+) -> RefreshResult:
+    """
+    User-triggered sync + compute.
+    Fetches live prices for all holdings, then recomputes all 8 period metrics.
+    Equivalent to calling /sync/prices + /sync/compute with the service key.
+    """
+    from routers.sync import _run_compute
+
+    now     = datetime.now(tz=timezone.utc)
+    synced  = 0
+    failed  = 0
+
+    symbols = fetch_all_active_symbols(user.user_id)
+    if symbols:
+        price_map = await fetch_quotes(symbols)
+        failed    = len(symbols) - len(price_map)
+
+        price_rows: list[dict] = []
+        for symbol, price in price_map.items():
+            asset = fetch_asset_by_symbol(symbol)
+            if asset:
+                price_rows.append({
+                    "time":     now.isoformat(),
+                    "asset_id": asset["id"],
+                    "symbol":   symbol,
+                    "currency": asset.get("currency", "USD"),
+                    "close":    round(price, 8),
+                    "source":   "yahoo",
+                    "adjusted": False,
+                })
+                synced += 1
+
+        if price_rows:
+            upsert_prices(price_rows)
+        update_holding_prices(user.user_id, price_map)
+
+    computed_periods = await _run_compute(user.user_id)
+
+    write_audit_log(
+        event_type="portfolio.refresh",
+        actor_id=user.user_id,
+        resource="portfolio_snapshots_v2",
+        metadata={"symbols_synced": synced, "periods_computed": len(computed_periods)},
+    )
+
+    return RefreshResult(
+        symbols_synced=synced,
+        symbols_failed=failed,
+        periods_computed=computed_periods,
+        refreshed_at=now,
     )

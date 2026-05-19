@@ -158,6 +158,20 @@ export interface PortfolioHistory {
   data_points:      number;
 }
 
+export interface RefreshResult {
+  symbols_synced:   number;
+  symbols_failed:   number;
+  periods_computed: string[];
+  refreshed_at:     string;
+}
+
+export interface PipelineStatus {
+  snapshot_count:   number;
+  holdings_count:   number;
+  last_computed_at: string | null;
+  last_synced_at:   string | null;
+}
+
 // ── Fetch helper ──────────────────────────────────────────────────────────────
 
 async function engineFetch<T>(
@@ -201,6 +215,12 @@ export const engine = {
 
     history: (jwt: string, period = "3M") =>
       engineFetch<PortfolioHistory>(`/v1/portfolio/history?period=${period}`, jwt),
+
+    status: (jwt: string) =>
+      engineFetch<PipelineStatus>("/v1/portfolio/status", jwt),
+
+    refresh: (jwt: string) =>
+      engineFetch<RefreshResult>("/v1/portfolio/refresh", jwt, { method: "POST" }),
   },
 
   tenant: {

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard, TrendingUp, Upload, Key, BarChart2,
-  FileText, Shield, LogOut, Heart, Clock, Briefcase,
+  FileText, Shield, LogOut, Heart, Clock, Briefcase, GitBranch,
 } from "lucide-react";
 
 const NAV = [
@@ -13,6 +13,7 @@ const NAV = [
   { href: "/dashboard/health-score",   label: "Health Score",  icon: Heart           },
   { href: "/dashboard/what-if",        label: "What-if",       icon: Clock           },
   { href: "/dashboard/holdings",       label: "Holdings",      icon: Briefcase       },
+  { href: "/dashboard/pipeline",       label: "Test Pipeline", icon: GitBranch       },
   { href: "/dashboard/portfolio",      label: "Analytics",     icon: TrendingUp      },
   { href: "/dashboard/ingest",         label: "Import Data",   icon: Upload          },
   { href: "/dashboard/ledger",         label: "Ledger",        icon: Shield          },
