@@ -1,157 +1,281 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur'; // Added the missing import
+import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import {
+  Animated,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 
-// ─── Design Tokens ──────────────────────────────────────────────────────────
-const BG = '#04070F';
-const CYAN = '#8FF5FF';
-const TXT = '#F8FAFC';
-const MUTED = '#64748B';
-const DOCK_BG = 'rgba(15, 23, 42, 0.85)';
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const BG      = '#04070F';
+const CYAN    = '#8FF5FF';
+const TXT     = '#F8FAFC';
+const MUTED   = '#64748B';
+const SIDEBAR_COLLAPSED = 62;
+const SIDEBAR_EXPANDED  = 210;
 const mono = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
+const sans = Platform.OS === 'ios' ? 'SF Pro Text' : 'sans-serif';
 
-const TABS: TabDef[] = [
-  { name: 'index',         label: 'Profile',   icon: 'account-outline',    iconActive: 'account' },
-  { name: 'Market',        label: 'Markets',   icon: 'chart-line',         iconActive: 'chart-line' },
-  { name: 'Portfolio',     label: 'Vault',     icon: 'chart-donut',        iconActive: 'chart-donut' },
-  { name: 'Holdings',      label: 'Assets',    icon: 'view-grid-outline',  iconActive: 'view-grid' },
-  { name: 'Insights',      label: 'AI',        icon: 'brain',              iconActive: 'brain' },
-  { name: 'GlobalMarkets', label: 'Macro',     icon: 'earth',              iconActive: 'earth' },
-  { name: 'InvestmentProfile', label: 'Setup', icon: 'tune-variant',       iconActive: 'tune-variant' },
+// ─── Nav items ────────────────────────────────────────────────────────────────
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+interface NavItem { name: string; label: string; icon: IconName; iconActive: IconName }
+
+const NAV_ITEMS: NavItem[] = [
+  { name: 'index',             label: 'Profile',  icon: 'account-outline',          iconActive: 'account'           },
+  { name: 'Market',            label: 'Markets',  icon: 'chart-line',                iconActive: 'chart-line'        },
+  { name: 'Portfolio',         label: 'Vault',    icon: 'chart-donut',               iconActive: 'chart-donut'       },
+  { name: 'Holdings',          label: 'Assets',   icon: 'view-grid-outline',         iconActive: 'view-grid'         },
+  { name: 'Insights',          label: 'AI',       icon: 'brain',                     iconActive: 'brain'             },
+  { name: 'GlobalMarkets',     label: 'Macro',    icon: 'earth',                     iconActive: 'earth'             },
+  { name: 'Reports',           label: 'Reports',  icon: 'download-circle-outline',   iconActive: 'download-circle'   },
+  { name: 'InvestmentProfile', label: 'Setup',    icon: 'tune-variant',              iconActive: 'tune-variant'      },
 ];
 
-type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-interface TabDef { name: string; label: string; icon: IconName; iconActive: IconName; }
-
-const TabButton = ({ tab, active, onPress }: { tab: TabDef; active: boolean; onPress: () => void }) => {
-  const expansion = useRef(new Animated.Value(active ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.spring(expansion, {
-      toValue: active ? 1 : 0,
-      friction: 8,
-      tension: 40,
-      useNativeDriver: false,
-    }).start();
-  }, [active]);
-
-  const animatedWidth = expansion.interpolate({
-    inputRange: [0, 1],
-    outputRange: [42, 95],
-  });
-
-  const animatedOpacity = expansion.interpolate({
-    inputRange: [0.7, 1],
-    outputRange: [0, 1],
-  });
-
+// ─── Single nav row ───────────────────────────────────────────────────────────
+function NavRow({
+  item, active, expanded, onPress,
+}: {
+  item: NavItem; active: boolean; expanded: boolean; onPress: () => void;
+}) {
   return (
-    <Pressable onPress={onPress}>
-      <Animated.View style={[tb.inner, { width: animatedWidth, backgroundColor: active ? 'rgba(143, 245, 255, 0.12)' : 'transparent' }]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        nr.row,
+        active && nr.rowActive,
+        pressed && nr.rowPressed,
+      ]}
+    >
+      <View style={nr.iconWrap}>
         <MaterialCommunityIcons
-          name={active ? tab.iconActive : tab.icon}
-          size={20}
+          name={active ? item.iconActive : item.icon}
+          size={21}
           color={active ? CYAN : MUTED}
         />
-        {active && (
-          <Animated.Text numberOfLines={1} style={[tb.label, { opacity: animatedOpacity }]}>
-            {tab.label}
-          </Animated.Text>
-        )}
-      </Animated.View>
+        {active && <View style={nr.dot} />}
+      </View>
+      {expanded && (
+        <Text
+          numberOfLines={1}
+          style={[nr.label, active && nr.labelActive]}
+        >
+          {item.label}
+        </Text>
+      )}
     </Pressable>
   );
-};
+}
 
-function CustomTabBar({ state, navigation }: any) {
-  const insets = useSafeAreaInsets();
+// ─── Sidebar component ────────────────────────────────────────────────────────
+function Sidebar({ state, navigation }: any) {
+  const insets   = useSafeAreaInsets();
+  const [open, setOpen] = useState(false);
+  const anim     = useRef(new Animated.Value(0)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+
+  const toggle = () => {
+    const toValue = open ? 0 : 1;
+    Animated.parallel([
+      Animated.spring(anim, {
+        toValue,
+        friction: 7,
+        tension: 60,
+        useNativeDriver: false,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    setOpen(!open);
+  };
+
+  const close = () => {
+    Animated.parallel([
+      Animated.spring(anim, { toValue: 0, friction: 7, tension: 60, useNativeDriver: false }),
+      Animated.timing(backdropAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+    ]).start();
+    setOpen(false);
+  };
+
+  const sidebarWidth = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SIDEBAR_COLLAPSED, SIDEBAR_EXPANDED],
+  });
 
   return (
-    <View style={[bar.wrapper, { bottom: insets.bottom + 12 }]}>
-      {/* Container wraps the BlurView to ensure the border-radius 
-        and shadows are applied correctly across platforms 
-      */}
-      <View style={bar.container}>
-        <BlurView intensity={Platform.OS === 'ios' ? 30 : 100} tint="dark" style={bar.blurPadding}>
-          <View style={bar.row}>
-            {state.routes.map((route: any, index: number) => {
-              const tab = TABS.find(t => t.name === route.name);
-              if (!tab) return null;
-              const active = state.index === index;
+    <>
+      {/* Backdrop — dismisses sidebar on tap outside */}
+      {open && (
+        <Animated.View
+          style={[sb.backdrop, { opacity: backdropAnim }]}
+          pointerEvents={open ? 'auto' : 'none'}
+        >
+          <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+        </Animated.View>
+      )}
 
+      {/* Sidebar rail */}
+      <Animated.View
+        style={[
+          sb.rail,
+          {
+            width: sidebarWidth,
+            top: insets.top + 8,
+            bottom: insets.bottom + 8,
+          },
+        ]}
+      >
+        <BlurView
+          intensity={Platform.OS === 'ios' ? 40 : 100}
+          tint="dark"
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={sb.inner}>
+          {/* Logo / toggle */}
+          <Pressable style={sb.logoBtn} onPress={toggle}>
+            <View style={sb.logoMark}>
+              <Text style={sb.logoV}>V</Text>
+            </View>
+            {open && <Text style={sb.logoLabel}>VESTARA</Text>}
+            <MaterialCommunityIcons
+              name={open ? 'chevron-left' : 'chevron-right'}
+              size={16}
+              color={MUTED}
+              style={open ? undefined : sb.chevronCollapsed}
+            />
+          </Pressable>
+
+          <View style={sb.divider} />
+
+          {/* Nav items */}
+          <View style={sb.navList}>
+            {state.routes.map((route: any, index: number) => {
+              const item = NAV_ITEMS.find(n => n.name === route.name);
+              if (!item) return null;
+              const active = state.index === index;
               return (
-                <TabButton
+                <NavRow
                   key={route.key}
-                  tab={tab}
+                  item={item}
                   active={active}
+                  expanded={open}
                   onPress={() => {
                     const event = navigation.emit({ type: 'tabPress', target: route.key });
                     if (!active && !event.defaultPrevented) navigation.navigate(route.name);
+                    if (open) close();
                   }}
                 />
               );
             })}
           </View>
-        </BlurView>
-      </View>
-    </View>
+
+          {/* Version tag at bottom */}
+          {open && (
+            <View style={sb.versionWrap}>
+              <Text style={sb.versionTxt}>v1.0</Text>
+            </View>
+          )}
+        </View>
+      </Animated.View>
+    </>
   );
 }
 
-const bar = StyleSheet.create({
-  wrapper: {
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const sb = StyleSheet.create({
+  backdrop: {
+    position: 'absolute', inset: 0, zIndex: 9,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  rail: {
     position: 'absolute',
     left: 10,
-    right: 10,
-    alignItems: 'center',
-  },
-  container: {
-    borderRadius: 26,
+    zIndex: 10,
+    borderRadius: 20,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    backgroundColor: DOCK_BG,
-    overflow: 'hidden', // Crucial for BlurView to respect borderRadius
+    borderColor: 'rgba(255,255,255,0.08)',
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 15 },
-      android: { elevation: 8 },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 4, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+      },
+      android: { elevation: 16 },
     }),
   },
-  blurPadding: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+  inner: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 0,
+    backgroundColor: 'rgba(8, 14, 28, 0.75)',
   },
+  logoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+    minHeight: 48,
+  },
+  logoMark: {
+    width: 30, height: 30, borderRadius: 8,
+    backgroundColor: 'rgba(143,245,255,0.15)',
+    borderWidth: 1, borderColor: 'rgba(143,245,255,0.3)',
+    alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+  },
+  logoV:     { color: CYAN, fontSize: 15, fontWeight: '800', fontFamily: mono },
+  logoLabel: { flex: 1, color: CYAN, fontSize: 11, fontWeight: '700', letterSpacing: 2, fontFamily: mono },
+  chevronCollapsed: { position: 'absolute', right: 6, top: '50%' },
+
+  divider: {
+    height: 1, backgroundColor: 'rgba(255,255,255,0.07)',
+    marginHorizontal: 14, marginVertical: 8,
+  },
+  navList: { flex: 1, gap: 2, paddingHorizontal: 8 },
+
+  versionWrap: { paddingHorizontal: 16, paddingBottom: 4 },
+  versionTxt:  { fontSize: 10, color: MUTED, fontFamily: mono },
+});
+
+const nr = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 8,
+    gap: 12,
+    minHeight: 44,
   },
+  rowActive:  { backgroundColor: 'rgba(143,245,255,0.08)' },
+  rowPressed: { backgroundColor: 'rgba(255,255,255,0.05)' },
+  iconWrap: {
+    width: 30, alignItems: 'center', justifyContent: 'center', position: 'relative',
+  },
+  dot: {
+    position: 'absolute', right: -2, top: -2,
+    width: 6, height: 6, borderRadius: 3,
+    backgroundColor: CYAN,
+  },
+  label:       { flex: 1, fontSize: 13, fontWeight: '500', color: MUTED, fontFamily: sans },
+  labelActive: { color: TXT, fontWeight: '700' },
 });
 
-const tb = StyleSheet.create({
-  inner: {
-    height: 42,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 4,
-  },
-  label: {
-    color: CYAN,
-    fontSize: 11,
-    fontFamily: mono,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-});
-
+// ─── Root layout ──────────────────────────────────────────────────────────────
 export default function TabLayout() {
   return (
     <Tabs
@@ -162,14 +286,15 @@ export default function TabLayout() {
         headerTitleStyle: { fontWeight: '700', fontSize: 18 },
         tabBarStyle: { display: 'none' },
       }}
-      tabBar={(props) => <CustomTabBar {...props} />}
+      tabBar={(props) => <Sidebar {...props} />}
     >
-      <Tabs.Screen name="index" options={{ title: 'VESTARA' }} />
-      <Tabs.Screen name="Market" options={{ headerShown: false }} />
-      <Tabs.Screen name="Portfolio" options={{ headerShown: false }} />
-      <Tabs.Screen name="Holdings" options={{ headerShown: false }} />
-      <Tabs.Screen name="Insights" options={{ headerShown: false }} />
-      <Tabs.Screen name="GlobalMarkets" options={{ headerShown: false }} />
+      <Tabs.Screen name="index"             options={{ title: 'VESTARA' }} />
+      <Tabs.Screen name="Market"            options={{ headerShown: false }} />
+      <Tabs.Screen name="Portfolio"         options={{ headerShown: false }} />
+      <Tabs.Screen name="Holdings"          options={{ headerShown: false }} />
+      <Tabs.Screen name="Insights"          options={{ headerShown: false }} />
+      <Tabs.Screen name="GlobalMarkets"     options={{ headerShown: false }} />
+      <Tabs.Screen name="Reports"           options={{ headerShown: false }} />
       <Tabs.Screen name="InvestmentProfile" options={{ headerShown: false }} />
     </Tabs>
   );
