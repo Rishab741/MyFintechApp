@@ -18,7 +18,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 from config import get_settings
 from middleware.rate_limit import rate_limit_middleware
-from routers import audit, health, ingest, ledger, portfolio, sync, tenant
+from routers import audit, health, ingest, ledger, portfolio, simulate, sync, tenant
 
 # ── Settings (loaded once at import; all required vars must be present) ───────
 settings = get_settings()
@@ -105,3 +105,4 @@ app.include_router(ledger.router,    prefix="/v1/ledger")
 app.include_router(tenant.router,    prefix="/v1/tenant")
 app.include_router(audit.router,     prefix="/v1/audit")
 app.include_router(ingest.router,    prefix="/v1/ingest")
+app.include_router(simulate.router,  prefix="/v1/simulate")

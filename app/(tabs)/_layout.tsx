@@ -34,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { name: 'Holdings',          label: 'Assets',   icon: 'view-grid-outline',       iconActive: 'view-grid'       },
   { name: 'Insights',          label: 'AI',       icon: 'brain',                   iconActive: 'brain'           },
   { name: 'GlobalMarkets',     label: 'Macro',    icon: 'earth',                   iconActive: 'earth'           },
+  { name: 'Compare',           label: 'Compare',  icon: 'chart-multiple',          iconActive: 'chart-multiple'  },
   { name: 'Reports',           label: 'Reports',  icon: 'download-circle-outline', iconActive: 'download-circle' },
   { name: 'InvestmentProfile', label: 'Setup',    icon: 'tune-variant',            iconActive: 'tune-variant'    },
 ];
@@ -311,6 +312,7 @@ export default function TabLayout() {
       <Tabs.Screen name="Holdings"          options={{ headerShown: false }} />
       <Tabs.Screen name="Insights"          options={{ headerShown: false }} />
       <Tabs.Screen name="GlobalMarkets"     options={{ headerShown: false }} />
+      <Tabs.Screen name="Compare"           options={{ headerShown: false }} />
       <Tabs.Screen name="Reports"           options={{ headerShown: false }} />
       <Tabs.Screen name="InvestmentProfile" options={{ headerShown: false }} />
     </Tabs>
