@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { LineChart } from 'react-native-wagmi-charts';
+import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import {
   BG, BORDER, CARD, GOLD, GOLD_D, GREEN, MUTED, mono, RED, TXT, TXT2, width,
 } from '@/src/market/tokens';
@@ -35,6 +35,62 @@ function PeriodTab({
   );
 }
 
+// ── Pure SVG line chart with gradient fill ────────────────────────────────────
+function SvgLineChart({
+  data,
+  color,
+  w,
+  h = CHART_H,
+  gradId = 'mktGrad',
+}: {
+  data: ChartPoint[];
+  color: string;
+  w: number;
+  h?: number;
+  gradId?: string;
+}) {
+  const paths = useMemo(() => {
+    if (data.length < 2) return null;
+    const PAD = { top: 10, right: 4, bottom: 4, left: 4 };
+    const IW = w - PAD.left - PAD.right;
+    const IH = h - PAD.top - PAD.bottom;
+    const vals = data.map(d => d.value);
+    const minV = Math.min(...vals);
+    const maxV = Math.max(...vals);
+    const range = maxV - minV || 1;
+    const px = (i: number) => PAD.left + (i / (data.length - 1)) * IW;
+    const py = (v: number) => PAD.top + IH - ((v - minV) / range) * IH;
+
+    const pts = data.map((d, i) => ({ x: px(i), y: py(d.value) }));
+
+    // Smooth cubic bezier path
+    let line = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length; i++) {
+      const cp1x = (pts[i - 1].x + pts[i].x) / 2;
+      const cp2x = (pts[i - 1].x + pts[i].x) / 2;
+      line += ` C ${cp1x} ${pts[i - 1].y} ${cp2x} ${pts[i].y} ${pts[i].x} ${pts[i].y}`;
+    }
+    const fill = `${line} L ${pts[pts.length - 1].x} ${PAD.top + IH} L ${pts[0].x} ${PAD.top + IH} Z`;
+
+    return { line, fill };
+  }, [data, w, h]);
+
+  if (!paths) return null;
+
+  return (
+    <Svg width={w} height={h}>
+      <Defs>
+        <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={color} stopOpacity="0.25" />
+          <Stop offset="1" stopColor={color} stopOpacity="0" />
+        </LinearGradient>
+      </Defs>
+      <Path d={paths.fill} fill={`url(#${gradId})`} />
+      <Path d={paths.line} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 export function MarketChart({
   index,
   chartData,
@@ -46,11 +102,10 @@ export function MarketChart({
   const up = (q?.changePct ?? 0) >= 0;
   const lineColor = up ? GREEN : RED;
 
-  // Wagmi-charts needs { timestamp, value }
-  const wagmiData = useMemo(
-    () => chartData.map(p => ({ timestamp: p.timestamp, value: p.value })),
-    [chartData],
-  );
+  const lastPoint = chartData[chartData.length - 1];
+  const lastTs = lastPoint
+    ? new Date(lastPoint.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '';
 
   const changeAbsStr = q
     ? `${q.change >= 0 ? '+' : ''}${q.change.toFixed(2)}`
@@ -108,40 +163,24 @@ export function MarketChart({
             <ActivityIndicator color={GOLD} size="small" />
             <Text style={styles.loadingTxt}>Loading chart…</Text>
           </View>
-        ) : wagmiData.length > 1 ? (
-          <LineChart.Provider data={wagmiData}>
-            <LineChart height={CHART_H} width={width - 48}>
-              <LineChart.Path color={lineColor} width={2} />
-              <LineChart.Gradient color={lineColor} />
-              <LineChart.CursorCrosshair color={lineColor}>
-                <LineChart.Tooltip
-                  style={{
-                    backgroundColor: CARD,
-                    borderRadius: 6,
-                    borderWidth: 1,
-                    borderColor: BORDER,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                  }}
-                  textStyle={{ color: TXT, fontFamily: mono, fontSize: 12 }}
-                />
-              </LineChart.CursorCrosshair>
-            </LineChart>
-            <View style={styles.chartFooter}>
-              <LineChart.DatetimeText
-                style={{ color: MUTED, fontFamily: mono, fontSize: 10 }}
-              />
-              <LineChart.PriceText
-                style={{ color: TXT2, fontFamily: mono, fontSize: 11 }}
-              />
-            </View>
-          </LineChart.Provider>
+        ) : chartData.length > 1 ? (
+          <SvgLineChart data={chartData} color={lineColor} w={width - 48} h={CHART_H} gradId="mktChartGrad" />
         ) : (
           <View style={styles.loadingBox}>
             <Text style={styles.loadingTxt}>No data available</Text>
           </View>
         )}
       </View>
+
+      {/* Footer */}
+      {chartData.length > 1 && (
+        <View style={styles.chartFooter}>
+          <Text style={{ color: MUTED, fontFamily: mono, fontSize: 10 }}>{lastTs}</Text>
+          <Text style={{ color: TXT2, fontFamily: mono, fontSize: 11 }}>
+            {lastPoint ? lastPoint.value.toFixed(2) : ''}
+          </Text>
+        </View>
+      )}
 
       {/* Period selector */}
       <View style={styles.periodRow}>
@@ -193,21 +232,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.5,
   },
-  change: {
-    fontFamily: mono,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  changePct: {
-    fontFamily: mono,
-    fontSize: 12,
-  },
-  periodLabel: {
-    fontFamily: mono,
-    fontSize: 9,
-    color: MUTED,
-    marginTop: 2,
-  },
+  change:    { fontFamily: mono, fontSize: 14, fontWeight: '700' },
+  changePct: { fontFamily: mono, fontSize: 12 },
+  periodLabel: { fontFamily: mono, fontSize: 9, color: MUTED, marginTop: 2 },
   rangeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -215,39 +242,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 8,
   },
-  rangeLabel: {
-    fontFamily: mono,
-    fontSize: 9,
-    color: MUTED,
-    minWidth: 52,
-  },
-  rangeBar: {
-    flex: 1,
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  rangeFill: {
-    height: '100%',
-    borderRadius: 2,
-    opacity: 0.7,
-  },
-  chartArea: {
-    paddingHorizontal: 0,
-    marginBottom: 0,
-  },
-  loadingBox: {
-    height: CHART_H,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  loadingTxt: {
-    fontFamily: mono,
-    fontSize: 11,
-    color: MUTED,
-  },
+  rangeLabel: { fontFamily: mono, fontSize: 9, color: MUTED, minWidth: 52 },
+  rangeBar:   { flex: 1, height: 3, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' },
+  rangeFill:  { height: '100%', borderRadius: 2, opacity: 0.7 },
+  chartArea:  { paddingHorizontal: 0, marginBottom: 0 },
+  loadingBox: { height: CHART_H, justifyContent: 'center', alignItems: 'center', gap: 8 },
+  loadingTxt: { fontFamily: mono, fontSize: 11, color: MUTED },
   chartFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',

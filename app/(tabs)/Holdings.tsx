@@ -125,8 +125,9 @@ const DeltaBar: React.FC<{ ticker: string; pct: number; maxAbs: number; index: n
         Animated.timing(anim, { toValue: 1, duration: 600, delay: index * 40, useNativeDriver: false }).start();
     }, [pct]);
     const up     = pct >= 0;
-    const frac   = maxAbs > 0 ? Math.abs(pct) / maxAbs : 0;
-    const fillPct = anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', `${frac * 50}%` as any] });
+    const frac   = maxAbs > 0 && isFinite(maxAbs) ? Math.min(1, Math.abs(pct) / maxAbs) : 0;
+    const safeFrac = isFinite(frac) ? frac : 0;
+    const fillPct = anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', `${safeFrac * 50}%` as any] });
     return (
         <View style={db.row}>
             <Text style={db.label}>{ticker}</Text>
@@ -222,10 +223,11 @@ export default function HoldingsScreen() {
                 const ticker = getTicker(p.symbol);
                 const value  = getUnits(p) * (p.price ?? 0);
                 const hist   = assetHistory[ticker] ?? [value];
-                const pct    = hist.length >= 2
+                const rawPct = hist.length >= 2 && hist[0] !== 0
                     ? ((hist[hist.length - 1] - hist[0]) / hist[0]) * 100
                     : (p.open_pnl && (value - (p.open_pnl ?? 0)) > 0
                         ? (p.open_pnl / (value - p.open_pnl)) * 100 : 0);
+                const pct = isFinite(rawPct) ? rawPct : 0;
                 return { ticker, value, currency: p.currency ?? currency, pct, hist };
             })
             .filter(a => a.value > 0)
@@ -246,8 +248,10 @@ export default function HoldingsScreen() {
     const deltaItems = useMemo(() =>
         [...assetList].sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 8),
         [assetList]);
-    const maxAbsDelta = useMemo(() =>
-        Math.max(...deltaItems.map(a => Math.abs(a.pct)), 1), [deltaItems]);
+    const maxAbsDelta = useMemo(() => {
+        const vals = deltaItems.map(a => Math.abs(a.pct)).filter(isFinite);
+        return Math.max(...vals, 1);
+    }, [deltaItems]);
 
     // ─────────────────────────────────────────────────────────────────────────
     if (loading) {

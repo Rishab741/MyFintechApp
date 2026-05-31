@@ -14,8 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { LineChart } from 'react-native-wagmi-charts';
-import Svg, { Polyline } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Polyline, Stop } from 'react-native-svg';
 import {
   useStockExplorer,
   SECTOR_KEYS,
@@ -70,6 +69,39 @@ function Sparkline({ data, color, w = 64, h = 28 }: { data: ChartPoint[]; color:
   return (
     <Svg width={w} height={h}>
       <Polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// ─── SVG line chart (replaces react-native-wagmi-charts) ─────────────────────
+function SvgLineChart({ data, color, w, h = 200 }: { data: ChartPoint[]; color: string; w: number; h?: number }) {
+  if (data.length < 2) return <View style={{ width: w, height: h }} />;
+  const PAD = { top: 10, right: 4, bottom: 4, left: 4 };
+  const IW = w - PAD.left - PAD.right;
+  const IH = h - PAD.top - PAD.bottom;
+  const vals = data.map(d => d.value);
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+  const range = maxV - minV || 1;
+  const px = (i: number) => PAD.left + (i / (data.length - 1)) * IW;
+  const py = (v: number) => PAD.top + IH - ((v - minV) / range) * IH;
+  const pts = data.map((d, i) => ({ x: px(i), y: py(d.value) }));
+  let line = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const cpx = (pts[i - 1].x + pts[i].x) / 2;
+    line += ` C ${cpx} ${pts[i - 1].y} ${cpx} ${pts[i].y} ${pts[i].x} ${pts[i].y}`;
+  }
+  const fill = `${line} L ${pts[pts.length - 1].x} ${PAD.top + IH} L ${pts[0].x} ${PAD.top + IH} Z`;
+  return (
+    <Svg width={w} height={h}>
+      <Defs>
+        <LinearGradient id="detailGrad" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={color} stopOpacity="0.25" />
+          <Stop offset="1" stopColor={color} stopOpacity="0" />
+        </LinearGradient>
+      </Defs>
+      <Path d={fill} fill="url(#detailGrad)" />
+      <Path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -250,8 +282,11 @@ interface DetailModalProps {
 function StockDetailModal({ symbol, detail, chartData, period, chartLoading, rsi, onClose, onPeriodChange }: DetailModalProps) {
   const up = (detail?.changePct ?? 0) >= 0;
   const col = up ? GREEN : RED;
-  const wagmiData = chartData.map(p => ({ timestamp: p.timestamp, value: p.value }));
   const chartW = W - 32;
+  const lastPt = chartData[chartData.length - 1];
+  const lastTs = lastPt
+    ? new Date(lastPt.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '';
 
   return (
     <Modal visible={!!symbol} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -291,23 +326,16 @@ function StockDetailModal({ symbol, detail, chartData, period, chartLoading, rsi
                 <ActivityIndicator color={GOLD} size="large" />
                 <Text style={s.chartLoadTxt}>Loading chart…</Text>
               </View>
-            ) : wagmiData.length > 1 ? (
-              <LineChart.Provider data={wagmiData}>
-                <LineChart height={200} width={chartW}>
-                  <LineChart.Path color={col} width={2} />
-                  <LineChart.Gradient color={col} />
-                  <LineChart.CursorCrosshair color={col}>
-                    <LineChart.Tooltip
-                      style={{ backgroundColor: CARD2, borderRadius: 6, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 8, paddingVertical: 4 }}
-                      textStyle={{ color: TXT, fontFamily: mono, fontSize: 12 }}
-                    />
-                  </LineChart.CursorCrosshair>
-                </LineChart>
+            ) : chartData.length > 1 ? (
+              <>
+                <SvgLineChart data={chartData} color={col} w={chartW} h={200} />
                 <View style={s.chartFooterRow}>
-                  <LineChart.DatetimeText style={{ color: MUTED, fontFamily: mono, fontSize: 10 }} />
-                  <LineChart.PriceText style={{ color: TXT2, fontFamily: mono, fontSize: 11 }} />
+                  <Text style={{ color: MUTED, fontFamily: mono, fontSize: 10 }}>{lastTs}</Text>
+                  <Text style={{ color: TXT2, fontFamily: mono, fontSize: 11 }}>
+                    {lastPt ? lastPt.value.toFixed(2) : ''}
+                  </Text>
                 </View>
-              </LineChart.Provider>
+              </>
             ) : (
               <View style={s.chartPlaceholder}>
                 <Text style={s.chartLoadTxt}>No chart data available</Text>

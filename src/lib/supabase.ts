@@ -3,11 +3,53 @@ import * as SecureStore from 'expo-secure-store';
 import { AppState, AppStateStatus } from 'react-native';
 import 'react-native-url-polyfill/auto';
 
-// ─── Secure token storage (device keychain / keystore) ───────────────────────
+// ─── Secure token storage with chunking ──────────────────────────────────────
+// expo-secure-store v15 enforces a 2048-byte limit per key.
+// Supabase session tokens are larger, so we split them into 2048-byte chunks.
+const CHUNK_SIZE = 2000;
+
 const SecureStoreAdapter = {
-  getItem:    (key: string) => SecureStore.getItemAsync(key),
-  setItem:    (key: string, value: string) => SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+  getItem: async (key: string): Promise<string | null> => {
+    const one = await SecureStore.getItemAsync(key);
+    if (one !== null) return one;
+    // Try reassembling chunks
+    const parts: string[] = [];
+    let i = 0;
+    while (true) {
+      const chunk = await SecureStore.getItemAsync(`${key}.chunk.${i}`);
+      if (chunk === null) break;
+      parts.push(chunk);
+      i++;
+    }
+    return parts.length ? parts.join('') : null;
+  },
+
+  setItem: async (key: string, value: string): Promise<void> => {
+    if (value.length <= CHUNK_SIZE) {
+      await SecureStore.setItemAsync(key, value);
+      return;
+    }
+    // Remove any legacy single-key value
+    await SecureStore.deleteItemAsync(key).catch(() => {});
+    // Write chunks
+    let i = 0;
+    for (let offset = 0; offset < value.length; offset += CHUNK_SIZE) {
+      await SecureStore.setItemAsync(`${key}.chunk.${i}`, value.slice(offset, offset + CHUNK_SIZE));
+      i++;
+    }
+  },
+
+  removeItem: async (key: string): Promise<void> => {
+    await SecureStore.deleteItemAsync(key).catch(() => {});
+    let i = 0;
+    while (true) {
+      const chunkKey = `${key}.chunk.${i}`;
+      const exists = await SecureStore.getItemAsync(chunkKey);
+      if (exists === null) break;
+      await SecureStore.deleteItemAsync(chunkKey).catch(() => {});
+      i++;
+    }
+  },
 };
 
 // ─── Validate env vars at startup ────────────────────────────────────────────
