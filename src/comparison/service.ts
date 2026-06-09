@@ -114,12 +114,7 @@ export async function pollScenario(runId: string): Promise<ScenarioRun> {
     throw new Error(`poll-scenario ${res.status}: ${detail}`);
   }
 
-  const payload = await res.json() as ScenarioRun & { error?: string };
-
-  // Edge function can return HTTP 200 with an error field in the body
-  if (payload.error) throw new Error(payload.error);
-
-  return payload;
+  return res.json() as Promise<ScenarioRun>;
 }
 
 // ── Asset universe ────────────────────────────────────────────────────────────

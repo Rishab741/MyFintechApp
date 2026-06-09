@@ -50,7 +50,11 @@ log = logging.getLogger("engine")
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("Vestara Portfolio Engine starting up")
+    from supabase import acreate_client
+    s = get_settings()
+    log.info("Vestara Portfolio Engine starting up — connecting to Supabase")
+    app.state.db = await acreate_client(s.supabase_url, s.supabase_service_role_key)
+    log.info("Supabase async client ready")
     yield
     log.info("Vestara Portfolio Engine shutting down")
 
