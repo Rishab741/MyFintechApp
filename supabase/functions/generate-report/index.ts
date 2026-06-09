@@ -93,27 +93,81 @@ async function verifyUser(authHeader: string | null): Promise<string | null> {
 
 async function hasConnectedProfile(userId: string): Promise<boolean> {
   const sb = adminClient();
-  const { data, error } = await sb
-    .from("accounts")
-    .select("id")
+  // Check brokerage_accounts (new multi-account table)
+  const { count: bc } = await sb
+    .from("brokerage_accounts")
+    .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .eq("is_active", true)
-    .limit(1);
-  if (error) return false;
-  return (data?.length ?? 0) > 0;
+    .eq("is_active", true);
+  if ((bc ?? 0) > 0) return true;
+  // Fall back to snaptrade_connections (legacy single-account)
+  const { data: snap } = await sb
+    .from("snaptrade_connections")
+    .select("account_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (snap?.account_id) return true;
+  // Fall back: any portfolio snapshot means they had data at some point
+  const { count: sc } = await sb
+    .from("portfolio_snapshots")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  return (sc ?? 0) > 0;
 }
 
 // ── Data fetchers ─────────────────────────────────────────────────────────────
 
+// ── Snapshot helpers (guaranteed tables) ─────────────────────────────────────
+
+async function getLatestSnapshot(userId: string) {
+  const sb = adminClient();
+  const { data } = await sb
+    .from("portfolio_snapshots")
+    .select("snapshot, captured_at")
+    .eq("user_id", userId)
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data;
+}
+
+async function getAllSnapshots(userId: string) {
+  const sb = adminClient();
+  const { data } = await sb
+    .from("portfolio_snapshots")
+    .select("snapshot, captured_at")
+    .eq("user_id", userId)
+    .order("captured_at", { ascending: true });
+  return data ?? [];
+}
+
+// ── Data fetchers (view-first, snapshot fallback) ─────────────────────────────
+
 async function fetchHoldings(userId: string): Promise<HoldingRow[]> {
   const sb = adminClient();
-  const { data, error } = await sb
+  // Try the view first
+  const { data: viewData, error: viewErr } = await sb
     .from("query_holdings")
     .select("symbol,name,sector,quantity,avg_cost,current_price,market_value,unrealized_pnl,unrealized_pnl_pct")
     .eq("user_id", userId)
     .order("market_value", { ascending: false });
-  if (error) throw new Error(`Holdings fetch: ${error.message}`);
-  return (data ?? []) as HoldingRow[];
+  if (!viewErr && viewData?.length) return viewData as HoldingRow[];
+
+  // Fallback: extract from latest portfolio snapshot
+  const snap = await getLatestSnapshot(userId);
+  if (!snap) return [];
+  const positions: any[] = snap.snapshot?.positions ?? [];
+  return positions.map((p: any) => ({
+    symbol:             p.symbol?.raw_symbol ?? p.symbol?.id ?? String(p.symbol ?? ""),
+    name:               p.symbol?.description ?? "",
+    sector:             p.symbol?.type ?? "",
+    quantity:           Number(p.units ?? p.quantity ?? 0),
+    avg_cost:           Number(p.average_purchase_price ?? 0),
+    current_price:      Number(p.price ?? 0),
+    market_value:       Number(p.units ?? p.quantity ?? 0) * Number(p.price ?? 0),
+    unrealized_pnl:     Number(p.open_pnl ?? 0),
+    unrealized_pnl_pct: Number(p.fractional_units ?? 0),
+  })).filter(h => h.quantity > 0).sort((a, b) => b.market_value - a.market_value);
 }
 
 async function fetchTransactions(
@@ -122,37 +176,92 @@ async function fetchTransactions(
   endDate?: string,
 ): Promise<TransactionRow[]> {
   const sb = adminClient();
+  // Try transactions table directly (always exists)
   let q = sb
-    .from("query_transactions")
-    .select("transaction_type,executed_at,symbol,quantity,price,net_amount,fees,account_name")
+    .from("transactions")
+    .select("transaction_type, settled_at, symbol, quantity, price, net_amount, fee, notes")
     .eq("user_id", userId)
-    .order("executed_at", { ascending: false });
-  if (startDate) q = q.gte("executed_at", startDate);
-  if (endDate)   q = q.lte("executed_at", endDate + "T23:59:59Z");
-  const { data, error } = await q;
-  if (error) throw new Error(`Transactions fetch: ${error.message}`);
-  return (data ?? []) as TransactionRow[];
+    .order("settled_at", { ascending: false });
+  if (startDate) q = q.gte("settled_at", startDate);
+  if (endDate)   q = q.lte("settled_at", endDate + "T23:59:59Z");
+  const { data, error } = await q.limit(1000);
+  if (!error && data?.length) {
+    return data.map((t: any) => ({
+      transaction_type: t.transaction_type,
+      executed_at:      t.settled_at,
+      symbol:           t.symbol ?? "",
+      quantity:         Number(t.quantity ?? 0),
+      price:            Number(t.price ?? 0),
+      net_amount:       Number(t.net_amount ?? 0),
+      fees:             Number(t.fee ?? 0),
+      account_name:     t.notes ?? "—",
+    }));
+  }
+  return [];
 }
 
 async function fetchPerformance(userId: string): Promise<PerformanceRow[]> {
   const sb = adminClient();
-  const { data, error } = await sb
+  // Try view first
+  const { data: viewData, error: viewErr } = await sb
     .from("query_performance")
     .select("period,total_return_pct,sharpe_ratio,alpha,beta,max_drawdown,volatility")
     .eq("user_id", userId);
-  if (error) throw new Error(`Performance fetch: ${error.message}`);
-  return (data ?? []) as PerformanceRow[];
+  if (!viewErr && viewData?.length) return viewData as PerformanceRow[];
+
+  // Compute basic performance from snapshots
+  const snaps = await getAllSnapshots(userId);
+  if (snaps.length < 2) return [];
+
+  const totalValue = (snap: any) => {
+    const pos = snap.snapshot?.positions ?? [];
+    const bal = snap.snapshot?.balances ?? [];
+    return pos.reduce((s: number, p: any) => s + Number(p.units ?? 0) * Number(p.price ?? 0), 0)
+         + bal.reduce((s: number, b: any) => s + Number(b.cash ?? 0), 0);
+  };
+
+  const first = totalValue(snaps[0]);
+  const last  = totalValue(snaps[snaps.length - 1]);
+  const ret   = first > 0 ? ((last - first) / first) * 100 : 0;
+  const nDays = Math.round((new Date(snaps[snaps.length - 1].captured_at).getTime() - new Date(snaps[0].captured_at).getTime()) / 86400000);
+
+  return [{
+    period:          `${nDays} days`,
+    total_return_pct: round(ret) ?? 0,
+    sharpe_ratio:    0,
+    alpha:           0,
+    beta:            1,
+    max_drawdown:    0,
+    volatility:      0,
+  }];
 }
 
 async function fetchSummary(userId: string): Promise<SummaryRow | null> {
   const sb = adminClient();
-  const { data, error } = await sb
+  // Try view first
+  const { data: viewData, error: viewErr } = await sb
     .from("query_portfolio_summary")
     .select("total_value,cash_balance,invested_value,total_pnl,total_pnl_pct,position_count")
     .eq("user_id", userId)
-    .single();
-  if (error) return null;
-  return data as SummaryRow;
+    .maybeSingle();
+  if (!viewErr && viewData) return viewData as SummaryRow;
+
+  // Fallback from snapshot
+  const snap = await getLatestSnapshot(userId);
+  if (!snap) return null;
+  const positions: any[] = snap.snapshot?.positions ?? [];
+  const balances: any[]  = snap.snapshot?.balances  ?? [];
+  const totalPos = positions.reduce((s: number, p: any) => s + Number(p.units ?? 0) * Number(p.price ?? 0), 0);
+  const cash     = balances.reduce((s: number, b: any) => s + Number(b.cash ?? 0), 0);
+  const pnl      = positions.reduce((s: number, p: any) => s + Number(p.open_pnl ?? 0), 0);
+  return {
+    total_value:    round(totalPos + cash) ?? 0,
+    cash_balance:   round(cash) ?? 0,
+    invested_value: round(totalPos) ?? 0,
+    total_pnl:      round(pnl) ?? 0,
+    total_pnl_pct:  round(totalPos > 0 ? (pnl / (totalPos - pnl)) * 100 : 0) ?? 0,
+    position_count: positions.filter((p: any) => Number(p.units ?? 0) > 0).length,
+  };
 }
 
 // ── Format generators ─────────────────────────────────────────────────────────

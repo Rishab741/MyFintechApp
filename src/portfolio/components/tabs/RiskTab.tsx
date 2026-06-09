@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import Card from '../Card';
 import SHead from '../SHead';
 import RiskGrid from '../RiskGrid';
@@ -12,6 +12,7 @@ import {
 import { fmt2, sign } from '../../helpers';
 import type { RiskMetrics } from '../../types';
 import type { PerformanceMetrics } from '@/src/services/engineClient';
+import { computePortfolioScore, type ScoreInsight } from '../../scoring';
 
 interface Props {
     risk:          RiskMetrics | null;
@@ -20,77 +21,120 @@ interface Props {
     displayAlpha:  number;
 }
 
-const RiskScore: React.FC<{ score: number; label: string }> = ({ score, label }) => {
-    const color = score >= 75 ? RED : score >= 50 ? GOLD : GREEN;
+// ── Score dial ────────────────────────────────────────────────────────────────
+const ScoreDial: React.FC<{ score: number; grade: string; label: string; color: string }> = ({
+    score, grade, label, color,
+}) => (
+    <View style={s.dialRow}>
+        <View style={[s.dial, { borderColor: `${color}50`, backgroundColor: `${color}10` }]}>
+            <Text style={[s.dialGrade, { color }]}>{grade}</Text>
+            <Text style={[s.dialScore, { color }]}>{score}</Text>
+            <Text style={s.dialOf}>/100</Text>
+        </View>
+        <View style={{ flex: 1, gap: 4 }}>
+            <Text style={s.dialCaption}>RISK SCORE</Text>
+            <Text style={[s.dialLabel, { color }]}>{label}</Text>
+            <Text style={s.dialSub}>Multi-factor · updates with each sync</Text>
+        </View>
+    </View>
+);
+
+// ── Factor bar ────────────────────────────────────────────────────────────────
+const FactorBar: React.FC<{ label: string; score: number; weight: string }> = ({
+    label, score, weight,
+}) => {
+    const color = score >= 70 ? RED : score >= 45 ? GOLD : GREEN;
     return (
-        <View style={s.scoreWrap}>
-            <View style={[s.scoreHex, { borderColor: `${color}40`, backgroundColor: `${color}10` }]}>
-                <Text style={[s.scoreNum, { color }]}>{score}</Text>
+        <View style={s.factor}>
+            <View style={s.factorHeader}>
+                <Text style={s.factorLabel}>{label}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={s.factorWeight}>{weight}</Text>
+                    <Text style={[s.factorScore, { color }]}>{score}</Text>
+                </View>
             </View>
-            <View style={{ flex: 1 }}>
-                <Text style={s.scoreCaption}>RISK SCORE</Text>
-                <Text style={[s.scoreName, { color }]}>{label}</Text>
-                <Text style={s.scoreUpdated}>UPDATED 2M AGO</Text>
+            <View style={s.factorTrack}>
+                <View style={[s.factorFill, { width: `${score}%`, backgroundColor: color }]} />
             </View>
         </View>
     );
 };
 
-const InsightBanner: React.FC<{ title: string; body: string }> = ({ title, body }) => (
-    <View style={s.banner}>
-        <View style={s.bannerDot} />
-        <View style={{ flex: 1 }}>
-            <Text style={s.bannerTitle}>{title}</Text>
-            <Text style={s.bannerBody}>{body}</Text>
+// ── Insight banner ────────────────────────────────────────────────────────────
+const InsightBanner: React.FC<ScoreInsight> = ({ type, title, body }) => {
+    const accent = type === 'positive' ? GREEN : type === 'warning' ? GOLD : MUTED;
+    return (
+        <View style={[s.banner, { borderLeftColor: accent, backgroundColor: `${accent}08` }]}>
+            <View style={[s.bannerDot, { backgroundColor: accent }]} />
+            <View style={{ flex: 1 }}>
+                <Text style={[s.bannerTitle, { color: type === 'positive' ? GREEN : type === 'warning' ? '#b5f9ff' : TXT2 }]}>
+                    {title}
+                </Text>
+                <Text style={s.bannerBody}>{body}</Text>
+            </View>
         </View>
-    </View>
-);
+    );
+};
 
+// ── Main tab ──────────────────────────────────────────────────────────────────
 export default function RiskTab({ risk, metrics, snapValues, displayAlpha }: Props) {
     const vol    = metrics ? metrics.volatility * 100 : risk?.annStd ?? 0;
-    const sharpe = metrics ? metrics.sharpe_ratio      : risk?.sharpe ?? 0;
+    const sharpe = metrics ? metrics.sharpe_ratio      : risk?.sharpe  ?? 0;
 
-    const riskScore = Math.round(Math.min(Math.max((vol / 40) * 100, 10), 99));
-    const riskLabel = vol > 30 ? 'Aggressive' : vol > 15 ? 'Moderate' : 'Conservative';
+    const portfolioScore = useMemo(() => computePortfolioScore({
+        vol,
+        sharpe,
+        maxDrawdown: metrics?.max_drawdown != null ? metrics.max_drawdown * 100
+                   : snapValues.length >= 3 ? computeRawDrawdown(snapValues)
+                   : 0,
+        var95:    risk?.var95   ?? 0,
+        winRate:  risk?.winRate ?? 50,
+        alpha:    displayAlpha,
+    }), [vol, sharpe, displayAlpha, risk, metrics, snapValues]);
 
     const safeRisk: RiskMetrics = risk ?? { mean: 0, stddev: 0, annStd: 0, sharpe: 0, var95: 0, winRate: 0 };
+    const hasData = !!(risk || metrics);
 
     return (
         <>
-            {/* ── Risk overview ── */}
-            {(risk || metrics) && (
+            {/* ── Score card ── */}
+            {hasData && (
                 <Card>
-                    <SHead title="Quantum Insights" />
+                    <SHead title="Portfolio Risk Score" />
 
-                    <InsightBanner
-                        title="Exposure Alert"
-                        body="Monitor your sector concentration. Diversification across uncorrelated assets reduces drawdown risk."
+                    <ScoreDial
+                        score={portfolioScore.score}
+                        grade={portfolioScore.grade}
+                        label={portfolioScore.label}
+                        color={portfolioScore.color}
                     />
-
-                    <RiskScore score={riskScore} label={riskLabel} />
 
                     <View style={s.divider} />
 
-                    <View style={s.statRow}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={s.statLabel}>SHARPE RATIO</Text>
-                            <Text style={[s.statValue, { color: sharpe >= 1 ? GREEN : sharpe >= 0 ? GOLD : RED }]}>
-                                {fmt2(sharpe)}
-                            </Text>
-                        </View>
-                        <View style={s.statSep} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={s.statLabel}>ALPHA</Text>
-                            <Text style={[s.statValue, { color: displayAlpha >= 0 ? GREEN : RED }]}>
-                                {sign(displayAlpha)}{fmt2(Math.abs(displayAlpha))}%
-                            </Text>
-                        </View>
+                    {/* Factor breakdown bars */}
+                    <View style={s.factors}>
+                        <FactorBar label="Volatility"   score={portfolioScore.breakdown.volatility} weight="30%" />
+                        <FactorBar label="Max Drawdown" score={portfolioScore.breakdown.drawdown}   weight="25%" />
+                        <FactorBar label="Sharpe Ratio" score={portfolioScore.breakdown.sharpe}     weight="20%" />
+                        <FactorBar label="Win Rate"     score={portfolioScore.breakdown.winRate}    weight="10%" />
+                        <FactorBar label="VaR (95%)"    score={portfolioScore.breakdown.var95}      weight="10%" />
+                        <FactorBar label="Alpha"        score={portfolioScore.breakdown.alpha}      weight=" 5%" />
                     </View>
                 </Card>
             )}
 
+            {/* ── Dynamic insights ── */}
+            {hasData && portfolioScore.insights.length > 0 && (
+                <Card>
+                    <SHead title="AI Insights" />
+                    {portfolioScore.insights.map((ins, i) => (
+                        <InsightBanner key={i} {...ins} />
+                    ))}
+                </Card>
+            )}
+
             {/* ── Full risk metrics grid ── */}
-            {(risk || metrics) && (
+            {hasData && (
                 <Card>
                     <SHead
                         title="Risk Analysis"
@@ -122,30 +166,51 @@ export default function RiskTab({ risk, metrics, snapValues, displayAlpha }: Pro
     );
 }
 
+// ── Helper: compute max drawdown from snapshot values ────────────────────────
+function computeRawDrawdown(vals: number[]): number {
+    let peak = vals[0];
+    let maxDD = 0;
+    for (const v of vals) {
+        if (v > peak) peak = v;
+        const dd = peak > 0 ? ((v - peak) / peak) * 100 : 0;
+        if (dd < maxDD) maxDD = dd;
+    }
+    return maxDD;
+}
+
 const s = StyleSheet.create({
-    scoreWrap:    { flexDirection: 'row', alignItems: 'center', gap: 14 },
-    scoreHex:     { width: 64, height: 64, borderRadius: 6, borderWidth: 1,
-                    alignItems: 'center', justifyContent: 'center' },
-    scoreNum:     { fontSize: 26, fontWeight: '800', fontFamily: sans },
-    scoreCaption: { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2.5, marginBottom: 2 },
-    scoreName:    { fontSize: 14, fontWeight: '700', fontFamily: sans, marginBottom: 3 },
-    scoreUpdated: { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 1 },
+    // Score dial
+    dialRow:    { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    dial:       { width: 84, height: 84, borderRadius: 8, borderWidth: 2,
+                  alignItems: 'center', justifyContent: 'center' },
+    dialGrade:  { fontSize: 11, fontWeight: '900', fontFamily: mono, letterSpacing: 1 },
+    dialScore:  { fontSize: 28, fontWeight: '900', fontFamily: sans, lineHeight: 32 },
+    dialOf:     { color: MUTED, fontSize: 10, fontFamily: mono },
+    dialCaption:{ color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2.5 },
+    dialLabel:  { fontSize: 15, fontWeight: '700', fontFamily: sans },
+    dialSub:    { color: MUTED, fontSize: 10, lineHeight: 14 },
 
-    banner:       { backgroundColor: `${GOLD}0A`, borderWidth: 1, borderColor: `${GOLD}22`,
-                    borderLeftWidth: 3, borderLeftColor: GOLD,
-                    borderRadius: 4, padding: 12, flexDirection: 'row', gap: 10, marginBottom: 16 },
-    bannerDot:    { width: 6, height: 6, borderRadius: 3, backgroundColor: GOLD, marginTop: 4,
-                    shadowColor: GOLD, shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } },
-    bannerTitle:  { color: '#b5f9ff', fontSize: 12, fontWeight: '700', fontFamily: sans, marginBottom: 3, letterSpacing: 0.1 },
-    bannerBody:   { color: TXT2, fontSize: 11, lineHeight: 17 },
+    // Factor bars
+    factors:       { gap: 10 },
+    factor:        { gap: 5 },
+    factorHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    factorLabel:   { color: TXT2, fontSize: 11, fontFamily: mono },
+    factorWeight:  { color: MUTED, fontSize: 9, fontFamily: mono },
+    factorScore:   { fontSize: 11, fontWeight: '700', fontFamily: mono, width: 24, textAlign: 'right' },
+    factorTrack:   { height: 5, backgroundColor: 'rgba(65,72,87,0.5)', borderRadius: 3, overflow: 'hidden' },
+    factorFill:    { height: '100%', borderRadius: 3, opacity: 0.85 },
 
-    divider:      { height: 1, backgroundColor: 'rgba(65,72,87,0.6)', marginVertical: 16 },
+    // Insight banners
+    banner:        { backgroundColor: `${GOLD}0A`, borderWidth: 1, borderColor: `${GOLD}22`,
+                     borderLeftWidth: 3, borderRadius: 4, padding: 12,
+                     flexDirection: 'row', gap: 10, marginBottom: 10 },
+    bannerDot:     { width: 6, height: 6, borderRadius: 3, marginTop: 4,
+                     shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } },
+    bannerTitle:   { fontSize: 12, fontWeight: '700', fontFamily: sans, marginBottom: 3, letterSpacing: 0.1 },
+    bannerBody:    { color: TXT2, fontSize: 11, lineHeight: 17 },
 
-    statRow:      { flexDirection: 'row' },
-    statLabel:    { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 2, marginBottom: 4 },
-    statValue:    { fontSize: 18, fontWeight: '700', fontFamily: sans },
-    statSep:      { width: 1, backgroundColor: 'rgba(65,72,87,0.6)', marginHorizontal: 16, alignSelf: 'stretch' },
+    divider:       { height: 1, backgroundColor: 'rgba(65,72,87,0.6)', marginVertical: 16 },
 
-    badge:        { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3, borderWidth: 1 },
-    badgeTxt:     { fontSize: 9, fontWeight: '700', fontFamily: mono },
+    badge:         { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3, borderWidth: 1 },
+    badgeTxt:      { fontSize: 9, fontWeight: '700', fontFamily: mono },
 });

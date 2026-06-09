@@ -4,10 +4,10 @@
  */
 
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
     Animated,
+    Easing,
     Platform,
     RefreshControl,
     ScrollView,
@@ -47,8 +47,52 @@ const TABS: { key: InternalTab; label: string }[] = [
     { key: 'positions',    label: 'Positions'   },
 ];
 
+// ── Skeleton loader card ──────────────────────────────────────────────────────
+function SkeletonCard({ lines = 3 }: { lines?: number }) {
+    const pulse = useRef(new Animated.Value(0.4)).current;
+    React.useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulse, { toValue: 0.9, duration: 800, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+                Animated.timing(pulse, { toValue: 0.4, duration: 800, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+            ]),
+        ).start();
+    }, []);
+    return (
+        <Animated.View style={[sk.card, { opacity: pulse }]}>
+            <View style={sk.titleBar} />
+            {Array.from({ length: lines }).map((_, i) => (
+                <View key={i} style={[sk.line, { width: i === lines - 1 ? '60%' : '100%' }]} />
+            ))}
+        </Animated.View>
+    );
+}
+const sk = StyleSheet.create({
+    card:     { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 16, marginBottom: 12 },
+    titleBar: { height: 12, width: '40%', backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 4, marginBottom: 16 },
+    line:     { height: 8, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 4, marginBottom: 10 },
+});
+
 export default function PortfolioScreen() {
     const [activeTab, setActiveTab] = useState<InternalTab>('overview');
+    const tabAnim   = useRef(new Animated.Value(1)).current;
+    const slideAnim = useRef(new Animated.Value(0)).current;
+
+    const switchTab = useCallback((next: InternalTab) => {
+        if (next === activeTab) return;
+        // Fade + slide out current, then fade + slide in next
+        Animated.parallel([
+            Animated.timing(tabAnim,   { toValue: 0, duration: 120, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
+            Animated.timing(slideAnim, { toValue: 12, duration: 120, useNativeDriver: true }),
+        ]).start(() => {
+            setActiveTab(next);
+            slideAnim.setValue(-12);
+            Animated.parallel([
+                Animated.timing(tabAnim,   { toValue: 1, duration: 220, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
+                Animated.timing(slideAnim, { toValue: 0, duration: 220, useNativeDriver: true, easing: Easing.out(Easing.back(1.2)) }),
+            ]).start();
+        });
+    }, [activeTab, tabAnim, slideAnim]);
 
     const {
         loading, refreshing, connected, userName, lastUpdated,
@@ -112,10 +156,11 @@ export default function PortfolioScreen() {
 
             {/* ── Loading ── */}
             {loading ? (
-                <View style={s.centred}>
-                    <ActivityIndicator color={GOLD} size="large" />
-                    <Text style={s.loadingTxt}>Syncing portfolio…</Text>
-                </View>
+                <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+                    <SkeletonCard lines={4} />
+                    <SkeletonCard lines={3} />
+                    <SkeletonCard lines={5} />
+                </ScrollView>
 
             ) : !connected ? (
                 <View style={s.centred}>
@@ -180,7 +225,7 @@ export default function PortfolioScreen() {
                                 <TouchableOpacity
                                     key={tab.key}
                                     style={[s.tabBtn, active && s.tabBtnActive]}
-                                    onPress={() => setActiveTab(tab.key)}
+                                    onPress={() => switchTab(tab.key)}
                                     activeOpacity={0.7}
                                 >
                                     <Text style={[s.tabTxt, active && s.tabTxtActive]}>
@@ -192,7 +237,8 @@ export default function PortfolioScreen() {
                         })}
                     </View>
 
-                    {/* ── Active tab content ── */}
+                    {/* ── Active tab content (animated transition) ── */}
+                    <Animated.View style={{ opacity: tabAnim, transform: [{ translateY: slideAnim }] }}>
                     {activeTab === 'overview' && (
                         <OverviewTab
                             totalVal={totalVal}
@@ -245,6 +291,7 @@ export default function PortfolioScreen() {
                         <Text style={s.footerTxt}>VESTARA  ·  LIVE DATA  ·  SNAPTRADE</Text>
                         <View style={s.footerLine} />
                     </View>
+                    </Animated.View>
                 </ScrollView>
             )}
         </View>
@@ -289,7 +336,7 @@ const s = StyleSheet.create({
                       borderWidth: 1, borderColor: 'rgba(255,113,108,0.35)', borderRadius: 4, padding: 10 },
     errorBannerTxt: { color: '#ff716c', fontSize: 11, fontFamily: mono, letterSpacing: 0.3 },
 
-    scroll: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 52 },
+    scroll: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 80, gap: 4 },
 
     // Hero card
     heroCard:   { borderTopWidth: 1, borderTopColor: `${GOLD}60` },
