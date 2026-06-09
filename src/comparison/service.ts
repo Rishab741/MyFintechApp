@@ -10,24 +10,32 @@ import type {
 // ── Scenarios ─────────────────────────────────────────────────────────────────
 
 export async function listScenarios(): Promise<Scenario[]> {
+  // Order by updated_at (exposed after migration 20260609000001).
+  // Falls back to created_at on older deployments where updated_at is missing from the view.
   const { data, error } = await supabase
     .from("query_scenarios")
     .select("*")
-    .order("updated_at", { ascending: false });
+    .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as Scenario[];
 }
 
 export async function createScenario(input: CreateScenarioInput): Promise<Scenario> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  // getSession() reads the local JWT — no network round-trip, never fails silently.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) throw new Error("Not authenticated — please sign out and sign back in");
 
   const { data, error } = await supabase
     .from("scenarios")
-    .insert({ ...input, user_id: user.id })
+    .insert({ ...input, user_id: session.user.id })
     .select("*")
     .single();
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    // Surface the full Supabase error so it appears in both the alert and console
+    console.error("[createScenario] Supabase error:", JSON.stringify(error));
+    throw new Error(error.message);
+  }
   return data as Scenario;
 }
 
