@@ -15,10 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
-const BG    = '#04070F';
-const CYAN  = '#8FF5FF';
-const TXT   = '#F8FAFC';
-const MUTED = '#64748B';
+const BG    = '#060E1F';
+const CYAN  = '#0EA5E9';
+const TXT   = '#E8F4FD';
+const MUTED = '#607A93';
 const SIDEBAR_W = 252;
 const mono = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 const sans = Platform.OS === 'ios' ? 'SF Pro Text' : 'sans-serif';
@@ -118,11 +118,11 @@ function SidebarNav({ state, navigation }: any) {
           {/* Brand */}
           <View style={s.brand}>
             <View style={s.brandMark}>
-              <Text style={s.brandV}>V</Text>
+              <Text style={s.brandV}>↗</Text>
             </View>
             <View>
-              <Text style={s.brandName}>VESTARA</Text>
-              <Text style={s.brandSub}>Portfolio OS</Text>
+              <Text style={s.brandName}>PLATSTOCK</Text>
+              <Text style={s.brandSub}>Digital Markets</Text>
             </View>
             {/* Close button inside sidebar header */}
             <Pressable
@@ -159,7 +159,7 @@ function SidebarNav({ state, navigation }: any) {
           </View>
 
           <View style={s.divider} />
-          <Text style={s.version}>v1.0 · Vestara</Text>
+          <Text style={s.version}>v1.0 · PlatStock</Text>
         </View>
       </Animated.View>
 
@@ -216,13 +216,13 @@ const s = StyleSheet.create({
     zIndex: 20,
     overflow: 'hidden',
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: 'rgba(143,245,255,0.15)',
+    borderRightColor: 'rgba(14,165,233,0.18)',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 10, height: 0 }, shadowOpacity: 0.7, shadowRadius: 30 },
       android: { elevation: 24 },
     }),
   },
-  panelTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(4,7,15,0.78)' },
+  panelTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(6,14,31,0.85)' },
   panelInner: { flex: 1, paddingHorizontal: 18, paddingVertical: 20 },
 
   brand: {
@@ -231,11 +231,12 @@ const s = StyleSheet.create({
   },
   brandMark: {
     width: 38, height: 38, borderRadius: 11,
-    backgroundColor: 'rgba(143,245,255,0.10)',
-    borderWidth: 1.5, borderColor: 'rgba(143,245,255,0.30)',
+    backgroundColor: 'rgba(14,165,233,0.10)',
+    borderWidth: 1.5, borderColor: 'rgba(14,165,233,0.35)',
     alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#0EA5E9', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
   },
-  brandV:    { color: CYAN, fontSize: 18, fontWeight: '800', fontFamily: mono },
+  brandV:    { color: CYAN, fontSize: 16, fontWeight: '800', fontFamily: mono },
   brandName: { color: CYAN, fontSize: 12, fontWeight: '800', letterSpacing: 2.5, fontFamily: mono },
   brandSub:  { color: MUTED, fontSize: 10, marginTop: 1 },
   sidebarClose: {
@@ -268,14 +269,14 @@ const s = StyleSheet.create({
   fab: {
     width: 48, height: 48, borderRadius: 14,
     overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(143,245,255,0.25)',
+    borderWidth: 1, borderColor: 'rgba(14,165,233,0.3)',
     alignItems: 'center', justifyContent: 'center',
     ...Platform.select({
-      ios: { shadowColor: CYAN, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 12 },
+      ios: { shadowColor: CYAN, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.35, shadowRadius: 14 },
       android: { elevation: 10 },
     }),
   },
-  fabTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(4,7,15,0.75)' },
+  fabTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(6,14,31,0.80)' },
   fabPressed: { opacity: 0.7 },
 });
 
@@ -285,7 +286,7 @@ const nr = StyleSheet.create({
     borderRadius: 12, paddingVertical: 12, paddingHorizontal: 12,
     gap: 12,
   },
-  rowActive:  { backgroundColor: 'rgba(143,245,255,0.07)' },
+  rowActive:  { backgroundColor: 'rgba(14,165,233,0.08)' },
   rowPressed: { backgroundColor: 'rgba(255,255,255,0.04)' },
   iconWrap:   { width: 24, alignItems: 'center' },
   label:       { flex: 1, fontSize: 14, color: MUTED, fontFamily: sans, fontWeight: '500' },
@@ -308,7 +309,7 @@ export default function TabLayout() {
       }}
       tabBar={(props) => <SidebarNav {...props} />}
     >
-      <Tabs.Screen name="index"             options={{ title: 'VESTARA' }} />
+      <Tabs.Screen name="index"             options={{ title: 'PLATSTOCK' }} />
       <Tabs.Screen name="Market"            options={{ headerShown: false }} />
       <Tabs.Screen name="Portfolio"         options={{ headerShown: false }} />
       <Tabs.Screen name="Holdings"          options={{ headerShown: false }} />

@@ -10,6 +10,7 @@ import {
   Alert,
   Animated,
   FlatList,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -39,18 +40,18 @@ import {
 } from '@/src/comparison/types';
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
-const BG     = '#04070F';
-const CARD   = '#0C1525';
-const CARD2  = '#111E33';
-const CYAN   = '#8FF5FF';
-const GREEN  = '#00E09A';
+const BG     = '#060E1F';
+const CARD   = '#0E1D35';
+const CARD2  = '#122040';
+const CYAN   = '#0EA5E9';
+const GREEN  = '#10B981';
 const RED    = '#FF716C';
 const PURPLE = '#AC89FF';
 const AMBER  = '#F59E0B';
-const BORDER = 'rgba(143,245,255,0.10)';
-const TXT    = '#F8FAFC';
-const MUTED  = '#64748B';
-const SUB    = '#94A3B8';
+const BORDER = 'rgba(14,165,233,0.12)';
+const TXT    = '#E8F4FD';
+const MUTED  = '#607A93';
+const SUB    = '#7C9AB5';
 const mono   = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 const sans   = Platform.OS === 'ios' ? 'SF Pro Text' : 'sans-serif';
 
@@ -328,9 +329,9 @@ export default function CompareScreen() {
     if (!selectedAssets.find(a => a.symbol === asset.symbol)) {
       setSelectedAssets(prev => [...prev, asset]);
     }
+    // Keep search open so the user can immediately add the next asset
     setAssetSearch('');
     setSearchResults([]);
-    setShowSearch(false);
   };
 
   const removeAsset = (symbol: string) => {
@@ -890,7 +891,10 @@ export default function CompareScreen() {
   };
 
   return (
-    <View style={[sc.root, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={[sc.root, { paddingTop: insets.top }]}
+    >
       <StatusBar barStyle="light-content" backgroundColor={BG} />
 
       {/* Header */}
@@ -943,7 +947,7 @@ export default function CompareScreen() {
         {activeTab === 'decisions' && renderDecisions()}
         {activeTab === 'profile'   && renderProfile()}
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

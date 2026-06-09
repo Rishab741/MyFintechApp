@@ -17,27 +17,27 @@ import {
 const { width } = Dimensions.get('window');
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
-const BG          = '#0D0F1A';
-const SURFACE     = '#141726';
-const SURFACE_2   = '#1A1F32';
-const BORDER      = 'rgba(255,255,255,0.07)';
-const GOLD        = '#C9A84C';
-const GOLD_LIGHT  = '#E5C97A';
-const GOLD_DIM    = 'rgba(201,168,76,0.10)';
-const GOLD_BDR    = 'rgba(201,168,76,0.28)';
-const PURPLE      = '#8B5CF6';
-const PURPLE_DIM  = 'rgba(139,92,246,0.12)';
-const PURPLE_BDR  = 'rgba(139,92,246,0.30)';
-const TXT         = '#EEEAF3';
-const TXT_2       = '#A8A4B8';
-const TXT_3       = '#5A5670';
-const GREEN       = '#22C55E';
+const BG          = '#060E1F';
+const SURFACE     = '#0B1626';
+const SURFACE_2   = '#0E1D35';
+const BORDER      = 'rgba(14,165,233,0.10)';
+const GOLD        = '#0EA5E9';
+const GOLD_LIGHT  = '#38BDF8';
+const GOLD_DIM    = 'rgba(14,165,233,0.10)';
+const GOLD_BDR    = 'rgba(14,165,233,0.28)';
+const PURPLE      = '#818CF8';
+const PURPLE_DIM  = 'rgba(129,140,248,0.12)';
+const PURPLE_BDR  = 'rgba(129,140,248,0.30)';
+const TXT         = '#E8F4FD';
+const TXT_2       = '#7C9AB5';
+const TXT_3       = '#3D5166';
+const GREEN       = '#10B981';
 const RED         = '#EF4444';
-const BLUE        = '#3B82F6';
+const BLUE        = '#38BDF8';
 const ORANGE      = '#F97316';
-const TEAL        = '#14B8A6';
+const TEAL        = '#06B6D4';
 
-const serif = Platform.OS === 'ios' ? 'Georgia' : 'serif';
+const serif = Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif';
 const sans  = Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif';
 
 // ─── Static data ─────────────────────────────────────────────────────────────

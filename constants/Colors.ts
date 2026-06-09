@@ -23,39 +23,39 @@ export default {
 // Import: import { QL } from '@/constants/Colors';
 
 export const QL = {
-  // Surfaces
-  BG:        '#070e1b',
-  BG2:       '#0c1322',
-  CARD:      '#11192a',
-  CARD2:     '#172031',
-  CARD3:     '#1c2639',
-  GLASS:     'rgba(143,245,255,0.04)',
-  BORDER:    '#414857',
-  BORDER_HI: 'rgba(143,245,255,0.22)',
+  // Surfaces — Platstock deep navy palette
+  BG:        '#060E1F',
+  BG2:       '#0B1626',
+  CARD:      '#0E1D35',
+  CARD2:     '#122040',
+  CARD3:     '#162A4A',
+  GLASS:     'rgba(14,165,233,0.04)',
+  BORDER:    '#1E3347',
+  BORDER_HI: 'rgba(14,165,233,0.25)',
 
-  // Primary — neon cyan (mapped as GOLD for backward compat)
-  GOLD:      '#8ff5ff',
-  GOLD_L:    '#b5f9ff',
-  GOLD_D:    'rgba(143,245,255,0.08)',
-  GOLD_B:    'rgba(143,245,255,0.22)',
+  // Primary — sky blue
+  GOLD:      '#0EA5E9',   // kept as GOLD for backward compat with existing screens
+  GOLD_L:    '#38BDF8',
+  GOLD_D:    'rgba(14,165,233,0.08)',
+  GOLD_B:    'rgba(14,165,233,0.22)',
 
   // Secondary / supporting
-  BLUE:      '#ac89ff',
-  BLUE_D:    'rgba(172,137,255,0.13)',
-  GREEN:     '#00E09A',
-  GREEN_D:   'rgba(0,224,154,0.09)',
+  BLUE:      '#818CF8',
+  BLUE_D:    'rgba(129,140,248,0.13)',
+  GREEN:     '#10B981',
+  GREEN_D:   'rgba(16,185,129,0.09)',
   RED:       '#ff716c',
   RED_D:     'rgba(255,113,108,0.09)',
   PURPLE:    '#ac89ff',
   PURPLE_D:  'rgba(172,137,255,0.09)',
-  ORANGE:    '#ff6b98',
-  ORANGE_D:  'rgba(255,107,152,0.10)',
-  AMBER:     '#FFA500',
-  AMBER_D:   'rgba(255,165,0,0.09)',
+  ORANGE:    '#F97316',
+  ORANGE_D:  'rgba(249,115,22,0.10)',
+  AMBER:     '#F59E0B',
+  AMBER_D:   'rgba(245,158,11,0.09)',
 
   // Text
-  TXT:       '#e2e8fb',
-  TXT2:      '#a5abbd',
-  MUTED:     '#6f7586',
-  SUB:       '#414857',
+  TXT:       '#E8F4FD',
+  TXT2:      '#7C9AB5',
+  MUTED:     '#607A93',
+  SUB:       '#1E3347',
 } as const;

@@ -38,12 +38,12 @@ import {
 } from "@/src/onboarding/service";
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
-const BG    = "#04070F";
-const CYAN  = "#8FF5FF";
-const GREEN = "#00E09A";
-const MUTED = "#64748B";
-const SUB   = "#94A3B8";
-const TXT   = "#F8FAFC";
+const BG    = "#060E1F";
+const CYAN  = "#0EA5E9";
+const GREEN = "#10B981";
+const MUTED = "#607A93";
+const SUB   = "#7C9AB5";
+const TXT   = "#E8F4FD";
 const mono  = Platform.OS === "ios" ? "Menlo" : "monospace";
 const { width: W, height: H } = Dimensions.get("window");
 
