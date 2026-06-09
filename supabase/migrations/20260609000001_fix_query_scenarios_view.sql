@@ -1,9 +1,13 @@
 -- Fix query_scenarios view: expose updated_at so PostgREST can order by it.
 -- The original view used updated_at only in the internal ORDER BY clause,
 -- making it invisible to the REST layer → 400 on ?order=updated_at.desc.
--- Also removes the internal ORDER BY (PostgREST handles ordering itself).
+--
+-- CREATE OR REPLACE VIEW cannot insert a column in the middle of the column list
+-- (Postgres treats it as a rename → error 42P16). DROP + CREATE is required.
 
-create or replace view public.query_scenarios
+drop view if exists public.query_scenarios;
+
+create view public.query_scenarios
 with (security_invoker = true)
 as
 select
@@ -19,11 +23,12 @@ select
   s.is_bookmarked,
   s.last_run_at,
   s.created_at,
-  s.updated_at,
   -- Latest run status (lateral join — one row per scenario)
   r.status        as last_run_status,
   r.completed_at  as last_completed_at,
-  r.error_message as last_error
+  r.error_message as last_error,
+  -- updated_at appended at the end so column positions are preserved
+  s.updated_at
 from public.scenarios s
 left join lateral (
   select status, completed_at, error_message
