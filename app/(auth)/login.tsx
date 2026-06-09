@@ -18,19 +18,18 @@ import * as SecureStore from 'expo-secure-store';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthStore } from '../../src/store/useAuthStore';
 
-// ─── Rate limiting ────────────────────────────────────────────────────────────
-// Stored in device keychain so it persists across app restarts.
+// ─── Rate limiting ─────────────────────────────────────────────────────────────
 const RATE_KEY = 'vestara_auth_rate';
 
 interface RateData {
-  count:       number;   // cumulative failed attempts
-  lockedUntil: number;   // unix ms — 0 means not locked
+  count:       number;
+  lockedUntil: number;
 }
 
 function getLockDurationMs(count: number): number {
-  if (count >= 10) return 30 * 60 * 1_000;  // 30 min
-  if (count >= 5)  return  5 * 60 * 1_000;  // 5 min
-  if (count >= 3)  return      30 * 1_000;  // 30 s
+  if (count >= 10) return 30 * 60 * 1_000;
+  if (count >= 5)  return  5 * 60 * 1_000;
+  if (count >= 3)  return      30 * 1_000;
   return 0;
 }
 
@@ -58,7 +57,6 @@ async function clearRateData(): Promise<void> {
   await SecureStore.deleteItemAsync(RATE_KEY);
 }
 
-// Map Supabase error messages to friendly, actionable strings
 function friendlyAuthError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes('invalid login credentials') || m.includes('invalid email or password'))
@@ -127,7 +125,7 @@ const FloatingLabel: React.FC<{
   const labelSize = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 11] });
   const labelColor = floatAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#5A6070', focused ? '#C9A84C' : '#8A94A6'],
+    outputRange: ['#3D5166', focused ? '#0EA5E9' : '#607A93'],
   });
 
   return (
@@ -159,39 +157,39 @@ const FloatingLabel: React.FC<{
 
 const inputStyles = StyleSheet.create({
   wrapper: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(14,165,233,0.04)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 0,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.07)',
     position: 'relative',
     minHeight: 62,
     justifyContent: 'flex-end',
   },
   wrapperFocused: {
-    backgroundColor: 'rgba(201,168,76,0.05)',
-    borderColor: 'rgba(201,168,76,0.35)',
+    backgroundColor: 'rgba(14,165,233,0.07)',
+    borderColor: 'rgba(14,165,233,0.45)',
   },
   floatLabel: {
     position: 'absolute',
     left: 16,
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
     letterSpacing: 0.3,
   },
   input: {
-    color: '#F0EDE6',
+    color: '#E8F4FD',
     fontSize: 16,
     paddingBottom: 10,
     paddingTop: 18,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   eyeBtn: { position: 'absolute', right: 14, bottom: 14 },
-  eyeIcon: { color: '#8A94A6', fontSize: 14 },
+  eyeIcon: { color: '#607A93', fontSize: 14 },
   underline: { height: 1, backgroundColor: 'transparent', marginHorizontal: -16 },
-  underlineFocused: { backgroundColor: 'rgba(201,168,76,0.4)' },
+  underlineFocused: { backgroundColor: 'rgba(14,165,233,0.5)' },
 });
 
 const InvestorChip: React.FC<{
@@ -213,32 +211,32 @@ const chipStyles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(14,165,233,0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
     gap: 12,
   },
   chipSelected: {
-    backgroundColor: 'rgba(201,168,76,0.1)',
-    borderColor: 'rgba(201,168,76,0.5)',
+    backgroundColor: 'rgba(14,165,233,0.1)',
+    borderColor: 'rgba(14,165,233,0.45)',
   },
   dot: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: '#5A6070',
+    borderColor: '#3D5166',
   },
   dotSelected: {
-    borderColor: '#C9A84C',
-    backgroundColor: '#C9A84C',
+    borderColor: '#0EA5E9',
+    backgroundColor: '#0EA5E9',
   },
-  label: { color: '#A0A8B4', fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  labelSelected: { color: '#F0EDE6' },
-  desc: { color: '#5A6070', fontSize: 12 },
+  label: { color: '#7C9AB5', fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  labelSelected: { color: '#E8F4FD' },
+  desc: { color: '#3D5166', fontSize: 12 },
 });
 
 const StepIndicator: React.FC<{ current: SignUpStep; total: number }> = ({ current, total }) => (
@@ -267,17 +265,17 @@ const stepStyles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: '#2A2F3A',
-    backgroundColor: '#0E1118',
+    borderColor: '#1E3347',
+    backgroundColor: '#0B1626',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dotActive: { borderColor: '#C9A84C', backgroundColor: 'rgba(201,168,76,0.15)' },
-  dotDone: { borderColor: '#C9A84C', backgroundColor: '#C9A84C' },
-  check: { color: '#0E1118', fontSize: 12, fontWeight: '900' },
-  line: { flex: 1, height: 2, backgroundColor: '#2A2F3A', marginHorizontal: 6 },
-  lineDone: { backgroundColor: '#C9A84C' },
-  label: { color: '#5A6070', fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif' },
+  dotActive: { borderColor: '#0EA5E9', backgroundColor: 'rgba(14,165,233,0.15)' },
+  dotDone: { borderColor: '#0EA5E9', backgroundColor: '#0EA5E9' },
+  check: { color: '#060E1F', fontSize: 12, fontWeight: '900' },
+  line: { flex: 1, height: 2, backgroundColor: '#1E3347', marginHorizontal: 6 },
+  lineDone: { backgroundColor: '#0EA5E9' },
+  label: { color: '#3D5166', fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif' },
 });
 
 const PasswordStrength: React.FC<{ password: string }> = ({ password }) => {
@@ -301,18 +299,18 @@ const PasswordStrength: React.FC<{ password: string }> = ({ password }) => {
               flex: 1,
               height: 3,
               borderRadius: 2,
-              backgroundColor: i < strength ? colors[strength - 1] : '#2A2F3A',
+              backgroundColor: i < strength ? colors[strength - 1] : '#1E3347',
             }}
           />
         ))}
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ color: strength > 0 ? colors[strength - 1] : '#5A6070', fontSize: 11 }}>
+        <Text style={{ color: strength > 0 ? colors[strength - 1] : '#3D5166', fontSize: 11 }}>
           {strength > 0 ? labels[strength - 1] : 'Enter password'}
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {checks.map(c => (
-            <Text key={c.label} style={{ color: c.pass ? '#C9A84C' : '#3A3F4A', fontSize: 10 }}>
+            <Text key={c.label} style={{ color: c.pass ? '#0EA5E9' : '#1E3347', fontSize: 10 }}>
               {c.label}
             </Text>
           ))}
@@ -352,7 +350,6 @@ export default function AuthScreen() {
   const [lockSecondsLeft, setLockSecondsLeft] = useState(0);
   const lockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // On mount: restore any existing lockout from keychain
   useEffect(() => {
     readRateData().then(({ lockedUntil }) => {
       const remaining = Math.ceil((lockedUntil - Date.now()) / 1_000);
@@ -535,7 +532,7 @@ export default function AuthScreen() {
         disabled={isLoading || lockSecondsLeft > 0}
       >
         {isLoading
-          ? <ActivityIndicator color="#0E1118" />
+          ? <ActivityIndicator color="#FFFFFF" />
           : lockSecondsLeft > 0
             ? <Text style={styles.primaryBtnText}>Try again in {lockSecondsLeft}s</Text>
             : <Text style={styles.primaryBtnText}>Sign In</Text>}
@@ -638,7 +635,7 @@ export default function AuthScreen() {
         style={styles.termsRow}
       >
         <View style={[styles.checkbox, signUp.agreedToTerms && styles.checkboxChecked]}>
-          {signUp.agreedToTerms && <Text style={{ color: '#0E1118', fontSize: 12, fontWeight: '900' }}>✓</Text>}
+          {signUp.agreedToTerms && <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '900' }}>✓</Text>}
         </View>
         <Text style={styles.termsText}>
           I agree to the{' '}
@@ -664,9 +661,10 @@ export default function AuthScreen() {
     >
       <StatusBar barStyle="light-content" />
 
-      {/* Background geometric accents */}
-      <View style={styles.bgAccent1} />
-      <View style={styles.bgAccent2} />
+      {/* Ambient glow — Coinwave-inspired particle light */}
+      <View style={styles.bgGlowTop} />
+      <View style={styles.bgGlowBottom} />
+      <View style={styles.bgGlowMid} />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -676,10 +674,10 @@ export default function AuthScreen() {
         {/* Logo */}
         <Animated.View style={[styles.logoWrap, { transform: [{ scale: logoScale }] }]}>
           <View style={styles.logoMark}>
-            <Text style={styles.logoMarkText}>◈</Text>
+            <Text style={styles.logoMarkText}>↗</Text>
           </View>
-          <Text style={styles.logoName}>VESTARA</Text>
-          <Text style={styles.logoTagline}>PRIVATE MARKETS</Text>
+          <Text style={styles.logoName}>PLATSTOCK</Text>
+          <Text style={styles.logoTagline}>DIGITAL MARKETS</Text>
         </Animated.View>
 
         {/* Card */}
@@ -698,7 +696,7 @@ export default function AuthScreen() {
                 disabled={isLoading}
               >
                 {isLoading
-                  ? <ActivityIndicator color="#0E1118" />
+                  ? <ActivityIndicator color="#FFFFFF" />
                   : <Text style={styles.primaryBtnText}>{step === 3 ? 'Create Account' : 'Continue'}</Text>}
               </TouchableOpacity>
             </View>
@@ -724,7 +722,7 @@ export default function AuthScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} onPress={handleForgotPassword} disabled={isLoading}>
                 {isLoading
-                  ? <ActivityIndicator color="#0E1118" />
+                  ? <ActivityIndicator color="#FFFFFF" />
                   : <Text style={styles.primaryBtnText}>Send Link</Text>}
               </TouchableOpacity>
             </View>
@@ -736,35 +734,48 @@ export default function AuthScreen() {
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
-const GOLD = '#C9A84C';
-const GOLD_LIGHT = '#E5C97A';
-const BG = '#0A0D14';
-const SURFACE = '#0E1118';
-const CARD = '#12161F';
+const ACCENT       = '#0EA5E9';   // sky-500 blue
+const ACCENT_LIGHT = '#38BDF8';   // sky-400
+const GREEN        = '#10B981';   // emerald CTA
+const BG           = '#060E1F';   // deep navy
+const SURFACE      = '#0B1626';
+const CARD         = '#0E1D35';   // dark blue card
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: BG,
   },
-  bgAccent1: {
+
+  // ── Ambient glow effects ──
+  bgGlowTop: {
     position: 'absolute',
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    backgroundColor: 'rgba(201,168,76,0.06)',
-    top: -80,
-    right: -80,
+    width: 380,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(14,165,233,0.07)',
+    top: -140,
+    right: -130,
   },
-  bgAccent2: {
+  bgGlowBottom: {
     position: 'absolute',
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: 'rgba(100,120,255,0.04)',
-    bottom: 60,
-    left: -60,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: 'rgba(16,185,129,0.04)',
+    bottom: 30,
+    left: -90,
   },
+  bgGlowMid: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(14,165,233,0.04)',
+    top: height * 0.38,
+    right: -60,
+  },
+
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -775,36 +786,42 @@ const styles = StyleSheet.create({
   // ── Logo ──
   logoWrap: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 36,
   },
   logoMark: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: 'rgba(201,168,76,0.12)',
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: 'rgba(14,165,233,0.1)',
     borderWidth: 1.5,
-    borderColor: 'rgba(201,168,76,0.4)',
+    borderColor: 'rgba(14,165,233,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
+    shadowColor: ACCENT,
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 10,
   },
   logoMarkText: {
-    fontSize: 26,
-    color: GOLD,
+    fontSize: 28,
+    color: ACCENT,
   },
   logoName: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#F0EDE6',
+    color: '#E8F4FD',
     letterSpacing: 6,
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-medium',
   },
   logoTagline: {
     fontSize: 10,
-    color: GOLD,
+    color: ACCENT,
     letterSpacing: 4,
-    marginTop: 4,
+    marginTop: 5,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
+    opacity: 0.8,
   },
 
   // ── Card ──
@@ -813,30 +830,30 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 28,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(14,165,233,0.1)',
     shadowColor: '#000',
-    shadowOpacity: 0.6,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.5,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: 12 },
     elevation: 20,
   },
   heading: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
-    color: '#F0EDE6',
+    color: '#E8F4FD',
     marginBottom: 6,
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: 0.3,
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-medium',
+    letterSpacing: 0.2,
   },
   subheading: {
     fontSize: 14,
-    color: '#5A6070',
+    color: '#3D5166',
     marginBottom: 28,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   sectionLabel: {
-    fontSize: 12,
-    color: '#8A94A6',
+    fontSize: 11,
+    color: '#607A93',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -844,38 +861,38 @@ const styles = StyleSheet.create({
 
   // ── Buttons ──
   primaryBtn: {
-    backgroundColor: GOLD,
+    backgroundColor: GREEN,
     paddingVertical: 17,
     paddingHorizontal: 20,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: GOLD,
+    shadowColor: GREEN,
     shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
   },
   primaryBtnDisabled: {
-    backgroundColor: 'rgba(201,168,76,0.4)',
+    backgroundColor: 'rgba(16,185,129,0.35)',
     shadowOpacity: 0,
   },
   primaryBtnText: {
-    color: '#0A0D14',
-    fontWeight: '800',
+    color: '#FFFFFF',
+    fontWeight: '700',
     fontSize: 16,
-    letterSpacing: 0.5,
-    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
+    letterSpacing: 0.4,
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-medium',
   },
   secondaryBtn: {
     paddingVertical: 17,
     borderRadius: 14,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(201,168,76,0.3)',
+    borderColor: 'rgba(14,165,233,0.3)',
   },
   secondaryBtnText: {
-    color: GOLD_LIGHT,
-    fontWeight: '700',
+    color: ACCENT_LIGHT,
+    fontWeight: '600',
     fontSize: 15,
     letterSpacing: 0.3,
   },
@@ -884,12 +901,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   backBtnText: {
-    color: '#8A94A6',
+    color: '#607A93',
     fontWeight: '600',
     fontSize: 15,
   },
@@ -901,7 +918,7 @@ const styles = StyleSheet.create({
 
   // ── Misc ──
   link: {
-    color: GOLD_LIGHT,
+    color: ACCENT_LIGHT,
     fontWeight: '600',
     fontSize: 13,
   },
@@ -914,10 +931,10 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   dividerText: {
-    color: '#3A3F4A',
+    color: '#1E3347',
     fontSize: 12,
     letterSpacing: 2,
   },
@@ -933,18 +950,18 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#3A3F4A',
+    borderColor: '#1E3347',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
     flexShrink: 0,
   },
   checkboxChecked: {
-    backgroundColor: GOLD,
-    borderColor: GOLD,
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
   },
   termsText: {
-    color: '#8A94A6',
+    color: '#607A93',
     fontSize: 13,
     lineHeight: 20,
     flex: 1,
@@ -958,7 +975,7 @@ const styles = StyleSheet.create({
   },
   securityIcon: { fontSize: 11 },
   securityText: {
-    color: '#3A3F4A',
+    color: '#1E3347',
     fontSize: 11,
     letterSpacing: 0.3,
   },
@@ -968,17 +985,17 @@ const styles = StyleSheet.create({
     padding: 24,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: 'rgba(201,168,76,0.15)',
+    borderColor: 'rgba(14,165,233,0.15)',
   },
   forgotTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#F0EDE6',
+    color: '#E8F4FD',
     marginBottom: 8,
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-medium',
   },
   forgotBody: {
-    color: '#8A94A6',
+    color: '#607A93',
     fontSize: 13,
     lineHeight: 20,
   },

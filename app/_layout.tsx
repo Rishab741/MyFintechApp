@@ -13,6 +13,7 @@ export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
   const appState = useRef<AppStateStatus>(AppState.currentState);
+  const [routeDecided, setRouteDecided] = useState(false);
 
   // ── 1. Hydrate session on cold start + listen for all future changes ────────
   useEffect(() => {
@@ -142,14 +143,20 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    if (!session && !inAuthGroup) {
-      router.replace('/(auth)/login');
+    if (!session) {
+      if (!inAuthGroup) {
+        router.replace('/(auth)/login');
+        // Keep spinner up — wait for segment to update to '(auth)'
+      } else {
+        setRouteDecided(true); // Already on login, safe to render
+      }
       return;
     }
 
     if (session && inAuthGroup) {
       // New sign-in: check if the user has any connected accounts.
       // Zero accounts → first-run onboarding wizard; otherwise → dashboard.
+      // Keep spinner up while we decide and redirect.
       (async () => {
         try {
           const { count } = await supabase
@@ -167,16 +174,20 @@ export default function RootLayout() {
           router.replace('/(tabs)'); // fail-safe: always reach the app
         }
       })();
+      return;
     }
+
+    // session && !inAuthGroup — user is already on the correct route
+    setRouteDecided(true);
   }, [session, initialized, segments]);
 
-  // ── 4. Splash while session resolves ────────────────────────────────────────
-  if (!initialized) {
+  // ── 4. Splash while session resolves or routing is in progress ───────────────
+  if (!initialized || !routeDecided) {
     return (
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <View style={{ flex: 1, backgroundColor: '#0A0D14', alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color="#C9A84C" size="large" />
+          <View style={{ flex: 1, backgroundColor: '#060E1F', alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color="#0EA5E9" size="large" />
           </View>
         </GestureHandlerRootView>
       </SafeAreaProvider>
