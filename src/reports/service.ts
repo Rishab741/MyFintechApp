@@ -41,11 +41,23 @@ export async function deleteReport(reportId: string): Promise<void> {
 
 /** Returns true if the current user has at least one active connected account. */
 export async function checkConnectedProfile(): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("accounts")
-    .select("id")
-    .eq("is_active", true)
-    .limit(1);
-  if (error) return false;
-  return (data?.length ?? 0) > 0;
+  // Check brokerage_accounts (new multi-account table)
+  const { count: bc } = await supabase
+    .from("brokerage_accounts")
+    .select("id", { count: "exact", head: true })
+    .eq("is_active", true);
+  if ((bc ?? 0) > 0) return true;
+
+  // Fall back: snaptrade_connections (legacy single-account)
+  const { data: snap } = await supabase
+    .from("snaptrade_connections")
+    .select("account_id")
+    .maybeSingle();
+  if (snap?.account_id) return true;
+
+  // Last resort: any portfolio snapshot means they've synced before
+  const { count: sc } = await supabase
+    .from("portfolio_snapshots")
+    .select("id", { count: "exact", head: true });
+  return (sc ?? 0) > 0;
 }
