@@ -1,0 +1,23 @@
+# Virtual environment — never ship the local venv into the Docker image.
+# The Dockerfile installs dependencies fresh from requirements.txt.
+.venv
+venv
+env
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Dev / editor artefacts
+.env
+.env.*
+*.env
+.DS_Store
+.idea
+.vscode
+
+# Test / coverage
+.pytest_cache
+.coverage
+htmlcov

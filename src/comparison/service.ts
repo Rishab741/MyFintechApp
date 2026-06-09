@@ -7,6 +7,11 @@ import type {
   ScenarioRun,
 } from "./types";
 
+// Resolved once at module load from the already-substituted env var.
+// Never read process.env at call time — Babel replaces it at build time only.
+const SUPABASE_FUNCTIONS_URL =
+  (process.env.EXPO_PUBLIC_SUPABASE_URL ?? "") + "/functions/v1";
+
 // ── Scenarios ─────────────────────────────────────────────────────────────────
 
 export async function listScenarios(): Promise<Scenario[]> {
@@ -88,43 +93,33 @@ export async function runScenario(
 }
 
 export async function pollScenario(runId: string): Promise<ScenarioRun> {
-  const { data, error } = await supabase.functions.invoke<ScenarioRun>(
-    "poll-scenario",
-    {
-      method: "GET",
-      headers: { "x-run-id": runId },
-      // Edge function reads run_id from query param — pass it as a custom header
-      // that the function can't read... instead build the URL via a workaround:
-      // supabase.functions.invoke doesn't support query params, so we use fetch.
-    },
-  );
-  // Fallback: invoke doesn't support query params, so use the session token directly
-  if (error && !data) {
-    return _pollWithFetch(runId);
-  }
-  if (!data) throw new Error("Empty response from poll-scenario");
-  return data;
-}
-
-async function _pollWithFetch(runId: string): Promise<ScenarioRun> {
+  // functions.invoke does not forward query params to the edge function.
+  // The poll-scenario function reads run_id from url.searchParams, so we
+  // must use a direct fetch with the param in the URL.
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("Not authenticated");
 
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-  const url = `${supabaseUrl}/functions/v1/poll-scenario?run_id=${encodeURIComponent(runId)}`;
+  const url = `${SUPABASE_FUNCTIONS_URL}/poll-scenario?run_id=${encodeURIComponent(runId)}`;
 
   const res = await fetch(url, {
+    method: "GET",
     headers: {
       Authorization: `Bearer ${session.access_token}`,
-      "Content-Type": "application/json",
+      "apikey": process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "",
     },
   });
 
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
+    const detail = await res.text().catch(() => "unknown error");
     throw new Error(`poll-scenario ${res.status}: ${detail}`);
   }
-  return res.json() as Promise<ScenarioRun>;
+
+  const payload = await res.json() as ScenarioRun & { error?: string };
+
+  // Edge function can return HTTP 200 with an error field in the body
+  if (payload.error) throw new Error(payload.error);
+
+  return payload;
 }
 
 // ── Asset universe ────────────────────────────────────────────────────────────
