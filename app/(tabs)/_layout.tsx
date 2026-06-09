@@ -319,6 +319,8 @@ export default function TabLayout() {
       <Tabs.Screen name="Import"            options={{ headerShown: false }} />
       <Tabs.Screen name="Reports"           options={{ headerShown: false }} />
       <Tabs.Screen name="InvestmentProfile" options={{ headerShown: false }} />
+      {/* Connect is kept as a route but not in the nav — accessible only via deep links */}
+      <Tabs.Screen name="Connect"           options={{ headerShown: false, href: null }} />
     </Tabs>
   );
 }

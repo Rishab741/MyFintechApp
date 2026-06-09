@@ -1,5 +1,5 @@
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, ActivityIndicator, Linking, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -136,7 +136,7 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
-  // ── 3. Route guard ───────────────────────────────────────────────────────────
+  // ── 3. Route guard (auth + first-run onboarding) ────────────────────────────
   useEffect(() => {
     if (!initialized) return;
 
@@ -144,8 +144,29 @@ export default function RootLayout() {
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
-      router.replace('/(tabs)');
+      return;
+    }
+
+    if (session && inAuthGroup) {
+      // New sign-in: check if the user has any connected accounts.
+      // Zero accounts → first-run onboarding wizard; otherwise → dashboard.
+      (async () => {
+        try {
+          const { count } = await supabase
+            .from('brokerage_accounts')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', session.user.id)
+            .eq('is_active', true);
+          if ((count ?? 0) === 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            router.replace('/onboard' as any);
+          } else {
+            router.replace('/(tabs)');
+          }
+        } catch {
+          router.replace('/(tabs)'); // fail-safe: always reach the app
+        }
+      })();
     }
   }, [session, initialized, segments]);
 

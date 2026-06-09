@@ -175,6 +175,146 @@ const ar = StyleSheet.create({
   reconnectTxt: { color: AMBER, fontSize: 11, fontFamily: mono, fontWeight: "700" },
 });
 
+// ── Binance / manual API-key fallback (hidden by default) ────────────────────
+// Only surfaced when user explicitly taps "Platform not listed?"
+// Kept out of the primary flow so it never creates friction for 95% of users.
+function BinanceFallback() {
+  const [open,       setOpen]       = useState(false);
+  const [exchange,   setExchange]   = useState<"binance" | "binance_us">("binance");
+  const [apiKey,     setApiKey]     = useState("");
+  const [apiSecret,  setApiSecret]  = useState("");
+  const [showSecret, setShowSecret] = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+  const [done,       setDone]       = useState(false);
+
+  const submit = async () => {
+    if (!apiKey.trim() || !apiSecret.trim()) { setError("Both fields are required."); return; }
+    setLoading(true); setError(null);
+    try {
+      const { connectBinanceKey } = await import("@/src/import/service");
+      await connectBinanceKey(apiKey.trim(), apiSecret.trim(), exchange);
+      setDone(true); setApiKey(""); setApiSecret("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Validation failed — check your keys and try again.");
+    } finally { setLoading(false); }
+  };
+
+  if (done) {
+    return (
+      <View style={bf.doneBox}>
+        <MaterialCommunityIcons name="check-circle" size={18} color={GREEN} />
+        <Text style={bf.doneTxt}>Binance connected successfully</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={bf.wrap}>
+      <Pressable style={bf.toggle} onPress={() => setOpen(v => !v)}>
+        <MaterialCommunityIcons name="help-circle-outline" size={16} color={MUTED} />
+        <Text style={bf.toggleTxt}>Platform not listed? Connect manually</Text>
+        <MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={16} color={MUTED} />
+      </Pressable>
+
+      {open && (
+        <View style={bf.panel}>
+          <Text style={bf.panelTitle}>Manual API Key Connection</Text>
+          <Text style={bf.panelSub}>
+            For platforms not covered by the portal (primarily Binance).
+            Create a <Text style={{ color: AMBER, fontWeight: "700" }}>read-only</Text> API key
+            on your exchange — never enable trading or withdrawal permissions.
+          </Text>
+
+          {/* Exchange selector */}
+          <View style={bf.segRow}>
+            {(["binance", "binance_us"] as const).map(ex => (
+              <Pressable
+                key={ex}
+                style={[bf.seg, exchange === ex && bf.segActive]}
+                onPress={() => setExchange(ex)}
+              >
+                <Text style={[bf.segTxt, exchange === ex && bf.segTxtActive]}>
+                  {ex === "binance" ? "Binance" : "Binance.US"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={bf.inputLabel}>API Key</Text>
+          <TextInput
+            style={bf.input}
+            value={apiKey}
+            onChangeText={setApiKey}
+            placeholder="Paste your API key"
+            placeholderTextColor={MUTED}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <View style={bf.secretHeader}>
+            <Text style={bf.inputLabel}>Secret Key</Text>
+            <Pressable onPress={() => setShowSecret(v => !v)}>
+              <Text style={{ color: CYAN, fontSize: 12, fontFamily: mono }}>{showSecret ? "Hide" : "Show"}</Text>
+            </Pressable>
+          </View>
+          <TextInput
+            style={bf.input}
+            value={apiSecret}
+            onChangeText={setApiSecret}
+            placeholder="Paste your secret key"
+            placeholderTextColor={MUTED}
+            secureTextEntry={!showSecret}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          {error && (
+            <View style={bf.errorBox}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={14} color={RED} />
+              <Text style={bf.errorTxt}>{error}</Text>
+            </View>
+          )}
+
+          <Pressable
+            style={[bf.submitBtn, (loading || !apiKey || !apiSecret) && { opacity: 0.5 }]}
+            onPress={submit}
+            disabled={loading || !apiKey.trim() || !apiSecret.trim()}
+          >
+            {loading
+              ? <ActivityIndicator color={BG} size="small" />
+              : <Text style={bf.submitTxt}>Validate & Connect</Text>
+            }
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const bf = StyleSheet.create({
+  wrap:       { marginTop: 8, marginBottom: 4 },
+  toggle:     { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12 },
+  toggleTxt:  { flex: 1, color: MUTED, fontSize: 13 },
+  panel:      { backgroundColor: CARD2, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: BORDER },
+  panelTitle: { color: TXT, fontSize: 14, fontWeight: "700", marginBottom: 6 },
+  panelSub:   { color: MUTED, fontSize: 12, lineHeight: 18, marginBottom: 16 },
+  segRow:     { flexDirection: "row", backgroundColor: CARD, borderRadius: 10, padding: 3, marginBottom: 14 },
+  seg:        { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center" },
+  segActive:  { backgroundColor: CARD2 },
+  segTxt:     { color: MUTED, fontSize: 13, fontFamily: mono },
+  segTxtActive:{ color: TXT, fontWeight: "700" },
+  inputLabel: { color: MUTED, fontSize: 10, fontFamily: mono, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 },
+  input:      { backgroundColor: CARD, color: TXT, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, fontSize: 13, fontFamily: mono, borderWidth: 1, borderColor: BORDER, marginBottom: 10 },
+  secretHeader:{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  errorBox:   { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: RED + "15", borderRadius: 8, padding: 10, borderWidth: 1, borderColor: RED + "33", marginBottom: 10 },
+  errorTxt:   { flex: 1, color: RED, fontSize: 12 },
+  submitBtn:  { backgroundColor: "#F3BA2F", borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+  submitTxt:  { color: BG, fontSize: 14, fontWeight: "800" },
+  doneBox:    { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: GREEN + "12", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: GREEN + "33", marginBottom: 8 },
+  doneTxt:    { color: GREEN, fontSize: 13 },
+});
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -457,6 +597,9 @@ export default function OnboardingScreen() {
             )}
           </>
         )}
+
+        {/* Platform not listed? — Binance & unsupported exchanges manual fallback */}
+        <BinanceFallback />
 
         {/* Security footnote */}
         <View style={s.securityNote}>
