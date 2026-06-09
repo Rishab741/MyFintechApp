@@ -341,17 +341,17 @@ serve(async (req: Request) => {
         return json({ error: "User not registered" }, 404)
       }
 
-      // Fetch the account list from SnapTrade to get the real account_id
+      // Fetch ALL accounts from SnapTrade (user may have connected multiple)
       const { data: accounts } = await snapTradeRequest(
         clientId, consumerKey, 'GET', '/accounts', null,
         `userId=${user_id}&userSecret=${userData.user_secret}`
       )
       console.log("Accounts after connection:", JSON.stringify(accounts))
 
-      const accountId = Array.isArray(accounts) && accounts.length > 0
-        ? accounts[0].id
-        : brokerage_authorization_id
+      const accountList = Array.isArray(accounts) ? accounts : []
+      const accountId   = accountList.length > 0 ? accountList[0].id : brokerage_authorization_id
 
+      // ── Legacy: keep snaptrade_connections for backwards compat ──────────
       await supabaseAdmin.from('snaptrade_connections').upsert({
         user_id,
         account_id: accountId,
@@ -359,8 +359,32 @@ serve(async (req: Request) => {
         connected_at: new Date().toISOString(),
       })
 
+      // ── New: upsert ALL accounts into brokerage_accounts ─────────────────
+      if (accountList.length > 0) {
+        const rows = accountList.map((acc: any) => ({
+          user_id,
+          provider:               'snaptrade',
+          snaptrade_account_id:   acc.id,
+          snaptrade_auth_id:      brokerage_authorization_id ?? null,
+          brokerage_slug:         acc.brokerage?.slug ?? null,
+          brokerage_name:         acc.brokerage?.name ?? null,
+          brokerage_logo_url:     acc.brokerage?.square_logo_url ?? null,
+          account_name:           acc.name ?? null,
+          account_number:         acc.number ?? null,
+          account_type:           acc.type ?? null,
+          currency:               acc.currency?.code ?? 'USD',
+          is_active:              true,
+          reconnect_required:     false,
+          last_synced_at:         new Date().toISOString(),
+        }))
+        await supabaseAdmin
+          .from('brokerage_accounts')
+          .upsert(rows, { onConflict: 'user_id,provider,snaptrade_account_id' })
+        console.log(`Saved ${rows.length} account(s) to brokerage_accounts ✅`)
+      }
+
       console.log("Connection saved to DB ✅")
-      return json({ success: true, account_id: accountId })
+      return json({ success: true, account_id: accountId, accounts_connected: accountList.length })
     }
 
     // ══════════════════════════════════════════════════════════════════════════
