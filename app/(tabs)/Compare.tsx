@@ -308,7 +308,6 @@ export default function CompareScreen() {
 
   // ── Asset search ──────────────────────────────────────────────────────────
   const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setSearchResults([]); return; }
     setIsSearching(true);
     try { setSearchResults(await searchAssets(q)); }
     catch { setSearchResults([]); }
@@ -319,6 +318,12 @@ export default function CompareScreen() {
     setAssetSearch(q);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => doSearch(q), 350);
+  };
+
+  // Load featured assets the moment the search box opens
+  const openSearch = () => {
+    setShowSearch(true);
+    if (searchResults.length === 0 && !assetSearch) doSearch('');
   };
 
   const pickAsset = (asset: ComparisonAsset) => {
@@ -416,7 +421,7 @@ export default function CompareScreen() {
       <View style={sc.formGroup}>
         <View style={sc.rowBetween}>
           <Text style={sc.label}>Compare Against ({selectedAssets.length}/5)</Text>
-          <Pressable onPress={() => setShowSearch(v => !v)} style={sc.addBtn}>
+          <Pressable onPress={showSearch ? () => { setShowSearch(false); setSearchResults([]); setAssetSearch(''); } : openSearch} style={sc.addBtn}>
             <MaterialCommunityIcons name={showSearch ? 'close' : 'plus'} size={16} color={CYAN} />
             <Text style={sc.addBtnTxt}>{showSearch ? 'Cancel' : 'Add'}</Text>
           </Pressable>

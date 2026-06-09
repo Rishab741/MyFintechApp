@@ -129,17 +129,38 @@ export async function fetchAssetUniverse(): Promise<ComparisonAsset[]> {
 }
 
 export async function searchAssets(query: string): Promise<ComparisonAsset[]> {
-  const q = query.trim().toUpperCase();
+  const q = query.trim();
   if (!q) return fetchAssetUniverse();
 
-  const { data, error } = await supabase
-    .from("comparison_asset_universe")
-    .select("symbol, name, asset_class, sector, exchange, currency, is_featured, description")
-    .or(`symbol.ilike.%${q}%,name.ilike.%${query.trim()}%`)
-    .order("is_featured", { ascending: false })
-    .limit(30);
-  if (error) throw new Error(error.message);
-  return (data ?? []) as ComparisonAsset[];
+  const COLS = "symbol, name, asset_class, sector, exchange, currency, is_featured, description";
+
+  // Run symbol and name searches separately — using .or() with % wildcards causes
+  // double URL-encoding (%25) in PostgREST, making the wildcards literal characters.
+  const [{ data: bySymbol }, { data: byName }] = await Promise.all([
+    supabase
+      .from("comparison_asset_universe")
+      .select(COLS)
+      .ilike("symbol", `%${q}%`)
+      .order("is_featured", { ascending: false })
+      .limit(20),
+    supabase
+      .from("comparison_asset_universe")
+      .select(COLS)
+      .ilike("name", `%${q}%`)
+      .order("is_featured", { ascending: false })
+      .limit(20),
+  ]);
+
+  // Merge and deduplicate by symbol; featured rows sort first naturally
+  const seen = new Set<string>();
+  const results: ComparisonAsset[] = [];
+  for (const row of [...(bySymbol ?? []), ...(byName ?? [])]) {
+    if (!seen.has(row.symbol)) {
+      seen.add(row.symbol);
+      results.push(row as ComparisonAsset);
+    }
+  }
+  return results.slice(0, 30);
 }
 
 // ── Behavioral profile ────────────────────────────────────────────────────────
