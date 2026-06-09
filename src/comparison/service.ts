@@ -19,9 +19,12 @@ export async function listScenarios(): Promise<Scenario[]> {
 }
 
 export async function createScenario(input: CreateScenarioInput): Promise<Scenario> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
   const { data, error } = await supabase
     .from("scenarios")
-    .insert(input)
+    .insert({ ...input, user_id: user.id })
     .select("*")
     .single();
   if (error) throw new Error(error.message);
