@@ -66,7 +66,22 @@ export async function getSnapTradePortalUrl(): Promise<string> {
   const { data, error } = await supabase.functions.invoke("exchange-plaid-token", {
     body: { action: "snaptrade_create", user_id: user.id },
   });
-  if (error) throw new Error(error.message ?? "Failed to start connection portal");
+
+  if (error) {
+    // supabase-js wraps non-2xx responses as FunctionsHttpError with the raw
+    // Response in `context`. Extract the body so the user sees the real reason
+    // (e.g. "Config missing" for missing secrets, or a SnapTrade API message).
+    let detail: string = error.message ?? "Failed to start connection portal";
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const body = await (error as any).context?.json?.();
+      if (body?.error)   detail = body.error;
+      if (body?.message) detail = body.message;
+    } catch { /* response body not JSON — keep the default message */ }
+    console.error("[getSnapTradePortalUrl]", detail);
+    throw new Error(detail);
+  }
+
   if (data?.already_connected) throw new Error("ALREADY_CONNECTED");
   if (!data?.redirect_uri) throw new Error(data?.error ?? "No portal URL returned");
   return data.redirect_uri as string;

@@ -154,21 +154,17 @@ export default function RootLayout() {
     }
 
     if (session && inAuthGroup) {
-      // New sign-in: check if the user has any connected accounts.
-      // Zero accounts → first-run onboarding wizard; otherwise → dashboard.
-      // Keep spinner up while we decide and redirect.
+      // New sign-in: check user_metadata.onboarded flag.
+      // First-time user (flag absent/false) → onboarding wizard.
+      // Returning user → dashboard directly.
       (async () => {
         try {
-          const { count } = await supabase
-            .from('brokerage_accounts')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', session.user.id)
-            .eq('is_active', true);
-          if ((count ?? 0) === 0) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user?.user_metadata?.onboarded) {
+            router.replace('/(tabs)');
+          } else {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             router.replace('/onboard' as any);
-          } else {
-            router.replace('/(tabs)');
           }
         } catch {
           router.replace('/(tabs)'); // fail-safe: always reach the app

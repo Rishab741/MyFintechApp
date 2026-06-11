@@ -202,16 +202,36 @@ serve(async (req: Request) => {
           await waitForRegistration(clientId, consumerKey, user_id)
 
         } else if (regData.code === '1012' || regData.code === 1012) {
-          // 1012 = this userId already exists in SnapTrade but we have no secret.
-          // Only delete THIS user — never wipe other users' accounts.
-          console.log("1012 hit — deleting and re-registering current user only...")
-          const { status: delStatus, data: delData } = await snapTradeRequest(
-            clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', { userId: user_id }
+          // 1012 = "Personal keys can only register one user."
+          // The personal key slot is already occupied by a DIFFERENT user.
+          // We must list users, evict the occupant(s), then register this user.
+          // (Deleting `user_id` is wrong — that user was never registered.)
+          console.log("1012 hit — personal key slot occupied; listing current registrants...")
+          const { data: userList } = await snapTradeRequest(
+            clientId, consumerKey, 'GET', '/snapTrade/listUsers', null
           )
-          console.log(`Delete ${user_id}:`, delStatus, JSON.stringify(delData))
-          await waitForDeletion(clientId, consumerKey, user_id)
+          console.log("Currently registered in SnapTrade:", JSON.stringify(userList))
+          const occupants: string[] = Array.isArray(userList) ? userList : []
 
-          console.log("Re-registering with correct userId...")
+          for (const occupantId of occupants) {
+            // userId must be in query params — NOT in the request body
+            const { status: delSt, data: delD } = await snapTradeRequest(
+              clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', null,
+              `userId=${encodeURIComponent(occupantId)}`
+            )
+            console.log(`Evicted SnapTrade occupant ${occupantId}:`, delSt, JSON.stringify(delD))
+            // Soft-clear DB records so the evicted user can reconnect cleanly
+            await supabaseAdmin.from('snaptrade_users').delete().eq('user_id', occupantId)
+            await supabaseAdmin.from('snaptrade_connections').delete().eq('user_id', occupantId)
+            await supabaseAdmin.from('brokerage_accounts')
+              .update({ is_active: false, reconnect_required: true, sync_error: 'Account reset — please reconnect' })
+              .eq('user_id', occupantId)
+          }
+
+          // Wait until the evicted user is no longer in the list
+          await waitForDeletion(clientId, consumerKey, occupants[0] ?? user_id)
+
+          console.log("Re-registering current user...")
           const { status: retryStatus, data: retryData } = await snapTradeRequest(
             clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId: user_id }
           )
@@ -227,8 +247,10 @@ serve(async (req: Request) => {
 
         } else if (regData.code === '1010' || regData.code === 1010) {
           console.log("1010 hit — userId exists, cycling to get fresh secret...")
+          // userId must be in query params — NOT in the request body
           const { status: delStatus, data: delData } = await snapTradeRequest(
-            clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', { userId: user_id }
+            clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', null,
+            `userId=${encodeURIComponent(user_id)}`
           )
           console.log("Delete response:", delStatus, JSON.stringify(delData))
           await waitForDeletion(clientId, consumerKey, user_id)
@@ -282,7 +304,8 @@ serve(async (req: Request) => {
         // and return a fresh link in this same request so the user never sees an error.
         console.log("Retry login failed — auto-recovering with fresh registration...")
         await supabaseAdmin.from('snaptrade_users').delete().eq('user_id', user_id)
-        await snapTradeRequest(clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', { userId: user_id })
+        // userId must be in query params, not the request body
+        await snapTradeRequest(clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', null, `userId=${encodeURIComponent(user_id)}`)
         await waitForDeletion(clientId, consumerKey, user_id)
 
         const { status: freshRegStatus, data: freshRegData } = await snapTradeRequest(

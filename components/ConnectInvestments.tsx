@@ -147,8 +147,19 @@ export default function ConnectInvestment({ onConnectionChange }: { onConnection
         return;
       }
 
-      if (error || !data?.redirect_uri) {
-        throw new Error('Could not initialize Brokerage Link');
+      if (error) {
+        let detail = error.message ?? 'Could not initialize Brokerage Link';
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const body = await (error as any).context?.json?.();
+          if (body?.error)   detail = body.error;
+          if (body?.message) detail = body.message;
+        } catch { /* keep default */ }
+        throw new Error(detail);
+      }
+
+      if (!data?.redirect_uri) {
+        throw new Error(data?.error ?? 'No portal URL returned from brokerage service');
       }
 
       const supported = await Linking.canOpenURL(data.redirect_uri);
