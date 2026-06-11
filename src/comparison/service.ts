@@ -48,10 +48,13 @@ export async function updateScenario(
   id: string,
   input: Partial<CreateScenarioInput>,
 ): Promise<Scenario> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not authenticated");
   const { data, error } = await supabase
     .from("scenarios")
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("user_id", session.user.id)
     .select("*")
     .single();
   if (error) throw new Error(error.message);
@@ -59,7 +62,13 @@ export async function updateScenario(
 }
 
 export async function deleteScenario(id: string): Promise<void> {
-  const { error } = await supabase.from("scenarios").delete().eq("id", id);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not authenticated");
+  const { error } = await supabase
+    .from("scenarios")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", session.user.id);
   if (error) throw new Error(error.message);
 }
 

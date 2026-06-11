@@ -31,11 +31,8 @@ const COINBASE_CLIENT_SECRET = Deno.env.get("COINBASE_CLIENT_SECRET")!;
 const COINBASE_TOKEN_URL = "https://api.coinbase.com/oauth/token";
 const COINBASE_REVOKE_URL = "https://api.coinbase.com/oauth/revoke";
 
-const BINANCE_BASE    = "https://api.binance.com";
-const BINANCE_US_BASE = "https://api.binance.us";
-
 const CORS = {
-  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Origin":  Deno.env.get("ALLOWED_ORIGIN") ?? "https://platstock.app",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -73,34 +70,12 @@ async function coinbaseTokenRequest(params: Record<string, string>) {
   return res.json();
 }
 
-// ── Binance signature helper ──────────────────────────────────────────────────
-// Validates that a key pair is valid by calling GET /api/v3/account
-// (requires HMAC-SHA256 signature).
-async function validateBinanceKey(
-  apiKey: string,
-  apiSecret: string,
-  base: string,
-): Promise<{ valid: boolean; error?: string }> {
-  try {
-    const ts       = Date.now().toString();
-    const payload  = `timestamp=${ts}`;
-    const key      = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(apiSecret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-    const sigBuf   = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
-    const sig      = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
-    const url      = `${base}/api/v3/account?${payload}&signature=${sig}`;
-    const res      = await fetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
-    if (res.ok) return { valid: true };
-    const body = await res.json().catch(() => ({}));
-    return { valid: false, error: body.msg ?? `HTTP ${res.status}` };
-  } catch (e) {
-    return { valid: false, error: e instanceof Error ? e.message : String(e) };
-  }
+// ── Exchange label map ────────────────────────────────────────────────────────
+const EXCHANGE_LABELS: Record<string, string> = {
+  binance:    "Binance",
+  binance_us: "Binance.US",
+  kraken:     "Kraken",
+  kucoin:     "KuCoin",
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -218,32 +193,38 @@ Deno.serve(async (req: Request) => {
     return json({ disconnected: true });
   }
 
-  // ── Binance API key validation + storage ──────────────────────────────────
+  // ── Exchange API key storage ──────────────────────────────────────────────
+  // We do NOT call the exchange API to validate keys here because:
+  //   1. IP-restricted keys (common on Binance) would always be rejected since
+  //      Supabase edge function IPs are not in the user's allowlist.
+  //   2. Each exchange (Kraken, KuCoin) uses a different auth scheme.
+  // Keys are validated lazily on the first portfolio sync instead.
   if (action === "binance-key") {
     const { api_key, api_secret, exchange } = body;
-    if (!api_key || !api_secret) return json({ error: "api_key and api_secret required" }, 400);
+    if (!api_key?.trim() || !api_secret?.trim()) {
+      return json({ error: "api_key and api_secret are required" }, 400);
+    }
+    if (api_key.trim().length < 8 || api_secret.trim().length < 8) {
+      return json({ error: "Key or secret looks too short — please paste the full key from your exchange" }, 400);
+    }
 
-    const isBinanceUS = exchange === "binance_us";
-    const base        = isBinanceUS ? BINANCE_US_BASE : BINANCE_BASE;
-    const label       = isBinanceUS ? "Binance.US" : "Binance";
-
-    const { valid, error: valErr } = await validateBinanceKey(api_key, api_secret, base);
-    if (!valid) return json({ error: `Invalid API key: ${valErr}` }, 400);
+    const exchangeId = exchange ?? "binance";
+    const label      = EXCHANGE_LABELS[exchangeId] ?? exchangeId;
 
     const { error: dbErr } = await sb.from("exchange_connections").upsert({
       user_id:         user.id,
-      exchange:        exchange ?? "binance",
+      exchange:        exchangeId,
       label,
       connection_type: "api_key",
-      api_key,
-      api_secret,
+      api_key:         api_key.trim(),
+      api_secret:      api_secret.trim(),
       is_active:       true,
       last_synced_at:  new Date().toISOString(),
       sync_error:      null,
     }, { onConflict: "user_id,exchange" });
 
     if (dbErr) return json({ error: dbErr.message }, 500);
-    return json({ exchange: exchange ?? "binance", label, valid: true });
+    return json({ exchange: exchangeId, label, connected: true });
   }
 
   return json({ error: `Unknown action: ${action}` }, 400);

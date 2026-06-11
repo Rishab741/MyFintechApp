@@ -63,8 +63,9 @@ export async function getSnapTradePortalUrl(): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
+  // user_id is extracted from the JWT on the server — do not send it in the body
   const { data, error } = await supabase.functions.invoke("exchange-plaid-token", {
-    body: { action: "snaptrade_create", user_id: user.id },
+    body: { action: "snaptrade_create" },
   });
 
   if (error) {
@@ -94,13 +95,9 @@ export async function getSnapTradePortalUrl(): Promise<string> {
 export async function saveSnapTradeConnection(
   brokerageAuthorizationId: string | null,
 ): Promise<{ accounts_connected: number }> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-
   const { data, error } = await supabase.functions.invoke("exchange-plaid-token", {
     body: {
       action:                    "snaptrade_save_connection",
-      user_id:                   user.id,
       brokerage_authorization_id: brokerageAuthorizationId,
     },
   });
@@ -112,10 +109,7 @@ export async function saveSnapTradeConnection(
  * Triggers a fresh holdings sync for all connected SnapTrade accounts.
  */
 export async function syncSnapTradeHoldings(): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
   await supabase.functions.invoke("exchange-plaid-token", {
-    body: { action: "snaptrade_get_holdings", user_id: user.id },
+    body: { action: "snaptrade_get_holdings" },
   });
 }

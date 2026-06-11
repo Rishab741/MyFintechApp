@@ -2,13 +2,18 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  // Restrict to known origins; '*' allows any website to trigger credentialed requests.
+  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? 'https://platstock.app',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const PLAID_BASE_URL = 'https://sandbox.plaid.com'
+// Read from env so switching sandbox → production is a config change, not a code change.
+const PLAID_BASE_URL = Deno.env.get('PLAID_BASE_URL') ?? 'https://sandbox.plaid.com'
 const SNAPTRADE_BASE_URL = 'https://api.snaptrade.com/api/v1'
+
+const SUPABASE_URL         = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -16,7 +21,14 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 
-// ── UNTOUCHED from original working code ──────────────────────────────────────
+// ── JWT verification — user_id comes only from the verified token ─────────────
+async function getUser(authHeader: string) {
+  if (!authHeader.startsWith('Bearer ')) return null
+  const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+  const { data: { user }, error } = await sb.auth.getUser(authHeader.slice(7))
+  return error ? null : user
+}
+
 async function snapTradeSign(
   consumerKey: string,
   path: string,
@@ -35,7 +47,6 @@ async function snapTradeSign(
   return btoa(String.fromCharCode(...new Uint8Array(signature)))
 }
 
-// ── UNTOUCHED from original working code ──────────────────────────────────────
 async function snapTradeRequest(
   clientId: string,
   consumerKey: string,
@@ -71,17 +82,10 @@ async function snapTradeLogin(
   userSecret: string
 ): Promise<{ status: number; data: any }> {
   const timestamp = Math.floor(Date.now() / 1000).toString()
-
-  // customRedirect and immediateRedirect go in the query string alongside the
-  // auth params — same string that gets signed with null content.
-  // This is safe because the original signing worked with null content,
-  // and adding params to the query doesn't change the content field.
   const redirectUri = encodeURIComponent('myfintechapp://snaptrade-callback')
   const query = `clientId=${clientId}&timestamp=${timestamp}&userId=${userId}&userSecret=${userSecret}&customRedirect=${redirectUri}&immediateRedirect=true`
   const path = '/api/v1/snapTrade/login'
   const signature = await snapTradeSign(consumerKey, path, query, null)
-
-  console.log("Signing:", JSON.stringify({ content: null, path, query }))
 
   const res = await fetch(`${SNAPTRADE_BASE_URL}/snapTrade/login?${query}`, {
     method: 'POST',
@@ -97,7 +101,6 @@ async function snapTradeLogin(
   return { status: res.status, data }
 }
 
-// ── UNTOUCHED from original working code ──────────────────────────────────────
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 async function waitForDeletion(
@@ -143,9 +146,15 @@ async function waitForRegistration(
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+  // ── Auth gate: every action requires a valid Supabase session ─────────────
+  const user = await getUser(req.headers.get('authorization') ?? '')
+  if (!user) return json({ error: 'Unauthorized' }, 401)
+  // user.id is the authoritative user identifier for the remainder of this function
+  const userId = user.id
+
   try {
     const body = await req.json()
-    const { action, user_id, public_token, metadata } = body
+    const { action, public_token, metadata } = body
 
     // ══════════════════════════════════════════════════════════════════════════
     // SNAPTRADE — Brokerages
@@ -153,24 +162,19 @@ serve(async (req: Request) => {
 
     if (action === 'snaptrade_create') {
       console.log("--- STARTING SNAPTRADE_CREATE ---")
-      console.log("App user_id:", user_id)
+      console.log("App userId:", userId)
 
       const clientId = Deno.env.get('SNAPTRADE_CLIENT_ID')
       const consumerKey = Deno.env.get('SNAPTRADE_CONSUMER_KEY')
       if (!clientId || !consumerKey) return json({ error: "Config missing" }, 500)
 
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      )
+      const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-      // ── NEW: If the user already connected a brokerage, skip the portal.
-      // This is the only addition to snaptrade_create — everything else below
-      // is byte-for-byte identical to the original working code.
+      // If the user already connected a brokerage, skip the portal.
       const { data: existingConnection } = await supabaseAdmin
         .from('snaptrade_connections')
         .select('account_id')
-        .eq('user_id', user_id)
+        .eq('user_id', userId)
         .maybeSingle()
 
       if (existingConnection?.account_id) {
@@ -182,7 +186,7 @@ serve(async (req: Request) => {
       const { data: existingUser } = await supabaseAdmin
         .from('snaptrade_users')
         .select('user_secret')
-        .eq('user_id', user_id)
+        .eq('user_id', userId)
         .maybeSingle()
 
       let userSecret = existingUser?.user_secret
@@ -192,20 +196,18 @@ serve(async (req: Request) => {
         console.log("No secret in DB. Attempting registration...")
 
         const { status: regStatus, data: regData } = await snapTradeRequest(
-          clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId: user_id }
+          clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId }
         )
         console.log("Register response:", JSON.stringify(regData))
 
         if (regStatus === 200 && regData.userSecret) {
           userSecret = regData.userSecret
           console.log("Waiting for registration to fully activate...")
-          await waitForRegistration(clientId, consumerKey, user_id)
+          await waitForRegistration(clientId, consumerKey, userId)
 
         } else if (regData.code === '1012' || regData.code === 1012) {
           // 1012 = "Personal keys can only register one user."
-          // The personal key slot is already occupied by a DIFFERENT user.
-          // We must list users, evict the occupant(s), then register this user.
-          // (Deleting `user_id` is wrong — that user was never registered.)
+          // The personal key slot is occupied by a DIFFERENT user — list them, evict, then register.
           console.log("1012 hit — personal key slot occupied; listing current registrants...")
           const { data: userList } = await snapTradeRequest(
             clientId, consumerKey, 'GET', '/snapTrade/listUsers', null
@@ -228,19 +230,18 @@ serve(async (req: Request) => {
               .eq('user_id', occupantId)
           }
 
-          // Wait until the evicted user is no longer in the list
-          await waitForDeletion(clientId, consumerKey, occupants[0] ?? user_id)
+          await waitForDeletion(clientId, consumerKey, occupants[0] ?? userId)
 
           console.log("Re-registering current user...")
           const { status: retryStatus, data: retryData } = await snapTradeRequest(
-            clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId: user_id }
+            clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId }
           )
           console.log("Re-register response:", JSON.stringify(retryData))
 
           if (retryStatus === 200 && retryData.userSecret) {
             userSecret = retryData.userSecret
             console.log("Waiting for registration to fully activate...")
-            await waitForRegistration(clientId, consumerKey, user_id)
+            await waitForRegistration(clientId, consumerKey, userId)
           } else {
             return json({ error: "Re-registration failed after 1012", details: retryData }, 401)
           }
@@ -250,21 +251,21 @@ serve(async (req: Request) => {
           // userId must be in query params — NOT in the request body
           const { status: delStatus, data: delData } = await snapTradeRequest(
             clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', null,
-            `userId=${encodeURIComponent(user_id)}`
+            `userId=${encodeURIComponent(userId)}`
           )
           console.log("Delete response:", delStatus, JSON.stringify(delData))
-          await waitForDeletion(clientId, consumerKey, user_id)
+          await waitForDeletion(clientId, consumerKey, userId)
 
           console.log("Re-registering...")
           const { status: retryStatus, data: retryData } = await snapTradeRequest(
-            clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId: user_id }
+            clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId }
           )
           console.log("Re-register response:", JSON.stringify(retryData))
 
           if (retryStatus === 200 && retryData.userSecret) {
             userSecret = retryData.userSecret
             console.log("Waiting for registration to fully activate...")
-            await waitForRegistration(clientId, consumerKey, user_id)
+            await waitForRegistration(clientId, consumerKey, userId)
           } else {
             return json({ error: "Re-registration failed after 1010", details: retryData }, 401)
           }
@@ -274,7 +275,7 @@ serve(async (req: Request) => {
         }
 
         await supabaseAdmin.from('snaptrade_users').upsert({
-          user_id,
+          user_id: userId,
           user_secret: userSecret,
         })
         console.log("userSecret saved to DB ✅")
@@ -283,7 +284,7 @@ serve(async (req: Request) => {
       // 3. Generate Login Portal Link
       console.log("Generating Login Link...")
       const { status: loginStatus, data: loginData } = await snapTradeLogin(
-        clientId, consumerKey, user_id, userSecret
+        clientId, consumerKey, userId, userSecret
       )
       console.log("Login response:", JSON.stringify(loginData))
 
@@ -292,7 +293,7 @@ serve(async (req: Request) => {
         await delay(4000)
 
         const { status: retryLoginStatus, data: retryLoginData } = await snapTradeLogin(
-          clientId, consumerKey, user_id, userSecret
+          clientId, consumerKey, userId, userSecret
         )
         console.log("Retry login response:", JSON.stringify(retryLoginData))
 
@@ -300,26 +301,24 @@ serve(async (req: Request) => {
           return json({ redirect_uri: retryLoginData.redirectURI })
         }
 
-        // Retry also failed — secret is stale. Auto-recover: delete, re-register,
-        // and return a fresh link in this same request so the user never sees an error.
+        // Retry also failed — secret is stale. Auto-recover with fresh registration.
         console.log("Retry login failed — auto-recovering with fresh registration...")
-        await supabaseAdmin.from('snaptrade_users').delete().eq('user_id', user_id)
-        // userId must be in query params, not the request body
-        await snapTradeRequest(clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', null, `userId=${encodeURIComponent(user_id)}`)
-        await waitForDeletion(clientId, consumerKey, user_id)
+        await supabaseAdmin.from('snaptrade_users').delete().eq('user_id', userId)
+        await snapTradeRequest(clientId, consumerKey, 'DELETE', '/snapTrade/deleteUser', null, `userId=${encodeURIComponent(userId)}`)
+        await waitForDeletion(clientId, consumerKey, userId)
 
         const { status: freshRegStatus, data: freshRegData } = await snapTradeRequest(
-          clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId: user_id }
+          clientId, consumerKey, 'POST', '/snapTrade/registerUser', { userId }
         )
         console.log("Fresh re-register response:", JSON.stringify(freshRegData))
 
         if (freshRegStatus === 200 && freshRegData.userSecret) {
           const freshSecret = freshRegData.userSecret
-          await supabaseAdmin.from('snaptrade_users').upsert({ user_id, user_secret: freshSecret })
-          await waitForRegistration(clientId, consumerKey, user_id)
+          await supabaseAdmin.from('snaptrade_users').upsert({ user_id: userId, user_secret: freshSecret })
+          await waitForRegistration(clientId, consumerKey, userId)
 
           const { status: freshLoginStatus, data: freshLoginData } = await snapTradeLogin(
-            clientId, consumerKey, user_id, freshSecret
+            clientId, consumerKey, userId, freshSecret
           )
           console.log("Fresh login response:", JSON.stringify(freshLoginData))
           if (freshLoginStatus === 200 && freshLoginData.redirectURI) {
@@ -337,9 +336,7 @@ serve(async (req: Request) => {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SNAPTRADE — NEW: Save connection after user completes the portal.
-    // Call this from your deep link handler in ConnectInvestments.tsx once
-    // SnapTrade redirects back to vestara://snaptrade-callback.
+    // SNAPTRADE — Save connection after user completes the portal.
     // ══════════════════════════════════════════════════════════════════════════
 
     if (action === 'snaptrade_save_connection') {
@@ -349,15 +346,12 @@ serve(async (req: Request) => {
       const consumerKey = Deno.env.get('SNAPTRADE_CONSUMER_KEY')
       if (!clientId || !consumerKey) return json({ error: "Config missing" }, 500)
 
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      )
+      const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
       const { data: userData } = await supabaseAdmin
         .from('snaptrade_users')
         .select('user_secret')
-        .eq('user_id', user_id)
+        .eq('user_id', userId)
         .single()
 
       if (!userData?.user_secret) {
@@ -367,25 +361,23 @@ serve(async (req: Request) => {
       // Fetch ALL accounts from SnapTrade (user may have connected multiple)
       const { data: accounts } = await snapTradeRequest(
         clientId, consumerKey, 'GET', '/accounts', null,
-        `userId=${user_id}&userSecret=${userData.user_secret}`
+        `userId=${userId}&userSecret=${userData.user_secret}`
       )
       console.log("Accounts after connection:", JSON.stringify(accounts))
 
       const accountList = Array.isArray(accounts) ? accounts : []
       const accountId   = accountList.length > 0 ? accountList[0].id : brokerage_authorization_id
 
-      // ── Legacy: keep snaptrade_connections for backwards compat ──────────
       await supabaseAdmin.from('snaptrade_connections').upsert({
-        user_id,
+        user_id: userId,
         account_id: accountId,
         brokerage_authorization_id: brokerage_authorization_id ?? null,
         connected_at: new Date().toISOString(),
       })
 
-      // ── New: upsert ALL accounts into brokerage_accounts ─────────────────
       if (accountList.length > 0) {
         const rows = accountList.map((acc: any) => ({
-          user_id,
+          user_id: userId,
           provider:               'snaptrade',
           snaptrade_account_id:   acc.id,
           snaptrade_auth_id:      brokerage_authorization_id ?? null,
@@ -411,8 +403,7 @@ serve(async (req: Request) => {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SNAPTRADE — NEW: Fetch live holdings and save a portfolio snapshot.
-    // Call this from your portfolio/analytics screen.
+    // SNAPTRADE — Fetch live holdings and save a portfolio snapshot.
     // ══════════════════════════════════════════════════════════════════════════
 
     if (action === 'snaptrade_get_holdings') {
@@ -420,15 +411,12 @@ serve(async (req: Request) => {
       const consumerKey = Deno.env.get('SNAPTRADE_CONSUMER_KEY')
       if (!clientId || !consumerKey) return json({ error: "Config missing" }, 500)
 
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      )
+      const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
       const { data: userData } = await supabaseAdmin
         .from('snaptrade_users')
         .select('user_secret')
-        .eq('user_id', user_id)
+        .eq('user_id', userId)
         .single()
 
       if (!userData?.user_secret) {
@@ -438,7 +426,7 @@ serve(async (req: Request) => {
       const { data: connection } = await supabaseAdmin
         .from('snaptrade_connections')
         .select('account_id')
-        .eq('user_id', user_id)
+        .eq('user_id', userId)
         .single()
 
       if (!connection?.account_id) {
@@ -448,18 +436,16 @@ serve(async (req: Request) => {
       const { status: holdingsStatus, data: holdings } = await snapTradeRequest(
         clientId, consumerKey, 'GET',
         `/accounts/${connection.account_id}/holdings`, null,
-        `userId=${user_id}&userSecret=${userData.user_secret}`
+        `userId=${userId}&userSecret=${userData.user_secret}`
       )
 
       console.log("Holdings status:", holdingsStatus, JSON.stringify(holdings))
 
       if (holdingsStatus === 401 || holdingsStatus === 403) {
-        // Brokerage authorization has expired — clear the stale connection so
-        // the app can prompt the user to reconnect.
         await supabaseAdmin
           .from('snaptrade_connections')
           .delete()
-          .eq('user_id', user_id)
+          .eq('user_id', userId)
         console.log("Stale brokerage auth cleared from DB — user must reconnect")
         return json({
           error: "brokerage_auth_expired",
@@ -471,9 +457,8 @@ serve(async (req: Request) => {
         return json({ error: "Failed to fetch holdings", details: holdings }, holdingsStatus)
       }
 
-      // Persist snapshot for time-series charting and analytics/predictions
       await supabaseAdmin.from('portfolio_snapshots').insert({
-        user_id,
+        user_id: userId,
         snapshot: holdings,
         captured_at: new Date().toISOString(),
       })
@@ -482,7 +467,7 @@ serve(async (req: Request) => {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // PLAID — Traditional Banks (UNTOUCHED from original)
+    // PLAID — Traditional Banks
     // ══════════════════════════════════════════════════════════════════════════
 
     if (action === 'plaid_create') {
@@ -494,7 +479,7 @@ serve(async (req: Request) => {
           'PLAID-SECRET': Deno.env.get('PLAID_SECRET') ?? '',
         },
         body: JSON.stringify({
-          user: { client_user_id: user_id ?? 'user_sandbox' },
+          user: { client_user_id: userId },
           client_name: 'Vestara',
           products: ['investments'],
           country_codes: ['US'],
@@ -519,17 +504,15 @@ serve(async (req: Request) => {
       const plaidData = await plaidResponse.json()
       if (!plaidResponse.ok) return json({ error: plaidData.error_message }, 502)
 
-      await createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      ).from('linked_accounts').insert({
-        user_id,
-        provider: 'plaid',
-        access_token: plaidData.access_token,
-        provider_item_id: plaidData.item_id,
-        institution_name: metadata?.institution?.name ?? 'Bank',
-        account_type: 'bank',
-      })
+      await createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        .from('linked_accounts').insert({
+          user_id: userId,
+          provider: 'plaid',
+          access_token: plaidData.access_token,
+          provider_item_id: plaidData.item_id,
+          institution_name: metadata?.institution?.name ?? 'Bank',
+          account_type: 'bank',
+        })
 
       return json({ success: true })
     }
@@ -537,7 +520,8 @@ serve(async (req: Request) => {
     return json({ error: `Unknown action: ${action}` }, 400)
 
   } catch (err) {
-    console.error('CRITICAL ERROR:', err.message)
-    return json({ error: 'Internal Server Error', message: err.message }, 500)
+    // Never leak internal error details to the client
+    console.error('CRITICAL ERROR:', err instanceof Error ? err.message : String(err))
+    return json({ error: 'Internal Server Error' }, 500)
   }
 })

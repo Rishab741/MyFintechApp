@@ -68,8 +68,10 @@ app = FastAPI(
         "Computes TWR, Sharpe, Beta, Drawdown, CAGR and exposure metrics "
         "from normalised portfolio time-series data."
     ),
-    docs_url="/docs",       # always on — needed for B2B client onboarding
-    redoc_url="/redoc",
+    # Disable API docs in production — they enumerate endpoints and parameters.
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+    openapi_url="/openapi.json" if settings.debug else None,
     lifespan=lifespan,
 )
 
@@ -92,9 +94,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     # Explicitly capture here because FastAPI's exception_handler intercepts
     # the exception before Sentry's middleware can see it automatically.
     sentry_sdk.capture_exception(exc)
+    # Never expose internal exception details to callers — Sentry captures the full trace above.
     return JSONResponse(
         status_code=500,
-        content={"error": "internal_server_error", "detail": str(exc)},
+        content={"error": "internal_server_error"},
     )
 
 # ── Routers ───────────────────────────────────────────────────────────────────

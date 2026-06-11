@@ -56,19 +56,23 @@ const SecureStoreAdapter = {
   },
 
   setItem: async (key: string, value: string): Promise<void> => {
-    // Check byte length (not char length) so multi-byte characters don't push
-    // a chunk past expo-secure-store's hard 2048-byte limit.
-    const byteLen = new TextEncoder().encode(value).length;
-    if (byteLen <= CHUNK_SIZE) {
+    const encoded = new TextEncoder().encode(value);
+    if (encoded.length <= CHUNK_SIZE) {
       await SecureStore.setItemAsync(key, value);
       return;
     }
-    // Remove any legacy single-key value
     await SecureStore.deleteItemAsync(key).catch(() => {});
-    // Write chunks — slice by character but keep chunk byte-budget safe
+    // Slice by bytes and respect UTF-8 character boundaries so multi-byte chars
+    // (emoji, accented letters) are never split across chunks.
+    const decoder = new TextDecoder('utf-8', { fatal: false });
     let i = 0;
-    for (let offset = 0; offset < value.length; offset += CHUNK_SIZE) {
-      await SecureStore.setItemAsync(`${key}.chunk.${i}`, value.slice(offset, offset + CHUNK_SIZE));
+    let offset = 0;
+    while (offset < encoded.length) {
+      let end = Math.min(offset + CHUNK_SIZE, encoded.length);
+      // Back up to the nearest UTF-8 leading byte so we don't split a multi-byte sequence
+      while (end < encoded.length && (encoded[end] & 0xC0) === 0x80) end--;
+      await SecureStore.setItemAsync(`${key}.chunk.${i}`, decoder.decode(encoded.slice(offset, end)));
+      offset = end;
       i++;
     }
   },

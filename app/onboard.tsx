@@ -184,7 +184,7 @@ export default function OnboardScreen() {
         body: JSON.stringify({ api_key: bnKey.trim(), api_secret: bnSecret.trim(), exchange: bnNet }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Invalid API key — check it has Read permissions');
+      if (!res.ok) throw new Error(json.error ?? 'Could not save your API key. Please try again.');
 
       await markOnboarded();
       setConnectedPlatform(EXCHANGE_LABELS[bnNet]);

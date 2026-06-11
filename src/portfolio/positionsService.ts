@@ -45,7 +45,13 @@ export async function listPositions(): Promise<UserPosition[]> {
 }
 
 export async function deletePosition(id: string): Promise<void> {
-  const { error } = await supabase.from('user_positions').delete().eq('id', id);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+  const { error } = await supabase
+    .from('user_positions')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', session.user.id);
   if (error) throw new Error(error.message);
 }
 

@@ -64,11 +64,10 @@ export default function RootLayout() {
       return;
     }
 
-    // Save the connection — the edge function fetches the real account_id from SnapTrade
+    // Save the connection — the edge function extracts user_id from the JWT
     const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
       body: {
         action: 'snaptrade_save_connection',
-        user_id: user.id,
         brokerage_authorization_id: authorizationId,
       },
     });
@@ -85,7 +84,7 @@ export default function RootLayout() {
 
     // Fetch holdings in background so Portfolio has data ready immediately
     supabase.functions.invoke('exchange-plaid-token', {
-      body: { action: 'snaptrade_get_holdings', user_id: user.id },
+      body: { action: 'snaptrade_get_holdings' },
     }).then(({ error: hErr }) => {
       if (hErr) console.log('Initial holdings fetch error:', hErr);
       else console.log('Initial holdings fetched ✅');
