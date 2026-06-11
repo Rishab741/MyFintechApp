@@ -134,11 +134,12 @@ export default function OnboardScreen() {
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   // ── Exchange API key state ─────────────────────────────────────────────────
-  const [bnKey,     setBnKey]     = useState('');
-  const [bnSecret,  setBnSecret]  = useState('');
-  const [bnNet,     setBnNet]     = useState<BinanceNet>('binance');
-  const [bnLoading, setBnLoading] = useState(false);
-  const [bnError,   setBnError]   = useState<string | null>(null);
+  const [bnKey,        setBnKey]        = useState('');
+  const [bnSecret,     setBnSecret]     = useState('');
+  const [bnPassphrase, setBnPassphrase] = useState('');  // KuCoin only
+  const [bnNet,        setBnNet]        = useState<BinanceNet>('binance');
+  const [bnLoading,    setBnLoading]    = useState(false);
+  const [bnError,      setBnError]      = useState<string | null>(null);
 
   // ── Manual entry state ─────────────────────────────────────────────────────
   const [query,     setQuery]    = useState('');
@@ -169,11 +170,20 @@ export default function OnboardScreen() {
       setBnError('Both API Key and Secret are required.');
       return;
     }
+    if (bnNet === 'kucoin' && !bnPassphrase.trim()) {
+      setBnError('KuCoin also requires an API Passphrase — set one when you created the key.');
+      return;
+    }
     setBnLoading(true);
     setBnError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
+
+      // KuCoin: encode secret as "secret|passphrase" so the edge function can split them
+      const apiSecret = bnNet === 'kucoin'
+        ? `${bnSecret.trim()}|${bnPassphrase.trim()}`
+        : bnSecret.trim();
 
       const res = await fetch(`${FUNCTIONS_URL}/coinbase-oauth/binance-key`, {
         method: 'POST',
@@ -181,7 +191,7 @@ export default function OnboardScreen() {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ api_key: bnKey.trim(), api_secret: bnSecret.trim(), exchange: bnNet }),
+        body: JSON.stringify({ api_key: bnKey.trim(), api_secret: apiSecret, exchange: bnNet }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not save your API key. Please try again.');
@@ -387,7 +397,7 @@ export default function OnboardScreen() {
                   <Pressable
                     key={net}
                     style={[s.exchangeBtn, bnNet === net && s.exchangeBtnActive]}
-                    onPress={() => setBnNet(net)}
+                    onPress={() => { setBnNet(net); setBnPassphrase(''); }}
                   >
                     <Text style={[s.exchangeBtnTxt, bnNet === net && { color: BG }]}>{label}</Text>
                   </Pressable>
@@ -416,6 +426,22 @@ export default function OnboardScreen() {
                 autoCorrect={false}
                 secureTextEntry
               />
+
+              {bnNet === 'kucoin' && (
+                <>
+                  <Text style={[s.fieldLabel, { marginTop: 12 }]}>API PASSPHRASE</Text>
+                  <TextInput
+                    style={s.field}
+                    placeholder="Passphrase you set when creating the key…"
+                    placeholderTextColor={MUTED}
+                    value={bnPassphrase}
+                    onChangeText={setBnPassphrase}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    secureTextEntry
+                  />
+                </>
+              )}
 
               {bnError && <ErrorNote msg={bnError} />}
 

@@ -48,10 +48,6 @@ export interface PortfolioDataResult {
 }
 
 // ── Shared state store ────────────────────────────────────────────────────────
-// A single Zustand store is shared across every component that calls
-// usePortfolioData(). This prevents two mounted tab screens (Assets + Vault)
-// from spawning independent fetch/subscription instances that race each other.
-
 interface SharedState {
     holdings:    HoldingsData | null;
     snapshots:   Snapshot[];
@@ -87,48 +83,141 @@ const useShared = create<SharedState>((set) => ({
 }));
 
 // ── Module-level lifecycle guards ─────────────────────────────────────────────
-// Tracks how many components are currently subscribed. The first mount starts
-// fetching / the RT subscription / the poll; the last unmount tears them down.
 let _subscriberCount = 0;
-let _fetchInFlight   = false;       // prevents concurrent snaptrade_get_holdings calls
-let _initGen         = 0;           // cancels stale init() calls
+let _fetchInFlight   = false;
+let _initGen         = 0;
 let _cleanupRT: (() => void) | null = null;
 let _pollTimer: ReturnType<typeof setInterval> | null = null;
 
-// ── Module-level fetch helpers ────────────────────────────────────────────────
-// Defined outside the hook so they are truly singletons regardless of how many
-// components have called usePortfolioData().
+// ── Connection type detection ─────────────────────────────────────────────────
+// Returns which data source(s) the user has configured.
+async function _detectSources(userId: string): Promise<{
+    hasSnaptrade: boolean;
+    hasExchange:  boolean;
+    hasManual:    boolean;
+}> {
+    const [snapRes, exchRes, posRes] = await Promise.all([
+        supabase
+            .from('snaptrade_connections')
+            .select('account_id')
+            .eq('user_id', userId)
+            .maybeSingle(),
+        supabase
+            .from('exchange_connections')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('is_active', true)
+            .limit(1)
+            .maybeSingle(),
+        supabase
+            .from('user_positions')
+            .select('id', { count: 'exact', head: true }),
+    ]);
+    return {
+        hasSnaptrade: !!snapRes.data?.account_id,
+        hasExchange:  !!exchRes.data?.id,
+        hasManual:    (posRes.count ?? 0) > 0,
+    };
+}
 
+// ── Build HoldingsData from manual user_positions (no live prices) ────────────
+async function _buildManualHoldings(): Promise<HoldingsData | null> {
+    const { data: positions } = await supabase
+        .from('user_positions')
+        .select('symbol, name, quantity, avg_cost, asset_class')
+        .order('created_at', { ascending: true });
+
+    if (!positions?.length) return null;
+
+    return {
+        account: { name: 'Manual Portfolio' },
+        positions: positions.map((p: any) => ({
+            symbol:      p.symbol,
+            description: p.name ?? p.symbol,
+            units:       p.quantity,
+            quantity:    p.quantity,
+            // avg_cost is the best proxy for "price" when no live feed is connected.
+            // PnL will show as 0 until a live sync updates these values.
+            price:       p.avg_cost ?? 0,
+            currency:    'USD',
+            type:        p.asset_class ?? 'stock',
+            open_pnl:    0,
+        })),
+        balances: [],
+    };
+}
+
+// ── Fetch fresh data from the right source ────────────────────────────────────
 async function _fetchFresh(userId: string) {
-    if (_fetchInFlight) return;     // already in-flight, skip duplicate call
+    if (_fetchInFlight) return;
     _fetchInFlight = true;
+
     const {
         setHoldings, setLastUpdated, setFetchError, setConnected,
     } = useShared.getState();
+
     try {
-        const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
-            body: { action: 'snaptrade_get_holdings', user_id: userId },
-        });
-        if (error) {
-            setFetchError(error.message ?? 'Failed to refresh holdings');
-            return;
-        }
-        if (data?.error === 'brokerage_auth_expired') {
-            setConnected(false);
-            setHoldings(null);
-            setFetchError(data.message ?? 'Brokerage authorization expired. Please reconnect.');
-            return;
-        }
-        if (data?.holdings) {
-            setHoldings(data.holdings);
-            setLastUpdated(new Date());
-            setFetchError(null);
-            autoTriggerDataset(userId);
-        } else if (data?.error) {
-            setFetchError(data.message ?? data.error);
+        const { hasSnaptrade, hasExchange, hasManual } = await _detectSources(userId);
+
+        if (hasSnaptrade) {
+            // ── SnapTrade path ────────────────────────────────────────────────
+            const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
+                body: { action: 'snaptrade_get_holdings' },
+            });
+            if (error) { setFetchError(error.message ?? 'Failed to refresh holdings'); return; }
+
+            if (data?.error === 'brokerage_auth_expired') {
+                setConnected(false);
+                setHoldings(null);
+                setFetchError(data.message ?? 'Brokerage authorization expired. Please reconnect.');
+                return;
+            }
+            if (data?.holdings) {
+                setHoldings(data.holdings);
+                setLastUpdated(new Date());
+                setFetchError(null);
+                autoTriggerDataset(userId);
+            } else if (data?.error) {
+                setFetchError(data.message ?? data.error);
+            }
+
+        } else if (hasExchange) {
+            // ── Exchange API key path ─────────────────────────────────────────
+            const { data, error } = await supabase.functions.invoke('sync-exchange', {});
+            if (error) { setFetchError(error.message ?? 'Failed to sync exchange'); return; }
+
+            if (data?.synced === false) {
+                setFetchError(data.message ?? (data.errors?.[0] ?? 'Sync failed'));
+                return;
+            }
+            // Snapshot was saved by the function — read it back so the hook
+            // and the real-time subscription both reflect the same row.
+            const { data: snap } = await supabase
+                .from('portfolio_snapshots')
+                .select('snapshot, captured_at')
+                .eq('user_id', userId)
+                .order('captured_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (snap?.snapshot) {
+                setHoldings(snap.snapshot as HoldingsData);
+                setLastUpdated(new Date(snap.captured_at));
+                setFetchError(null);
+                autoTriggerDataset(userId);
+            }
+
+        } else if (hasManual) {
+            // ── Manual positions path ─────────────────────────────────────────
+            const holdings = await _buildManualHoldings();
+            if (holdings) {
+                setHoldings(holdings);
+                setLastUpdated(new Date());
+                setFetchError(null);
+            }
         }
     } catch (e: any) {
-        setFetchError(e?.message ?? 'Failed to refresh holdings');
+        setFetchError(e?.message ?? 'Failed to refresh portfolio');
     } finally {
         _fetchInFlight = false;
     }
@@ -140,26 +229,41 @@ async function _init(headerAnim: Animated.Value) {
         setHoldings, setSnapshots, setLoading, setConnected, setUserName,
         setLastUpdated, setFetchError,
     } = useShared.getState();
+
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (gen !== _initGen) return;
         if (!user) { setLoading(false); return; }
+
         const meta = user.user_metadata;
         setUserName(meta?.full_name ?? meta?.name ?? user.email?.split('@')[0] ?? 'Investor');
 
-        const { data: conn } = await supabase
-            .from('snaptrade_connections').select('account_id').eq('user_id', user.id).maybeSingle();
+        // Check all connection sources in parallel
+        const { hasSnaptrade, hasExchange, hasManual } = await _detectSources(user.id);
         if (gen !== _initGen) return;
-        if (!conn?.account_id) { setConnected(false); setLoading(false); return; }
+
+        if (!hasSnaptrade && !hasExchange && !hasManual) {
+            setConnected(false);
+            setLoading(false);
+            return;
+        }
         setConnected(true);
 
+        // Load snapshot history (shared across all connection types)
         const [latestSnapRes, histSnapsRes] = await Promise.all([
             supabase
-                .from('portfolio_snapshots').select('snapshot, captured_at')
-                .eq('user_id', user.id).order('captured_at', { ascending: false }).limit(1).maybeSingle(),
+                .from('portfolio_snapshots')
+                .select('snapshot, captured_at')
+                .eq('user_id', user.id)
+                .order('captured_at', { ascending: false })
+                .limit(1)
+                .maybeSingle(),
             supabase
-                .from('portfolio_snapshots').select('snapshot, captured_at')
-                .eq('user_id', user.id).order('captured_at', { ascending: true }).limit(90),
+                .from('portfolio_snapshots')
+                .select('snapshot, captured_at')
+                .eq('user_id', user.id)
+                .order('captured_at', { ascending: true })
+                .limit(90),
         ]);
         if (gen !== _initGen) return;
 
@@ -171,7 +275,24 @@ async function _init(headerAnim: Animated.Value) {
 
         setLoading(false);
         Animated.timing(headerAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-        await _fetchFresh(user.id);
+
+        // If no snapshot yet (first connection), trigger a full sync immediately
+        // so the user sees their data right away rather than waiting for the poll.
+        if (!latestSnapRes.data) {
+            if (hasManual && !hasSnaptrade && !hasExchange) {
+                // Manual only — build from DB without a network call
+                const holdings = await _buildManualHoldings();
+                if (holdings && gen === _initGen) {
+                    setHoldings(holdings);
+                    setLastUpdated(new Date());
+                }
+            } else {
+                await _fetchFresh(user.id);
+            }
+        } else {
+            // Snapshot exists — refresh in background to pick up any changes
+            await _fetchFresh(user.id);
+        }
     } catch (e: any) {
         if (gen !== _initGen) return;
         setFetchError(e?.message ?? 'Failed to load portfolio');
@@ -201,19 +322,16 @@ function _startPoll(userId: string) {
 // ── Public hook ───────────────────────────────────────────────────────────────
 
 export function usePortfolioData(): PortfolioDataResult {
-    // Per-component state — each screen keeps its own period and refresh flag
     const [period,     setPeriod]     = useState<Period>('ALL');
     const [refreshing, setRefreshing] = useState(false);
     const headerAnim = useRef(new Animated.Value(0)).current;
 
-    // Shared state — single source of truth for both Assets and Vault screens
     const {
         holdings, snapshots, loading, connected, userName, lastUpdated, fetchError,
     } = useShared();
 
     const { brokerageConnected } = useConnectionStore();
 
-    // First mount starts everything; last unmount tears it down.
     useEffect(() => {
         _subscriberCount++;
         if (_subscriberCount === 1) {
@@ -250,7 +368,7 @@ export function usePortfolioData(): PortfolioDataResult {
         setRefreshing(false);
     }, []);
 
-    // ── Derived (unchanged logic) ─────────────────────────────────────────────
+    // ── Derived ───────────────────────────────────────────────────────────────
     const positions = holdings?.positions ?? [];
     const balances  = holdings?.balances  ?? [];
     const currency  = getCurrency(balances[0]?.currency);
