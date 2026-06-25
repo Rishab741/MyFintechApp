@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:engine": "cd ../services/engine && uvicorn main:app --reload --port 8000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
