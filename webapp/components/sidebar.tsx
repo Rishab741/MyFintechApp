@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard, TrendingUp, Upload, Key, BarChart2,
   FileText, Shield, LogOut, Heart, Clock, Briefcase, GitBranch, Globe,
-  Menu, X,
+  Menu, Sigma, Smartphone, X,
 } from "lucide-react";
 
 const NAV = [
@@ -15,10 +15,12 @@ const NAV = [
   { href: "/dashboard/markets",        label: "Alpha Screen",  icon: Globe           },
   { href: "/dashboard/health-score",   label: "Health Score",  icon: Heart           },
   { href: "/dashboard/what-if",        label: "What-if",       icon: Clock           },
+  { href: "/dashboard/simulate",       label: "Simulate",      icon: Sigma           },
   { href: "/dashboard/holdings",       label: "Holdings",      icon: Briefcase       },
-  { href: "/dashboard/pipeline",       label: "Test Pipeline", icon: GitBranch       },
   { href: "/dashboard/portfolio",      label: "Analytics",     icon: TrendingUp      },
+  { href: "/dashboard/sync",           label: "Mobile Sync",   icon: Smartphone      },
   { href: "/dashboard/ingest",         label: "Import Data",   icon: Upload          },
+  { href: "/dashboard/pipeline",       label: "Test Pipeline", icon: GitBranch       },
   { href: "/dashboard/ledger",         label: "Ledger",        icon: Shield          },
   { href: "/dashboard/api-keys",       label: "API Keys",      icon: Key             },
   { href: "/dashboard/usage",          label: "Usage",         icon: BarChart2       },

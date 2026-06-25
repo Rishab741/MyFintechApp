@@ -266,4 +266,104 @@ export const engine = {
       });
     },
   },
+
+  simulate: {
+    run: (jwt: string, req: ScenarioRequest) =>
+      engineFetch<{ job_id: string; status: string }>("/v1/simulate/scenario", jwt, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+      }),
+
+    poll: (jwt: string, jobId: string) =>
+      engineFetch<SimJobResult>(`/v1/simulate/scenario/${jobId}`, jwt),
+
+    rebuildProfile: (jwt: string, userId: string) =>
+      engineFetch<{ status: string; profile_confidence: string }>(
+        "/v1/simulate/behavioral-profile", jwt,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId }),
+        },
+      ),
+  },
 };
+
+// ── Simulation types ──────────────────────────────────────────────────────────
+
+export interface ScenarioRequest {
+  user_id:                     string;
+  run_id:                      string;
+  comparison_assets:           string[];
+  period_start:                string | null;
+  period_end:                  string | null;
+  initial_capital?:            number | null;
+  rebalancing_strategy:        string;
+  apply_behavioral_adjustment: boolean;
+  apply_dividend_reinvestment: boolean;
+  run_monte_carlo:             boolean;
+  monthly_savings_assumption:  number;
+}
+
+export interface SimAssetMetrics {
+  label:        string;
+  total_return: number;
+  cagr:         number;
+  volatility:   number;
+  sharpe:       number;
+  sortino:      number;
+  max_drawdown: number;
+  var_95:       number;
+  win_rate:     number;
+  start_value:  number;
+  end_value:    number;
+}
+
+export interface SimTimePoint {
+  date:   string;
+  actual: number;
+  [key: string]: number | string;
+}
+
+export interface SimDecisionNode {
+  date:              string;
+  transaction_type:  "buy" | "sell";
+  symbol:            string;
+  actual_delta_30d:  number;
+  alt_deltas_30d:    Record<string, number>;
+  impact_score:      number;
+}
+
+export interface SimTOI {
+  monthly_savings_assumption: number;
+  best_alternative:           string | null;
+  best_dollar_gap:            number;
+  alternatives: Record<string, {
+    dollar_gap:        number;
+    pct_gap:           number;
+    months_to_recover: number;
+    outperformed:      boolean;
+  }>;
+}
+
+export interface MonteCarloFan {
+  p10: number[];
+  p25: number[];
+  p50: number[];
+  p75: number[];
+  p90: number[];
+}
+
+export interface SimJobResult {
+  status:              "queued" | "running" | "complete" | "failed";
+  run_id?:             string;
+  error?:              string;
+  timeseries?:         SimTimePoint[];
+  metrics?:            Record<string, SimAssetMetrics>;
+  inflection_points?:  SimDecisionNode[];
+  temporal_opportunity?: SimTOI;
+  monte_carlo?:        Record<string, MonteCarloFan> | null;
+  computation_ms?:     number;
+  data_quality_score?: number;
+}
