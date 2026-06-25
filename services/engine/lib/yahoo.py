@@ -39,6 +39,11 @@ _CONCURRENT_QUOTES = 20
 _benchmark_cache: dict[str, tuple[float, dict[str, float]]] = {}
 _BENCHMARK_TTL_S = 3_600
 
+# Per-key asyncio Lock: prevents a cache stampede where N concurrent requests
+# all miss the cache simultaneously and each fires a separate Yahoo Finance fetch.
+# Only the first acquires the lock; the rest wait and then read from cache.
+_benchmark_locks: dict[str, asyncio.Lock] = {}
+
 
 # ── Batch current quotes ──────────────────────────────────────────────────────
 async def fetch_quotes(symbols: list[str]) -> dict[str, float]:
@@ -157,6 +162,8 @@ async def fetch_benchmark_returns(
     users only hits Yahoo Finance once per worker rather than once per user.
     """
     cache_key = f"{symbol}:{period}"
+
+    # Fast path: cache hit (no lock needed — just read)
     now = time.monotonic()
     cached = _benchmark_cache.get(cache_key)
     if cached is not None:
@@ -164,17 +171,32 @@ async def fetch_benchmark_returns(
         if now - fetched_at < _BENCHMARK_TTL_S:
             return cached_returns
 
-    closes = await fetch_daily_closes(symbol, period)
-    if len(closes) < 2:
-        return {}
+    # Slow path: acquire per-key lock so only ONE coroutine fetches from Yahoo;
+    # all others wait then read from the populated cache.
+    if cache_key not in _benchmark_locks:
+        _benchmark_locks[cache_key] = asyncio.Lock()
 
-    returns: dict[str, float] = {}
-    for i in range(1, len(closes)):
-        prev = closes[i - 1]["close"]
-        curr = closes[i]["close"]
-        if prev > 0:
-            date_str = closes[i]["time"].strftime("%Y-%m-%d")
-            returns[date_str] = (curr - prev) / prev
+    async with _benchmark_locks[cache_key]:
+        # Re-check inside lock — another coroutine may have populated while waiting
+        now = time.monotonic()
+        cached = _benchmark_cache.get(cache_key)
+        if cached is not None:
+            fetched_at, cached_returns = cached
+            if now - fetched_at < _BENCHMARK_TTL_S:
+                return cached_returns
 
-    _benchmark_cache[cache_key] = (now, returns)
-    return returns
+        closes = await fetch_daily_closes(symbol, period)
+        if len(closes) < 2:
+            return {}
+
+        returns: dict[str, float] = {}
+        for i in range(1, len(closes)):
+            prev = closes[i - 1]["close"]
+            curr = closes[i]["close"]
+            if prev > 0:
+                date_str = closes[i]["time"].strftime("%Y-%m-%d")
+                returns[date_str] = (curr - prev) / prev
+
+        _benchmark_cache[cache_key] = (time.monotonic(), returns)
+        log.info("Benchmark cache populated for %s/%s (%d days)", symbol, period, len(returns))
+        return returns

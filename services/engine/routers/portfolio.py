@@ -153,7 +153,12 @@ async def get_metrics(
 
 async def _compute_metrics_for_user(user_id: str, period: Period) -> PerformanceMetrics:
     """Core computation path — called by both the metrics endpoint and /sync/compute."""
-    raw_snaps = fetch_snapshots(user_id, limit=500)
+    # Fetch snapshots + holdings in parallel to halve Supabase round-trips
+    raw_snaps, holdings = await asyncio.gather(
+        asyncio.to_thread(fetch_snapshots, user_id, 500),
+        asyncio.to_thread(fetch_holdings, user_id),
+    )
+
     if not raw_snaps:
         raise HTTPException(status_code=404, detail="No portfolio history found.")
 
@@ -180,23 +185,22 @@ async def _compute_metrics_for_user(user_id: str, period: Period) -> Performance
 
     max_dd, dd_days = compute_max_drawdown(values)
 
-    # Benchmark
+    # Benchmark fetch is async + cached — concurrent with metric computation above
     bench_returns  = await _get_benchmark_returns(times)
-    bench_total    = sum(bench_returns)   # chain-linked benchmark holding-period return
+    bench_total    = sum(bench_returns)
     rf_daily       = settings.risk_free_rate_daily
 
     beta        = compute_beta(daily_returns, bench_returns)
     correlation = compute_correlation(daily_returns, bench_returns)
 
-    # Annualise both series for Jensen's alpha (alpha needs annualised inputs)
+    # Annualise both series for Jensen's alpha
     portfolio_ann = (1 + twr) ** (365.0 / days) - 1 if days > 0 else 0.0
     benchmark_ann = (1 + bench_total) ** (365.0 / days) - 1 if days > 0 else 0.0
     alpha = compute_alpha(portfolio_ann, benchmark_ann, beta, settings.risk_free_rate_annual)
 
-    # Latest holdings for position count + cash
-    holdings      = fetch_holdings(user_id)
-    total_value   = values[-1]
-    cash_rows = fetch_snapshots(user_id, limit=1)
+    total_value = values[-1]
+    # cash_value available from the most recent snapshot directly
+    cash_rows = raw_snaps[-1:]
     cash_value    = float((cash_rows[-1].get("cash_value") or 0)) if cash_rows else 0.0
     cash_pct      = cash_value / total_value if total_value > 0 else 0.0
 
@@ -244,21 +248,26 @@ async def get_exposure(
     Return portfolio exposure by asset class, sector, and currency,
     plus concentration risk metrics.
     """
-    holdings = fetch_holdings(user.user_id)
+    # Fetch holdings and latest snapshot in parallel
+    holdings, snap = await asyncio.gather(
+        asyncio.to_thread(fetch_holdings, user.user_id),
+        asyncio.to_thread(fetch_snapshots, user.user_id, 1),
+    )
     if not holdings:
         raise HTTPException(status_code=404, detail="No holdings found.")
 
-    snap = fetch_snapshots(user.user_id, limit=1)
     total_value = float(snap[-1]["total_value"]) if snap else 0.0
     cash_value  = float(snap[-1]["cash_value"])  if snap else 0.0
 
     report = build_exposure_report(holdings, total_value, cash_value)
 
-    write_audit_log(
+    # Fire audit log in background — don't block the response
+    asyncio.create_task(asyncio.to_thread(
+        write_audit_log,
         event_type="portfolio.exposure.read",
         actor_id=user.user_id,
         resource="holdings",
-    )
+    ))
 
     return ExposureReport(**report)
 
@@ -273,7 +282,7 @@ async def get_history(
     Return the portfolio NAV time series for charting.
     Includes benchmark-normalised values when available.
     """
-    raw_snaps = fetch_snapshots(user.user_id, limit=500)
+    raw_snaps = await asyncio.to_thread(fetch_snapshots, user.user_id, 500)
     if not raw_snaps:
         raise HTTPException(status_code=404, detail="No portfolio history found.")
 
@@ -285,7 +294,7 @@ async def get_history(
 
     values, times = slice_by_period(all_values, all_times, period)
 
-    # Fetch benchmark closes for the same window
+    # Benchmark fetch hits cache (or Yahoo Finance once, then cache for 1h)
     bench_returns = await _get_benchmark_returns(times)
 
     # Build benchmark normalised series (base 100 at first data point)

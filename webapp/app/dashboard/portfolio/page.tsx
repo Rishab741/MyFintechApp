@@ -57,23 +57,29 @@ export default function PortfolioPage() {
   const [period,     setPeriod]     = useState<Period>("1Y");
   const [histPeriod, setHistPeriod] = useState<string>("3M");
 
+  const SWR_OPTS = {
+    revalidateOnFocus:      false,  // don't re-fetch every time the tab is re-focused
+    dedupingInterval:       60_000, // deduplicate identical keys for 60s
+    revalidateOnReconnect:  false,
+  };
+
   // Metrics
   const { data, isLoading } = useSWR(["metrics", period], async () => {
     const jwt = await getJwt();
     return engine.portfolio.metrics(jwt, period);
-  });
+  }, SWR_OPTS);
 
-  // Exposure
+  // Exposure — static until a manual refresh; no need to refetch on every period change
   const { data: expo } = useSWR("exposure", async () => {
     const jwt = await getJwt();
     return engine.portfolio.exposure(jwt);
-  });
+  }, SWR_OPTS);
 
   // NAV history
   const { data: hist } = useSWR(["history", histPeriod], async () => {
     const jwt = await getJwt();
     return engine.portfolio.history(jwt, histPeriod);
-  });
+  }, SWR_OPTS);
 
   const twr   = data?.twr   != null ? (data.twr   >= 0 ? "positive" : "negative") as const : "neutral" as const;
   const cagr  = data?.cagr  != null ? (data.cagr  >= 0 ? "positive" : "negative") as const : "neutral" as const;
