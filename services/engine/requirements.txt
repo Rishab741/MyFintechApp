@@ -20,7 +20,6 @@ python-jose[cryptography]==3.3.0
 numpy==2.2.1
 scipy==1.15.0
 pandas==2.2.3
-yfinance==0.2.54
 
 # Utilities
 python-dateutil==2.9.0.post0

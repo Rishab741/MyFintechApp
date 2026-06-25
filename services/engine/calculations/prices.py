@@ -5,9 +5,9 @@ Strategy
 --------
 1. Check price_cache in Supabase for the requested date range.
 2. Collect every symbol that has missing date gaps.
-3. Download ALL missing symbols in ONE yfinance call (batch download).
-   This is far less likely to trigger rate-limiting than N sequential calls.
-4. Retry with exponential back-off on rate-limit responses.
+3. Download ALL missing symbols concurrently via Yahoo Finance v8 chart API.
+   This API is unblocked on server environments (v7 batch is rate-limited).
+4. Retry with exponential back-off on 429 responses.
 5. Write new rows to price_cache; serve the merged result to callers.
 """
 
@@ -15,19 +15,29 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
+import httpx
 import pandas as pd
-import yfinance as yf
 from supabase import AsyncClient
 
+from config import get_settings
+
 log = logging.getLogger("engine.prices")
+settings = get_settings()
 
 EARLIEST_FETCH = date(1990, 1, 1)
 
-# Keywords that indicate a Yahoo Finance rate-limit response
-_RATE_LIMIT_KEYWORDS = ("rate", "429", "too many", "ratelimit", "limited")
+BASE2 = "https://query2.finance.yahoo.com"
+
+_HEADERS = {
+    "User-Agent": settings.yahoo_user_agent,
+    "Accept":     "application/json",
+}
+
+# Max concurrent v8 chart requests
+_CONCURRENT = 8
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -71,9 +81,9 @@ async def get_prices_multi(
     """
     Fetch prices for multiple symbols.
 
-    All symbols with cache misses are downloaded in a SINGLE Yahoo Finance
-    request, which is far less likely to trigger per-IP rate limiting than
-    N sequential individual requests.
+    All symbols with cache misses are downloaded concurrently via the Yahoo
+    Finance v8 chart API — bypasses the per-IP rate limit that blocks the
+    legacy v7 batch endpoint on server environments.
     """
     cached_data: dict[str, pd.DataFrame] = {}
     needs_fetch: list[str] = []
@@ -90,9 +100,9 @@ async def get_prices_multi(
             needs_fetch.append(symbol)
             cached_data[symbol] = pd.DataFrame(columns=["date", "adj_close"])
 
-    # Step 2 — batch-download all stale/missing symbols in one call
+    # Step 2 — concurrently fetch all stale/missing symbols
     if needs_fetch:
-        log.info("Batch-fetching %d symbol(s) from Yahoo Finance: %s", len(needs_fetch), needs_fetch)
+        log.info("Fetching %d symbol(s) from Yahoo Finance v8: %s", len(needs_fetch), needs_fetch)
         batch = await _fetch_yahoo_with_retry(needs_fetch, start, end)
 
         for symbol in needs_fetch:
@@ -136,7 +146,11 @@ async def get_coverage(
     return date.fromisoformat(dates[0]), date.fromisoformat(dates[-1]), len(rows)
 
 
-# ── Yahoo Finance — batch download with retry ─────────────────────────────────
+# ── Yahoo Finance v8 — concurrent fetch with retry ────────────────────────────
+
+def _to_unix(d: date) -> int:
+    return int(datetime(d.year, d.month, d.day, tzinfo=timezone.utc).timestamp())
+
 
 async def _fetch_yahoo_with_retry(
     symbols: list[str],
@@ -145,137 +159,145 @@ async def _fetch_yahoo_with_retry(
     max_retries: int = 4,
 ) -> dict[str, pd.DataFrame]:
     """
-    Download OHLCV for one or many symbols in a single yfinance call.
+    Fetch OHLCV + dividends + splits for one or many symbols via the
+    Yahoo Finance v8/finance/chart API.
 
-    Retries with exponential back-off (2 s → 4 s → 8 s → 16 s) on
-    rate-limit errors.  Returns {symbol: DataFrame}; empty DataFrames
-    for any symbol that ultimately fails.
+    Each symbol is fetched in its own HTTP request, all fired concurrently
+    (up to _CONCURRENT in-flight at once).  Retries with exponential
+    back-off (2s → 4s → 8s → 16s) on 429 or transient errors.
+
+    Returns {symbol: DataFrame}; empty DataFrames for any symbol that fails.
     """
-    end_exclusive = end + timedelta(days=1)
-    # yfinance accepts a single string OR a list; use list even for one symbol
-    # so the returned column structure is always consistent.
-    ticker_arg = symbols[0] if len(symbols) == 1 else symbols
+    period1 = _to_unix(start)
+    period2 = _to_unix(end + timedelta(days=1))   # Yahoo end is exclusive
 
-    for attempt in range(max_retries):
-        try:
-            raw = yf.download(
-                ticker_arg,
-                start=start.isoformat(),
-                end=end_exclusive.isoformat(),
-                auto_adjust=False,
-                progress=False,
-                threads=len(symbols) > 1,
-            )
-            if raw.empty:
-                log.warning("yfinance returned empty DataFrame for %s", symbols)
-                return {s: pd.DataFrame() for s in symbols}
+    sem = asyncio.Semaphore(_CONCURRENT)
 
-            raw = raw.reset_index()
+    async def _fetch_one(
+        client: httpx.AsyncClient,
+        sym: str,
+    ) -> tuple[str, pd.DataFrame]:
+        url = (
+            f"{BASE2}/v8/finance/chart/{sym}"
+            f"?interval=1d&period1={period1}&period2={period2}"
+            f"&includeAdjustedClose=true&events=div,splits"
+        )
+        for attempt in range(max_retries):
+            try:
+                async with sem:
+                    resp = await client.get(url)
+            except Exception as exc:
+                log.warning("Yahoo v8 request error (%s, attempt %d): %s", sym, attempt + 1, exc)
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                return sym, pd.DataFrame()
 
-            if len(symbols) == 1:
-                return {symbols[0]: _parse_single(raw)}
-            return _parse_batch(raw, symbols)
-
-        except Exception as exc:
-            err = str(exc).lower()
-            is_rate_limit = any(k in err for k in _RATE_LIMIT_KEYWORDS)
-            if is_rate_limit and attempt < max_retries - 1:
-                wait_s = min(2 ** (attempt + 1), 30)   # 2 s, 4 s, 8 s, 16 s
+            if resp.status_code == 429:
+                wait_s = min(2 ** (attempt + 1), 30)
                 log.warning(
-                    "Yahoo Finance rate-limited (attempt %d/%d) — retrying in %ds: %s",
-                    attempt + 1, max_retries, wait_s, exc,
+                    "Yahoo v8 rate-limited (%s, attempt %d/%d) — retrying in %ds",
+                    sym, attempt + 1, max_retries, wait_s,
                 )
-                await asyncio.sleep(wait_s)
-                continue
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(wait_s)
+                    continue
+                return sym, pd.DataFrame()
 
-            log.error("Yahoo Finance fetch failed for %s: %s", symbols, exc)
-            return {s: pd.DataFrame() for s in symbols}
+            try:
+                resp.raise_for_status()
+                return sym, _parse_v8_response(resp.json(), sym)
+            except Exception as exc:
+                log.error("Yahoo v8 parse failed (%s, attempt %d): %s", sym, attempt + 1, exc)
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                return sym, pd.DataFrame()
 
-    return {s: pd.DataFrame() for s in symbols}
+        return sym, pd.DataFrame()
 
+    async with httpx.AsyncClient(
+        headers=_HEADERS,
+        timeout=settings.yahoo_timeout_s,
+        follow_redirects=True,
+    ) as client:
+        pairs = await asyncio.gather(*[_fetch_one(client, s) for s in symbols])
 
-# ── Column parsers ────────────────────────────────────────────────────────────
-
-def _parse_single(raw: pd.DataFrame) -> pd.DataFrame:
-    """Parse yfinance output when a single symbol was requested (flat columns)."""
-    raw.columns = [
-        c[0].lower() if isinstance(c, tuple) else str(c).lower()
-        for c in raw.columns
-    ]
-    df = pd.DataFrame()
-    df["date"]         = pd.to_datetime(raw["date"]).dt.date
-    df["open"]         = raw.get("open",   pd.Series(dtype=float)).round(8)
-    df["high"]         = raw.get("high",   pd.Series(dtype=float)).round(8)
-    df["low"]          = raw.get("low",    pd.Series(dtype=float)).round(8)
-    df["close"]        = raw.get("close",  pd.Series(dtype=float)).round(8)
-    adj                = raw.get("adj close", raw.get("close", pd.Series(dtype=float)))
-    df["adj_close"]    = adj.round(8)
-    df["volume"]       = raw.get("volume",       pd.Series(dtype=float)).fillna(0).astype(int)
-    df["dividend"]     = raw.get("dividends",    pd.Series(dtype=float)).fillna(0).round(8)
-    df["split_factor"] = raw.get("stock splits", pd.Series(dtype=float)).fillna(1).replace(0, 1).round(6)
-    return df.dropna(subset=["close"]).reset_index(drop=True)
+    return dict(pairs)
 
 
-def _parse_batch(raw: pd.DataFrame, symbols: list[str]) -> dict[str, pd.DataFrame]:
+def _parse_v8_response(data: dict, symbol: str) -> pd.DataFrame:
     """
-    Parse yfinance multi-symbol output.
-    yfinance uses MultiIndex columns: (Metric, Symbol).
+    Parse a Yahoo Finance v8/finance/chart API JSON response into a
+    standardised price DataFrame.
+
+    Columns: date, open, high, low, close, adj_close, volume, dividend, split_factor
     """
-    result: dict[str, pd.DataFrame] = {}
+    chart = data.get("chart", {})
+    results = chart.get("result") or []
+    if not results:
+        log.warning("Yahoo v8 empty result for %s", symbol)
+        return pd.DataFrame()
 
-    # Locate the Date column (it may be a flat or tuple column)
-    date_col = next(
-        (c for c in raw.columns
-         if (isinstance(c, tuple) and c[0].lower() == "date")
-         or (isinstance(c, str) and c.lower() == "date")),
-        None,
-    )
-    if date_col is None:
-        log.error("Date column not found in batch yfinance response; columns: %s", raw.columns.tolist())
-        return {s: pd.DataFrame() for s in symbols}
+    result      = results[0]
+    timestamps  = result.get("timestamp") or []
+    if not timestamps:
+        return pd.DataFrame()
 
-    dates = pd.to_datetime(raw[date_col]).dt.date
+    indicators  = result.get("indicators", {})
+    quote       = (indicators.get("quote") or [{}])[0]
+    adjclose_block = (indicators.get("adjclose") or [{}])[0]
 
-    for sym in symbols:
-        try:
-            def _get(metric: str) -> pd.Series:
-                """Return the (Metric, Symbol) column, trying common capitalisations."""
-                for m in (metric, metric.title(), metric.upper(), metric.lower()):
-                    for s in (sym, sym.upper(), sym.lower()):
-                        if (m, s) in raw.columns:
-                            return raw[(m, s)]
-                return pd.Series(dtype=float, index=raw.index)
+    opens      = quote.get("open",   [])
+    highs      = quote.get("high",   [])
+    lows       = quote.get("low",    [])
+    closes     = quote.get("close",  [])
+    volumes    = quote.get("volume", [])
+    adj_closes = adjclose_block.get("adjclose") or closes
 
-            close = _get("Close")
-            if close.dropna().empty:
-                log.warning("No Close data for %s in batch download — skipping", sym)
-                result[sym] = pd.DataFrame()
-                continue
+    # Build dividend/split lookup keyed by ISO date string
+    events    = result.get("events", {})
+    dividends: dict[str, float] = {}
+    splits:    dict[str, float] = {}
 
-            adj_close = _get("Adj Close")
-            if adj_close.dropna().empty:
-                adj_close = close
+    for ts_str, div_ev in (events.get("dividends") or {}).items():
+        d = datetime.fromtimestamp(int(ts_str), tz=timezone.utc).date()
+        dividends[str(d)] = float(div_ev.get("amount", 0.0))
 
-            result[sym] = pd.DataFrame({
-                "date":         dates,
-                "open":         _get("Open").round(8),
-                "high":         _get("High").round(8),
-                "low":          _get("Low").round(8),
-                "close":        close.round(8),
-                "adj_close":    adj_close.round(8),
-                "volume":       _get("Volume").fillna(0).astype(int),
-                "dividend":     _get("Dividends").fillna(0).round(8),
-                "split_factor": _get("Stock Splits").fillna(1).replace(0, 1).round(6),
-            }).dropna(subset=["close"]).reset_index(drop=True)
+    for ts_str, spl_ev in (events.get("splits") or {}).items():
+        d = datetime.fromtimestamp(int(ts_str), tz=timezone.utc).date()
+        num = float(spl_ev.get("numerator", 1.0))
+        den = float(spl_ev.get("denominator", 1.0))
+        splits[str(d)] = (num / den) if den else 1.0
 
-        except Exception as exc:
-            log.warning("Failed to parse batch data for %s: %s", sym, exc)
-            result[sym] = pd.DataFrame()
+    rows = []
+    for i, ts in enumerate(timestamps):
+        close = closes[i] if i < len(closes) else None
+        if close is None or close <= 0:
+            continue
+        d        = datetime.fromtimestamp(ts, tz=timezone.utc).date()
+        date_str = str(d)
+        adj      = adj_closes[i] if i < len(adj_closes) and adj_closes[i] else close
 
-    return result
+        rows.append({
+            "date":         d,
+            "open":         round(float(opens[i]),   8) if i < len(opens)   and opens[i]   is not None else None,
+            "high":         round(float(highs[i]),   8) if i < len(highs)   and highs[i]   is not None else None,
+            "low":          round(float(lows[i]),    8) if i < len(lows)    and lows[i]    is not None else None,
+            "close":        round(float(close),      8),
+            "adj_close":    round(float(adj),        8),
+            "volume":       int(volumes[i]) if i < len(volumes) and volumes[i] is not None else 0,
+            "dividend":     round(dividends.get(date_str, 0.0), 8),
+            "split_factor": round(splits.get(date_str, 1.0),    6),
+        })
+
+    if not rows:
+        return pd.DataFrame()
+
+    return pd.DataFrame(rows).dropna(subset=["close"]).reset_index(drop=True)
 
 
-# ── Cache helpers (unchanged) ─────────────────────────────────────────────────
+# ── Cache helpers ─────────────────────────────────────────────────────────────
 
 async def _fetch_from_cache(
     db: AsyncClient,

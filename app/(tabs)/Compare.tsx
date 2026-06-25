@@ -34,6 +34,7 @@ import {
   type AssetMetrics,
   type BehavioralProfile,
   type ComparisonAsset,
+  type MonteCarloFan,
   type RebalancingStrategy,
   type ScenarioResults,
   type TimeseriesPoint,
@@ -190,6 +191,82 @@ function ComparisonChart({ timeseries, seriesKeys, width, height = 220 }: ChartP
           />
         );
       })}
+    </Svg>
+  );
+}
+
+// ── Monte Carlo fan chart ──────────────────────────────────────────────────────
+interface FanChartProps {
+  data:   MonteCarloFan;
+  color:  string;
+  width:  number;
+  height?: number;
+}
+
+function MonteCarloFanChart({ data, color, width, height = 150 }: FanChartProps) {
+  const PAD = { top: 12, right: 8, bottom: 24, left: 50 };
+  const W   = width - PAD.left - PAD.right;
+  const H   = height - PAD.top - PAD.bottom;
+  const n   = data.p50.length;
+
+  if (n < 2) return null;
+
+  const all = [...data.p10, ...data.p90].filter(v => v != null && v > 0);
+  if (!all.length) return null;
+
+  const minV  = Math.min(...all) * 0.97;
+  const maxV  = Math.max(...all) * 1.03;
+  const range = maxV - minV || 1;
+
+  const xp = (i: number) => PAD.left + (i / (n - 1)) * W;
+  const yp = (v: number) => PAD.top + H - ((v - minV) / range) * H;
+
+  // Build a closed SVG path for a filled band between top[] and bot[]
+  const bandPath = (top: number[], bot: number[]): string => {
+    const fwd = top.map((v, i) => `${xp(i).toFixed(1)},${yp(v).toFixed(1)}`).join(' L ');
+    const rev = [...bot]
+      .reverse()
+      .map((v, i) => `${xp(n - 1 - i).toFixed(1)},${yp(v).toFixed(1)}`)
+      .join(' L ');
+    return `M ${fwd} L ${rev} Z`;
+  };
+
+  const linePts = (vals: number[]) =>
+    vals.map((v, i) => `${xp(i).toFixed(1)},${yp(v).toFixed(1)}`).join(' ');
+
+  const yTicks = [minV, (minV + maxV) / 2, maxV];
+  const xTick  = [0, Math.floor(n / 2), n - 1];
+  const xLabel = ['Now', 'Mid', 'End'];
+
+  return (
+    <Svg width={width} height={height}>
+      {/* Grid */}
+      {yTicks.map((v, i) => (
+        <React.Fragment key={i}>
+          <Line
+            x1={PAD.left} y1={yp(v)}
+            x2={PAD.left + W} y2={yp(v)}
+            stroke="rgba(255,255,255,0.05)" strokeWidth={1}
+          />
+          <SvgText x={PAD.left - 4} y={yp(v) + 4} fontSize={8} fill={MUTED} textAnchor="end" fontFamily={mono}>
+            {Math.abs(v) >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : Math.abs(v) >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v.toFixed(0)}
+          </SvgText>
+        </React.Fragment>
+      ))}
+
+      {/* Outer band p10–p90 */}
+      <Path d={bandPath(data.p90, data.p10)} fill={color} fillOpacity={0.07} stroke="none" />
+      {/* Inner band p25–p75 */}
+      <Path d={bandPath(data.p75, data.p25)} fill={color} fillOpacity={0.15} stroke="none" />
+      {/* Median line p50 */}
+      <Polyline points={linePts(data.p50)} fill="none" stroke={color} strokeWidth={1.8} />
+
+      {/* X labels */}
+      {xTick.map((ti, li) => (
+        <SvgText key={li} x={xp(ti)} y={height - 5} fontSize={8} fill={MUTED} textAnchor="middle" fontFamily={mono}>
+          {xLabel[li]}
+        </SvgText>
+      ))}
     </Svg>
   );
 }
@@ -715,6 +792,57 @@ export default function CompareScreen() {
           </View>
         )}
 
+        {/* Monte Carlo fan charts */}
+        {results.monte_carlo && Object.keys(results.monte_carlo).length > 0 && (
+          <View style={sc.mcCard}>
+            <View style={sc.mcHeader}>
+              <MaterialCommunityIcons name="chart-bell-curve-cumulative" size={18} color={AMBER} />
+              <Text style={sc.mcTitle}>Monte Carlo Projection</Text>
+            </View>
+            <Text style={sc.mcSub}>
+              Shaded bands show the 10th–90th (outer) and 25th–75th (inner) percentile
+              range of simulated outcomes. The solid line is the median (p50).
+            </Text>
+
+            {Object.entries(results.monte_carlo).map(([key, fan], si) => {
+              const color  = SERIES_COLORS[si] ?? MUTED;
+              const label  = key === 'actual' ? 'Your Portfolio' : key.replace(/_/g, ' ');
+              const endP10 = fan.p10[fan.p10.length - 1];
+              const endP50 = fan.p50[fan.p50.length - 1];
+              const endP90 = fan.p90[fan.p90.length - 1];
+              return (
+                <View key={key} style={sc.mcAsset}>
+                  {/* Asset label + colour dot */}
+                  <View style={sc.mcAssetHeader}>
+                    <View style={[sc.mcDot, { backgroundColor: color }]} />
+                    <Text style={[sc.mcAssetLabel, { color }]}>{label}</Text>
+                  </View>
+
+                  {/* Fan chart */}
+                  <View
+                    style={sc.mcChartWrap}
+                    onLayout={e => setChartWidth(e.nativeEvent.layout.width)}
+                  >
+                    <MonteCarloFanChart data={fan} color={color} width={chartWidth - 32} />
+                  </View>
+
+                  {/* End-value percentile row */}
+                  <View style={sc.mcEndRow}>
+                    {([['p10', endP10, RED], ['p50', endP50, color], ['p90', endP90, GREEN]] as [string, number, string][]).map(
+                      ([pct, val, clr]) => (
+                        <View key={pct} style={sc.mcEndCell}>
+                          <Text style={[sc.mcEndVal, { color: clr }]}>{fmtNum(val)}</Text>
+                          <Text style={sc.mcEndLbl}>{pct.toUpperCase()}</Text>
+                        </View>
+                      ),
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         <View style={{ height: 120 }} />
       </ScrollView>
     );
@@ -1187,6 +1315,30 @@ const sc = StyleSheet.create({
   toiAltDelta:   { fontSize: 13, fontWeight: '700', fontFamily: mono },
   toiAltRecover: { color: MUTED, fontSize: 11, marginTop: 2 },
   toiAltDollar:  { color: TXT, fontSize: 14, fontFamily: mono, fontWeight: '600' },
+
+  // Monte Carlo
+  mcCard: {
+    backgroundColor: AMBER + '0D', borderRadius: 14,
+    borderWidth: 1, borderColor: AMBER + '30', padding: 16, marginBottom: 16,
+  },
+  mcHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  mcTitle:  { color: AMBER, fontSize: 14, fontWeight: '700', fontFamily: mono },
+  mcSub:    { color: MUTED, fontSize: 11, marginBottom: 16, lineHeight: 16 },
+
+  mcAsset:       { marginBottom: 20 },
+  mcAssetHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  mcDot:         { width: 8, height: 8, borderRadius: 4 },
+  mcAssetLabel:  { fontSize: 12, fontWeight: '700', fontFamily: mono },
+  mcChartWrap:   { marginBottom: 8 },
+
+  mcEndRow:  { flexDirection: 'row', gap: 8 },
+  mcEndCell: {
+    flex: 1, alignItems: 'center',
+    backgroundColor: CARD2, borderRadius: 8, paddingVertical: 8,
+    borderWidth: 1, borderColor: BORDER,
+  },
+  mcEndVal: { fontSize: 13, fontWeight: '800', fontFamily: mono },
+  mcEndLbl: { color: MUTED, fontSize: 9, fontFamily: mono, marginTop: 2 },
 
   // Empty states
   empty: {
