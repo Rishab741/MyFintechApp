@@ -262,31 +262,41 @@ async def _run_scenario(job_id: str, req: ScenarioRequest, db) -> None:
             "data_quality_score":        round(data_quality, 3),
         }
 
-        # ── Write results to Supabase ──────────────────────────────────────
-        run_id = req.run_id
-        await db.table("scenario_results").upsert({
-            "run_id":                      run_id,
-            "user_id":                     req.user_id,
-            **result_payload,
-        }).execute()
-
-        await db.table("scenario_runs").update({
-            "status":       "complete",
-            "completed_at": date.today().isoformat(),
-        }).eq("id", run_id).execute()
-
-        _jobs[job_id] = {"status": "complete", "run_id": run_id, **result_payload}
+        # ── Store result in memory first — polling reads from here ───────────
+        # DB writes below are best-effort; a FK violation (no scenario_runs row)
+        # or any other DB error must not mark a successful computation as failed.
+        _jobs[job_id] = {"status": "complete", "run_id": req.run_id, **result_payload}
         log.info("Scenario %s complete in %dms", job_id, computation_ms)
+
+        # ── Persist to Supabase (best-effort, non-fatal) ───────────────────
+        try:
+            await db.table("scenario_results").upsert({
+                "run_id":  req.run_id,
+                "user_id": req.user_id,
+                **result_payload,
+            }).execute()
+            await db.table("scenario_runs").update({
+                "status":       "complete",
+                "completed_at": date.today().isoformat(),
+            }).eq("id", req.run_id).execute()
+        except Exception as db_exc:
+            log.warning(
+                "Scenario %s: DB persist failed (result still in memory): %s",
+                job_id, db_exc,
+            )
 
     except Exception as exc:
         log.exception("Scenario %s failed", job_id)
         error_msg = str(exc)
         _jobs[job_id] = {"status": "failed", "error": error_msg, "run_id": req.run_id}
-        await db.table("scenario_runs").update({
-            "status":        "failed",
-            "completed_at":  date.today().isoformat(),
-            "error_message": error_msg[:500],
-        }).eq("id", req.run_id).execute()
+        try:
+            await db.table("scenario_runs").update({
+                "status":        "failed",
+                "completed_at":  date.today().isoformat(),
+                "error_message": error_msg[:500],
+            }).eq("id", req.run_id).execute()
+        except Exception:
+            pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════

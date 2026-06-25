@@ -117,10 +117,10 @@ export default function SimulatePage() {
 
     try {
       const supabase = createClient();
-      const [{ data: { user } }, { data: { session } }] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.auth.getSession(),
-      ]);
+      // getUser() validates server-side and refreshes the token if expired.
+      // Re-read the session after to get the fresh access_token.
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
       const jwt    = session?.access_token ?? "";
       const userId = user?.id ?? "";
       const runId  = crypto.randomUUID();

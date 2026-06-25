@@ -64,13 +64,14 @@ class UserContext:
 
 def _decode_supabase_jwt(token: str) -> dict | None:
     """
-    Decode and verify a Supabase JWT locally using the project's HS256 secret.
+    Decode and verify a Supabase JWT.
 
-    This avoids a remote HTTP round-trip to Supabase Auth on every request.
-    The JWT secret is already loaded from env at startup via config.py.
-
-    Returns the decoded payload dict, or None if the token is invalid/expired.
+    Primary path: local HS256 decode with SUPABASE_JWT_SECRET (zero latency).
+    Fallback path: Supabase Auth API validation when the local secret is wrong
+    or not set — adds ~100ms but guarantees auth works even if the env var is
+    misconfigured.  A warning is logged so the operator can fix the secret.
     """
+    # ── 1. Try local decode (fast, no network) ────────────────────────────────
     try:
         return jwt.decode(
             token,
@@ -79,15 +80,38 @@ def _decode_supabase_jwt(token: str) -> dict | None:
             audience="authenticated",
         )
     except ExpiredSignatureError:
-        # Raise immediately — expired tokens should not fall through to the
-        # API-key path, which would silently accept them as a 64-hex string.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except JWTError:
-        return None  # Not a valid JWT — try API key path
+        pass  # Secret may be wrong — try Supabase API as fallback
+
+    # ── 2. Fallback: validate via Supabase Auth API ───────────────────────────
+    # This path is hit when SUPABASE_JWT_SECRET doesn't match the project.
+    # Fix: copy the JWT Secret from Supabase Dashboard → Settings → API and
+    # set it as SUPABASE_JWT_SECRET in your Railway environment variables.
+    try:
+        from lib.supabase_client import get_db
+        result = get_db().auth.get_user(token)
+        if result and result.user:
+            user = result.user
+            log.warning(
+                "JWT decoded via Supabase API (local secret mismatch). "
+                "Set SUPABASE_JWT_SECRET from Supabase Dashboard → Settings → API "
+                "to enable zero-latency local validation."
+            )
+            return {
+                "sub":   user.id,
+                "email": user.email,
+                "aud":   "authenticated",
+                "role":  "authenticated",
+            }
+    except Exception as api_exc:
+        log.debug("Supabase API JWT validation also failed: %s", api_exc)
+
+    return None  # Both paths failed — try API key path next
 
 
 def _resolve_tenant(user_id: str) -> str:

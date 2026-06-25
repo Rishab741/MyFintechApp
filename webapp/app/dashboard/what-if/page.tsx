@@ -6,8 +6,12 @@ import { engine, WhatIfResponse } from "@/lib/engine";
 import WhatIfChart from "@/components/charts/what-if-chart";
 import { TrendingUp, TrendingDown, Clock, Search } from "lucide-react";
 
-async function getJwt() {
-  const { data } = await createClient().auth.getSession();
+async function getJwt(): Promise<string> {
+  const supabase = createClient();
+  // getUser() validates the token server-side and refreshes it if expired.
+  // Then grab the (potentially refreshed) session for the access_token.
+  await supabase.auth.getUser();
+  const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? "";
 }
 
