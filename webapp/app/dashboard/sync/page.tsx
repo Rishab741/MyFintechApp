@@ -8,20 +8,23 @@ import {
 import { createClient } from "@/lib/supabase/client";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-interface SnapTradeConn {
-  account_id:    string | null;
-  brokerage:     string | null;
-  account_name:  string | null;
-  last_synced:   string | null;
+// brokerage_accounts table (migration 20260602000001_brokerage_accounts.sql)
+interface BrokerageAccount {
+  id:                   string;
+  snaptrade_account_id: string | null;
+  brokerage_name:       string | null;
+  account_name:         string | null;
+  last_synced_at:       string | null;
+  reconnect_required:   boolean;
 }
 
 interface ExchangeConn {
-  id:            string;
-  exchange:      string;
-  label:         string | null;
-  is_active:     boolean;
+  id:             string;
+  exchange:       string;
+  label:          string | null;
+  is_active:      boolean;
   last_synced_at: string | null;
-  sync_error:    string | null;
+  sync_error:     string | null;
 }
 
 type SyncStatus = "idle" | "syncing" | "done" | "error";
@@ -56,11 +59,11 @@ function ExchangeTag({ exchange }: { exchange: string }) {
 export default function SyncPage() {
   const supabase = createClient();
 
-  const [snapConn,    setSnapConn]    = useState<SnapTradeConn | null>(null);
-  const [exchanges,   setExchanges]   = useState<ExchangeConn[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [syncStatus,  setSyncStatus]  = useState<Record<string, SyncStatus>>({});
-  const [globalSync,  setGlobalSync]  = useState<SyncStatus>("idle");
+  const [brokerageAccounts, setBrokerageAccounts] = useState<BrokerageAccount[]>([]);
+  const [exchanges,         setExchanges]          = useState<ExchangeConn[]>([]);
+  const [loading,           setLoading]            = useState(true);
+  const [syncStatus,        setSyncStatus]         = useState<Record<string, SyncStatus>>({});
+  const [globalSync,        setGlobalSync]         = useState<SyncStatus>("idle");
 
   // ── Load connections ────────────────────────────────────────────────────────
   async function load() {
@@ -69,12 +72,15 @@ export default function SyncPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [snapRes, exchRes] = await Promise.all([
+      const [brokerRes, exchRes] = await Promise.all([
+        // Use brokerage_accounts — the correct table from migration 20260602
         supabase
-          .from("snaptrade_connections")
-          .select("account_id, brokerage, account_name, last_synced")
+          .from("brokerage_accounts")
+          .select("id, snaptrade_account_id, brokerage_name, account_name, last_synced_at, reconnect_required")
           .eq("user_id", user.id)
-          .maybeSingle(),
+          .eq("provider", "snaptrade")
+          .eq("is_active", true)
+          .order("created_at", { ascending: true }),
         supabase
           .from("exchange_connections")
           .select("id, exchange, label, is_active, last_synced_at, sync_error")
@@ -83,7 +89,7 @@ export default function SyncPage() {
           .order("created_at", { ascending: true }),
       ]);
 
-      setSnapConn(snapRes.data ?? null);
+      setBrokerageAccounts(brokerRes.data ?? []);
       setExchanges(exchRes.data ?? []);
     } finally {
       setLoading(false);
@@ -92,14 +98,12 @@ export default function SyncPage() {
 
   useEffect(() => { load(); }, []);
 
-  // ── Trigger sync ────────────────────────────────────────────────────────────
+  // ── Trigger sync — call Next.js API routes (server-side, no CORS issues) ───
   async function syncSnaptrade() {
     setSyncStatus(s => ({ ...s, snaptrade: "syncing" }));
     try {
-      const { error } = await supabase.functions.invoke("exchange-plaid-token", {
-        body: { action: "snaptrade_get_holdings" },
-      });
-      setSyncStatus(s => ({ ...s, snaptrade: error ? "error" : "done" }));
+      const res = await fetch("/api/sync/snaptrade", { method: "POST" });
+      setSyncStatus(s => ({ ...s, snaptrade: res.ok ? "done" : "error" }));
     } catch {
       setSyncStatus(s => ({ ...s, snaptrade: "error" }));
     }
@@ -109,8 +113,8 @@ export default function SyncPage() {
   async function syncExchange(id: string) {
     setSyncStatus(s => ({ ...s, [id]: "syncing" }));
     try {
-      const { error } = await supabase.functions.invoke("sync-exchange", {});
-      setSyncStatus(s => ({ ...s, [id]: error ? "error" : "done" }));
+      const res = await fetch("/api/sync/exchange", { method: "POST" });
+      setSyncStatus(s => ({ ...s, [id]: res.ok ? "done" : "error" }));
     } catch {
       setSyncStatus(s => ({ ...s, [id]: "error" }));
     }
@@ -120,14 +124,12 @@ export default function SyncPage() {
   async function syncAll() {
     setGlobalSync("syncing");
     try {
-      const calls: Promise<any>[] = [];
-      if (snapConn?.account_id) {
-        calls.push(supabase.functions.invoke("exchange-plaid-token", {
-          body: { action: "snaptrade_get_holdings" },
-        }));
+      const calls: Promise<Response>[] = [];
+      if (brokerageAccounts.length) {
+        calls.push(fetch("/api/sync/snaptrade", { method: "POST" }));
       }
       if (exchanges.length) {
-        calls.push(supabase.functions.invoke("sync-exchange", {}));
+        calls.push(fetch("/api/sync/exchange", { method: "POST" }));
       }
       await Promise.allSettled(calls);
       setGlobalSync("done");
@@ -138,7 +140,8 @@ export default function SyncPage() {
     setTimeout(() => setGlobalSync("idle"), 4000);
   }
 
-  const hasAnyConnection = !!snapConn?.account_id || exchanges.length > 0;
+  const hasSnaptrade = brokerageAccounts.length > 0;
+  const hasAnyConnection = hasSnaptrade || exchanges.length > 0;
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -188,7 +191,7 @@ export default function SyncPage() {
             <p className="text-white font-medium">No mobile connections found</p>
             <p className="text-muted text-sm mt-1">
               Open the Vestara mobile app to connect your brokerage or exchange accounts.
-              Once connected, they'll appear here for web-side syncing.
+              Once connected, they&apos;ll appear here for web-side syncing.
             </p>
           </div>
           <div className="bg-surface border border-border rounded-xl p-5 mt-2 text-left max-w-sm w-full space-y-2">
@@ -210,29 +213,18 @@ export default function SyncPage() {
         </div>
       )}
 
-      {/* SnapTrade connection */}
-      {!loading && snapConn?.account_id && (
+      {/* Brokerage accounts (SnapTrade) */}
+      {!loading && hasSnaptrade && (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <Wifi size={14} className="text-green-400" />
-            <p className="text-sm font-medium text-white">Brokerage (SnapTrade)</p>
-            <span className="ml-auto text-xs text-green-400 bg-green-400/10 border border-green-400/20 px-2 py-0.5 rounded-full">
-              Connected
-            </span>
-          </div>
-          <div className="px-5 py-4 flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <p className="text-sm text-white font-medium">
-                {snapConn.brokerage ?? "Brokerage"} · {snapConn.account_name ?? "Account"}
-              </p>
-              <p className="text-xs text-muted">
-                Last synced: {timeSince(snapConn.last_synced)}
-              </p>
-            </div>
+            <p className="text-sm font-medium text-white">
+              Brokerage Accounts via SnapTrade ({brokerageAccounts.length})
+            </p>
             <button
               onClick={syncSnaptrade}
               disabled={syncStatus["snaptrade"] === "syncing"}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-white/5 border border-border rounded-lg text-xs text-muted hover:text-white transition-colors disabled:opacity-50"
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-white/5 border border-border rounded-lg text-xs text-muted hover:text-white transition-colors disabled:opacity-50"
             >
               {syncStatus["snaptrade"] === "syncing" ? (
                 <Loader2 size={12} className="animate-spin" />
@@ -245,8 +237,27 @@ export default function SyncPage() {
               )}
               {syncStatus["snaptrade"] === "syncing" ? "Syncing…" :
                syncStatus["snaptrade"] === "done"    ? "Done" :
-               syncStatus["snaptrade"] === "error"   ? "Retry" : "Sync"}
+               syncStatus["snaptrade"] === "error"   ? "Retry" : "Sync All Brokerages"}
             </button>
+          </div>
+          <div className="divide-y divide-border">
+            {brokerageAccounts.map(acc => (
+              <div key={acc.id} className="px-5 py-4 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium truncate">
+                    {acc.brokerage_name ?? "Brokerage"}{acc.account_name ? ` · ${acc.account_name}` : ""}
+                  </p>
+                  <p className="text-xs text-muted mt-0.5">
+                    Last synced: {timeSince(acc.last_synced_at)}
+                  </p>
+                </div>
+                {acc.reconnect_required && (
+                  <span className="text-xs text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full shrink-0">
+                    Reconnect needed
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

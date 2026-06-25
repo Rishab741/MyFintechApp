@@ -179,15 +179,31 @@ async function engineFetch<T>(
   jwt: string,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${jwt}`,
-      ...(init?.headers ?? {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch (err: any) {
+    // Network-level failure (connection refused, no internet, etc.)
+    const isOffline =
+      err?.message?.includes("Failed to fetch") ||
+      err?.message?.includes("ERR_CONNECTION_REFUSED") ||
+      err?.code === "ECONNREFUSED";
+    if (isOffline) {
+      throw new Error(
+        "Engine offline — start the Python engine: cd services/engine && uvicorn main:app --reload --port 8000",
+      );
+    }
+    throw err;
+  }
   if (!res.ok) {
-    const body = await res.text();
+    let body = "";
+    try { body = await res.text(); } catch {}
     throw new Error(`Engine ${res.status}: ${body}`);
   }
   return res.json() as Promise<T>;
