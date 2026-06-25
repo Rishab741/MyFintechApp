@@ -4,7 +4,8 @@ Authentication middleware for the Vestara Portfolio Engine.
 Three authentication modes:
 
 1. USER AUTH — Supabase JWT from the mobile app / web dashboard.
-   Validated via Supabase Auth API (works for HS256 and RS256 projects).
+   Decoded locally with the Supabase JWT secret (HS256).
+   No remote API call — zero extra latency per request.
    Tenant is resolved via get_or_create_tenant() DB call (cached per process).
 
 2. API KEY AUTH — Bearer token for B2B licensees (RIAs, hedge funds).
@@ -23,6 +24,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import ExpiredSignatureError, JWTError, jwt
 
 from config import get_settings
 
@@ -60,6 +62,34 @@ class UserContext:
         )
 
 
+def _decode_supabase_jwt(token: str) -> dict | None:
+    """
+    Decode and verify a Supabase JWT locally using the project's HS256 secret.
+
+    This avoids a remote HTTP round-trip to Supabase Auth on every request.
+    The JWT secret is already loaded from env at startup via config.py.
+
+    Returns the decoded payload dict, or None if the token is invalid/expired.
+    """
+    try:
+        return jwt.decode(
+            token,
+            settings.supabase_jwt_secret,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+    except ExpiredSignatureError:
+        # Raise immediately — expired tokens should not fall through to the
+        # API-key path, which would silently accept them as a 64-hex string.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except JWTError:
+        return None  # Not a valid JWT — try API key path
+
+
 def _resolve_tenant(user_id: str) -> str:
     """
     Return tenant_id for a user — from cache or via DB call.
@@ -71,7 +101,6 @@ def _resolve_tenant(user_id: str) -> str:
     from lib.supabase_client import get_db
     db = get_db()
 
-    # Call the DB function that gets-or-creates the tenant
     res = db.rpc("get_or_create_tenant", {"p_user_id": user_id}).execute()
     tenant_id = res.data
     if not tenant_id:
@@ -91,36 +120,35 @@ async def require_user(
     """
     FastAPI dependency. Validates a Supabase JWT or a B2B API key.
 
-    - If the token decodes as a valid Supabase JWT → USER AUTH path.
-    - If JWT decode fails and the token is 64 hex chars → API KEY path.
+    - If the token is a valid Supabase JWT (HS256) → USER AUTH path (local, fast).
+    - If JWT decode fails and the token is 64 hex chars → API KEY path (one DB lookup).
     """
     token = credentials.credentials
 
-    # ── Try Supabase JWT via Auth API ────────────────────────────────────────
-    # Validates server-side — works for HS256 and RS256, no local secret needed.
-    try:
-        from lib.supabase_client import get_db
-        response = get_db().auth.get_user(token)
-        if response.user:
-            user      = response.user
-            tenant_id = _resolve_tenant(str(user.id))
-            return UserContext(
-                user_id=str(user.id),
-                tenant_id=tenant_id,
-                email=user.email,
-                role="authenticated",
+    # ── Try local JWT decode (zero network latency) ───────────────────────────
+    payload = _decode_supabase_jwt(token)
+    if payload:
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Malformed JWT: missing sub claim.",
+                headers={"WWW-Authenticate": "Bearer"},
             )
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.warning("Supabase JWT validation failed (will try API key): %s", e)
+        tenant_id = _resolve_tenant(user_id)
+        return UserContext(
+            user_id=user_id,
+            tenant_id=tenant_id,
+            email=payload.get("email"),
+            role="authenticated",
+        )
 
-    # ── Try B2B API key ───────────────────────────────────────────────────────
+    # ── Try B2B API key (one DB lookup, result cached) ────────────────────────
     key_hash = hashlib.sha256(token.encode()).hexdigest()
     from lib.supabase_client import get_db
-    db = get_db()
     res = (
-        db.table("tenants")
+        get_db()
+        .table("tenants")
         .select("id, tier, owner_email")
         .eq("api_key_hash", key_hash)
         .eq("is_active", True)
