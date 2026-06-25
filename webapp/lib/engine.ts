@@ -1,5 +1,5 @@
 /**
- * Typed client for the Vestara Portfolio Engine.
+ * Typed client for the Platstock Portfolio Engine.
  * All calls attach the caller's Supabase JWT as Bearer token.
  */
 

@@ -64,7 +64,7 @@ export default function ApiKeysPage() {
       <div>
         <h1 className="text-xl font-semibold text-white">API Keys</h1>
         <p className="text-sm text-muted mt-1">
-          Use your API key to authenticate B2B integrations with the Vestara engine.
+          Use your API key to authenticate B2B integrations with the Platstock engine.
         </p>
       </div>
 

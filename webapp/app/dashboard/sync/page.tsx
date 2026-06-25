@@ -190,14 +190,14 @@ export default function SyncPage() {
           <div>
             <p className="text-white font-medium">No mobile connections found</p>
             <p className="text-muted text-sm mt-1">
-              Open the Vestara mobile app to connect your brokerage or exchange accounts.
+              Open the Platstock mobile app to connect your brokerage or exchange accounts.
               Once connected, they&apos;ll appear here for web-side syncing.
             </p>
           </div>
           <div className="bg-surface border border-border rounded-xl p-5 mt-2 text-left max-w-sm w-full space-y-2">
             <p className="text-xs text-muted font-medium uppercase tracking-wide">How to connect</p>
             {[
-              "Open the Vestara app on your phone",
+              "Open the Platstock app on your phone",
               "Go to Onboarding → Connect Brokerage",
               "Choose SnapTrade (US brokers) or enter exchange API keys",
               "Return here and click Sync All",

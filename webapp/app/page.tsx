@@ -45,7 +45,7 @@ export default function LoginPage() {
               <path d="M3 3v18h18" /><path d="m7 16 4-4 4 4 5-5" />
             </svg>
           </div>
-          <h1 className="text-2xl font-semibold text-white">Vestara</h1>
+          <h1 className="text-2xl font-semibold text-white">Platstock</h1>
           <p className="text-muted text-sm mt-1">Institutional Portfolio Analytics</p>
         </div>
 

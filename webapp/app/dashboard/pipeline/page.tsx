@@ -246,7 +246,7 @@ export default function PipelinePage() {
       <div className="mb-5">
         <h1 className="text-xl font-semibold text-white">Test Data Pipeline</h1>
         <p className="text-sm text-muted mt-0.5">
-          Trace exactly how your data flows through Vestara — from raw CSV to computed metrics
+          Trace exactly how your data flows through Platstock — from raw CSV to computed metrics
         </p>
       </div>
 

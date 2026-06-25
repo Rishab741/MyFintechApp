@@ -9,7 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Vestara brand palette
+        // Platstock brand palette
         surface:  "#0d1117",
         card:     "#161b22",
         border:   "#21262d",

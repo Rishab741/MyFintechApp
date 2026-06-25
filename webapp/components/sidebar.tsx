@@ -71,7 +71,7 @@ export default function Sidebar({ email }: { email: string }) {
           <path d="M3 3v18h18" /><path d="m7 16 4-4 4 4 5-5" />
         </svg>
       </div>
-      <span className="font-semibold text-white text-sm">Vestara</span>
+      <span className="font-semibold text-white text-sm">Platstock</span>
     </div>
   );
 
@@ -104,7 +104,7 @@ export default function Sidebar({ email }: { email: string }) {
               <path d="M3 3v18h18" /><path d="m7 16 4-4 4 4 5-5" />
             </svg>
           </div>
-          <span className="font-semibold text-white text-sm">Vestara</span>
+          <span className="font-semibold text-white text-sm">Platstock</span>
         </div>
       </div>
 
