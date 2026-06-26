@@ -1,10 +1,11 @@
 ﻿"use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { engine } from "@/lib/engine";
 import { getJwt } from "@/lib/jwt";
-import { Shield, CheckCircle, AlertTriangle, RefreshCw } from "lucide-react";
+import { Shield, CheckCircle, AlertTriangle, RefreshCw, Wrench } from "lucide-react";
 
 
 
@@ -13,6 +14,9 @@ export default function LedgerPage() {
     const jwt = await getJwt();
     return engine.ledger.verify(jwt);
   }, { revalidateOnFocus: false });
+
+  const [repairState, setRepairState] = useState<"idle" | "running" | "done">("idle");
+  const [repairMsg,   setRepairMsg]   = useState("");
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -23,13 +27,39 @@ export default function LedgerPage() {
             SHA-256 hash-chained transaction ledger — tamper-evident by design.
           </p>
         </div>
-        <button
-          onClick={() => mutate()}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-muted hover:text-white text-sm transition-colors"
-        >
-          <RefreshCw size={14} />
-          Re-verify
-        </button>
+        <div className="flex gap-2">
+          {data && !data.chain_ok && (
+            <button
+              onClick={async () => {
+                setRepairState("running"); setRepairMsg("");
+                try {
+                  const jwt = await getJwt();
+                  const res = await engine.ledger.repair(jwt);
+                  setRepairMsg(`Re-sealed ${res.resealed} transactions`);
+                  setRepairState("done");
+                  mutate();
+                } catch (e: any) {
+                  setRepairMsg(e.message ?? "Repair failed");
+                  setRepairState("idle");
+                }
+              }}
+              disabled={repairState === "running"}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-warning/40 text-warning hover:bg-warning/10 text-sm transition-colors disabled:opacity-50"
+            >
+              {repairState === "running"
+                ? <div className="w-3.5 h-3.5 rounded-full border-2 border-warning border-t-transparent animate-spin" />
+                : <Wrench size={14} />}
+              {repairState === "running" ? "Repairing…" : "Repair chain"}
+            </button>
+          )}
+          <button
+            onClick={() => mutate()}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-muted hover:text-white text-sm transition-colors"
+          >
+            <RefreshCw size={14} />
+            Re-verify
+          </button>
+        </div>
       </div>
 
       {/* Status card */}
@@ -68,6 +98,18 @@ export default function LedgerPage() {
           </div>
         ) : null}
       </div>
+
+      {/* Repair result */}
+      {repairMsg && (
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm ${
+          repairState === "done"
+            ? "bg-positive/10 border-positive/20 text-positive"
+            : "bg-negative/10 border-negative/20 text-negative"
+        }`}>
+          {repairState === "done" ? <CheckCircle size={15} /> : <AlertTriangle size={15} />}
+          {repairMsg}
+        </div>
+      )}
 
       {/* Stats */}
       {data && (

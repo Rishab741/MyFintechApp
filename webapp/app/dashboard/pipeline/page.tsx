@@ -15,7 +15,7 @@ import {
 } from "@/lib/sample-data";
 import {
   Upload, RefreshCw, BarChart2, CheckCircle, Circle,
-  ChevronRight, Download, FileText, Zap, Eye,
+  ChevronRight, Download, FileText, Zap, Eye, Trash2, FlaskConical,
 } from "lucide-react";
 
 
@@ -90,25 +90,27 @@ function IngestStep({
   csvType:  "holdings" | "transactions";
   onDone:  (r: IngestResult) => void;
 }) {
-  const [state,   setState]   = useState<StepState>("idle");
-  const [result,  setResult]  = useState<IngestResult | null>(null);
-  const [file,    setFile]    = useState<File | null>(null);
-  const [error,   setError]   = useState("");
+  const [state,     setState]     = useState<StepState>("idle");
+  const [result,    setResult]    = useState<IngestResult | null>(null);
+  const [file,      setFile]      = useState<File | null>(null);
+  const [error,     setError]     = useState("");
+  const [wasSample, setWasSample] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function useSample() {
     const f = csvType === "holdings" ? csvToFile(makeSchwabHoldingsCsv(), "schwab_holdings.csv")
                                      : csvToFile(makeSchwabTransactionsCsv(), "schwab_transactions.csv");
     setFile(f);
-    await upload(f);
+    setWasSample(true);
+    await upload(f, true);
   }
 
-  async function upload(f: File) {
+  async function upload(f: File, isSample = false) {
     setState("running");
     setError("");
     try {
       const jwt = await getJwt();
-      const res = await engine.ingest.upload(jwt, "schwab", f, csvType);
+      const res = await engine.ingest.upload(jwt, "schwab", f, csvType, isSample);
       setResult(res);
       setState("done");
       onDone(res);
@@ -190,17 +192,25 @@ function IngestStep({
         {error && <p className="text-xs text-negative">{error}</p>}
 
         {result && state === "done" && (
-          <div className="grid grid-cols-3 gap-3 pt-1">
-            {[
-              { label: "Holdings",     v: result.holdings_upserted     },
-              { label: "Transactions", v: result.transactions_inserted },
-              { label: "Skipped",      v: result.skipped               },
-            ].map(({ label, v }) => (
-              <div key={label} className="bg-positive/5 border border-positive/20 rounded-lg p-2 text-center">
-                <p className="text-lg font-semibold text-positive">{v}</p>
-                <p className="text-xs text-muted">{label}</p>
+          <div className="space-y-2 pt-1">
+            {wasSample && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent">
+                <FlaskConical size={12} />
+                Sample data — flagged for easy retirement. Use "Retire sample data" below to remove it.
               </div>
-            ))}
+            )}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "Holdings",     v: result.holdings_upserted     },
+                { label: "Transactions", v: result.transactions_inserted },
+                { label: "Skipped",      v: result.skipped               },
+              ].map(({ label, v }) => (
+                <div key={label} className="bg-positive/5 border border-positive/20 rounded-lg p-2 text-center">
+                  <p className="text-lg font-semibold text-positive">{v}</p>
+                  <p className="text-xs text-muted">{label}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -210,11 +220,14 @@ function IngestStep({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function PipelinePage() {
-  const [holdingsDone, setHoldingsDone] = useState(false);
-  const [txDone,       setTxDone]       = useState(false);
-  const [refreshState, setRefreshState] = useState<StepState>("idle");
+  const [holdingsDone,  setHoldingsDone]  = useState(false);
+  const [txDone,        setTxDone]        = useState(false);
+  const [refreshState,  setRefreshState]  = useState<StepState>("idle");
   const [refreshResult, setRefreshResult] = useState<RefreshResult | null>(null);
   const [refreshError,  setRefreshError]  = useState("");
+  const [retireState,   setRetireState]   = useState<"idle" | "confirm" | "running" | "done">("idle");
+  const [retireResult,  setRetireResult]  = useState<{ tx_deleted: number; holdings_deleted: number } | null>(null);
+  const [retireError,   setRetireError]   = useState("");
 
   const { data: status, mutate: mutateStatus } = useSWR("pipeline-status", async () => {
     const jwt = await getJwt();
@@ -237,6 +250,20 @@ export default function PipelinePage() {
   }
 
   const allDone = holdingsDone && txDone && refreshState === "done";
+
+  async function retireSample() {
+    setRetireState("running");
+    setRetireError("");
+    try {
+      const jwt = await getJwt();
+      const res = await engine.ledger.retireSample(jwt);
+      setRetireResult(res);
+      setRetireState("done");
+    } catch (e: any) {
+      setRetireError(e.message ?? "Retire failed");
+      setRetireState("idle");
+    }
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-1">
@@ -397,6 +424,52 @@ export default function PipelinePage() {
           </p>
         )}
       </Step>
+
+      <ConnectorLine done={false} />
+
+      {/* ── Retire sample data ───────────────────────────────────────────── */}
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="flex items-start gap-3 mb-3">
+          <FlaskConical size={16} className="text-muted shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-white">Retire sample data</p>
+            <p className="text-xs text-muted mt-0.5">
+              Permanently deletes all data uploaded via "Use sample data" — keeps any real data you uploaded.
+              The ledger chain is automatically re-sealed after deletion.
+            </p>
+          </div>
+        </div>
+
+        {retireResult && retireState === "done" ? (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-positive/10 border border-positive/20 text-xs text-positive">
+            <CheckCircle size={12} />
+            Retired {retireResult.tx_deleted} transactions and {retireResult.holdings_deleted} holdings. Chain re-sealed.
+          </div>
+        ) : retireState === "confirm" ? (
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted flex-1">This cannot be undone. Confirm?</p>
+            <button onClick={() => setRetireState("idle")} className="text-xs text-muted hover:text-white px-3 py-1.5 rounded-lg border border-border">
+              Cancel
+            </button>
+            <button onClick={retireSample} className="text-xs bg-negative hover:bg-red-700 text-white px-3 py-1.5 rounded-lg">
+              Delete sample data
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setRetireState("confirm")}
+            disabled={retireState === "running"}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-negative border border-negative/30 hover:bg-negative/10 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {retireState === "running"
+              ? <div className="w-4 h-4 rounded-full border-2 border-negative border-t-transparent animate-spin" />
+              : <Trash2 size={14} />}
+            {retireState === "running" ? "Retiring…" : "Retire sample data"}
+          </button>
+        )}
+
+        {retireError && <p className="mt-2 text-xs text-negative">{retireError}</p>}
+      </div>
     </div>
   );
 }

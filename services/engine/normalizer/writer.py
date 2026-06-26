@@ -5,7 +5,7 @@ Responsibilities:
   1. get_or_create_account  — upsert an accounts row for the custodian account
   2. get_or_create_asset    — upsert an assets row for each symbol
   3. write_holdings         — upsert holdings (one row per account+asset)
-  4. write_transactions     — insert transactions (deduplicated via provider_tx_id)
+  4. write_transactions     — insert transactions with correct hash chaining
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from lib.ledger import get_chain_tip
 from lib.supabase_client import get_db
 from normalizer.protocol import (
     NormalizedHolding,
@@ -136,6 +137,7 @@ def write_holdings(
     user_id:          str,
     institution_name: str,
     holdings:         list[NormalizedHolding],
+    is_sample:        bool = False,
 ) -> tuple[int, list[str]]:
     """
     Upsert holdings into the DB.
@@ -163,6 +165,7 @@ def write_holdings(
                 "avg_cost_basis": str(h.avg_cost_basis),
                 "currency":       h.currency,
                 "updated_at":     now,
+                "is_sample":      is_sample,
             }
             if h.last_price:
                 row["last_price"]    = str(h.last_price)
@@ -188,9 +191,15 @@ def write_transactions(
     user_id:          str,
     institution_name: str,
     transactions:     list[NormalizedTransaction],
+    is_sample:        bool = False,
 ) -> tuple[int, int, list[str]]:
     """
-    Insert transactions, skipping duplicates via provider_tx_id.
+    Insert transactions with correct SHA-256 hash chaining.
+
+    Each row's prev_hash is set to the row_hash of the previous insert so the
+    ledger integrity check passes. The DB trigger seals row_hash on INSERT —
+    we read it back and thread it through to the next row.
+
     Returns (inserted_count, skipped_count, error_list).
     """
     if not transactions:
@@ -200,6 +209,9 @@ def write_transactions(
     inserted = 0
     skipped  = 0
     errors:  list[str] = []
+
+    # Fetch chain tip once — threaded through each insert so the chain is correct.
+    current_tip: str = get_chain_tip(user_id)
 
     for tx in transactions:
         try:
@@ -221,11 +233,16 @@ def write_transactions(
                 "settled_at":       tx.settled_at.isoformat(),
                 "notes":            tx.notes,
                 "metadata":         {"source": "custodian_import"},
+                "is_sample":        is_sample,
+                "prev_hash":        current_tip,
             }
             if tx.provider_tx_id:
                 row["provider_tx_id"] = tx.provider_tx_id
 
-            db.table("transactions").insert(row).execute()
+            res = db.table("transactions").insert(row).select("row_hash").execute()
+            # Thread the chain: this row's hash becomes the next row's prev_hash.
+            if res.data and res.data[0].get("row_hash"):
+                current_tip = res.data[0]["row_hash"]
             inserted += 1
 
         except Exception as exc:

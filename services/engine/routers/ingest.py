@@ -51,6 +51,7 @@ async def ingest_file(
     file:         UploadFile = File(..., description="CSV export from your custodian"),
     data_type:    Literal["holdings", "transactions", "auto"] = Form("auto"),
     account_ref:  str = Form("", description="Account number / label (optional override)"),
+    is_sample:    bool = Form(False, description="Mark data as sample/demo — can be retired later"),
 ) -> IngestResult:
     """
     Parse and import a custodian CSV file.
@@ -94,7 +95,7 @@ async def ingest_file(
         except Exception as exc:
             raise HTTPException(status_code=422, detail=f"Parse error: {exc}")
 
-        upserted, errs = write_holdings(user.user_id, institution_name, holdings)
+        upserted, errs = write_holdings(user.user_id, institution_name, holdings, is_sample=is_sample)
         result.holdings_upserted = upserted
         result.errors.extend(errs)
 
@@ -104,7 +105,7 @@ async def ingest_file(
         except Exception as exc:
             raise HTTPException(status_code=422, detail=f"Parse error: {exc}")
 
-        inserted, skipped, errs = write_transactions(user.user_id, institution_name, transactions)
+        inserted, skipped, errs = write_transactions(user.user_id, institution_name, transactions, is_sample=is_sample)
         result.transactions_inserted = inserted
         result.skipped               = skipped
         result.errors.extend(errs)

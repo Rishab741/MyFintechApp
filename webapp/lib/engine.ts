@@ -255,7 +255,11 @@ export const engine = {
   },
 
   ledger: {
-    verify: (jwt: string) => engineFetch<LedgerVerification>("/v1/ledger/verify", jwt),
+    verify:      (jwt: string) => engineFetch<LedgerVerification>("/v1/ledger/verify", jwt),
+    repair:      (jwt: string) => engineFetch<{ resealed: number }>("/v1/ledger/repair", jwt, { method: "POST" }),
+    retireSample:(jwt: string) => engineFetch<{ tx_deleted: number; holdings_deleted: number; accounts_deleted: number }>(
+      "/v1/ledger/sample", jwt, { method: "DELETE" },
+    ),
   },
 
   audit: {
@@ -272,10 +276,11 @@ export const engine = {
   ingest: {
     custodians: (jwt: string) => engineFetch<CustodianInfo[]>("/v1/ingest/custodians", jwt),
 
-    upload: (jwt: string, custodian: string, file: File, dataType: string) => {
+    upload: (jwt: string, custodian: string, file: File, dataType: string, isSample = false) => {
       const form = new FormData();
       form.append("file", file);
       form.append("data_type", dataType);
+      form.append("is_sample", String(isSample));
       return engineFetch<IngestResult>(`/v1/ingest/${custodian}`, jwt, {
         method: "POST",
         body: form,
