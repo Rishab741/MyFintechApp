@@ -1,17 +1,13 @@
 "use client";
 
 import useSWR from "swr";
-import { createClient } from "@/lib/supabase/client";
 import { engine } from "@/lib/engine";
+import { getJwt } from "@/lib/jwt";
 import MetricCard from "@/components/ui/metric-card";
 import PortfolioChart from "@/components/charts/portfolio-chart";
 import { TrendingUp, Activity, Shield, Zap, AlertTriangle, Heart } from "lucide-react";
 import Link from "next/link";
 
-async function getJwt() {
-  const { data } = await createClient().auth.getSession();
-  return data.session?.access_token ?? "";
-}
 
 function useMetrics() {
   return useSWR("metrics", async () => {

@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { getJwt } from "@/lib/jwt";
 
 import { useState, useRef } from "react";
 import useSWR from "swr";
@@ -6,10 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { engine, type IngestResult, type CustodianInfo } from "@/lib/engine";
 import { Upload, CheckCircle, AlertCircle, FileText } from "lucide-react";
 
-async function getJwt() {
-  const { data } = await createClient().auth.getSession();
-  return data.session?.access_token ?? "";
-}
+
 
 export default function IngestPage() {
   const { data: custodians } = useSWR("custodians", async () => {

@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { getJwt } from "@/lib/jwt";
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -12,12 +13,7 @@ import {
   TrendingDown, TrendingUp, Zap,
 } from "lucide-react";
 
-async function getJwt(): Promise<string> {
-  const supabase = createClient();
-  await supabase.auth.getUser();
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? "";
-}
+
 
 // ── Format helpers ────────────────────────────────────────────────────────────
 function fmtUsd(v: number) {

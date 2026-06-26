@@ -1,15 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { engine } from "@/lib/engine";
+import { getJwt } from "@/lib/jwt";
 import { Key, Copy, Trash2, RefreshCw, AlertTriangle, CheckCircle } from "lucide-react";
 
-async function getJwt() {
-  const { data } = await createClient().auth.getSession();
-  return data.session?.access_token ?? "";
-}
+
 
 export default function ApiKeysPage() {
   const { data: tenant, isLoading } = useSWR("tenant", async () => {

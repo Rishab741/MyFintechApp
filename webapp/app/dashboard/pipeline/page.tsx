@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { getJwt } from "@/lib/jwt";
 
 import { useState, useRef, useEffect } from "react";
 import useSWR from "swr";
@@ -17,10 +18,7 @@ import {
   ChevronRight, Download, FileText, Zap, Eye,
 } from "lucide-react";
 
-async function getJwt() {
-  const { data } = await createClient().auth.getSession();
-  return data.session?.access_token ?? "";
-}
+
 
 type StepState = "idle" | "running" | "done" | "error";
 

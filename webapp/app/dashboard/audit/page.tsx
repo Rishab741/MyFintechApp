@@ -1,15 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { engine } from "@/lib/engine";
+import { getJwt } from "@/lib/jwt";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-async function getJwt() {
-  const { data } = await createClient().auth.getSession();
-  return data.session?.access_token ?? "";
-}
+
 
 const EVENT_FILTERS = [
   { label: "All",       value: ""             },

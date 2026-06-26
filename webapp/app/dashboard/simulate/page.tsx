@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { engine, SimJobResult, SimAssetMetrics } from "@/lib/engine";
+import { getJwt } from "@/lib/jwt";
 import ComparisonChart  from "@/components/charts/comparison-chart";
 import MonteCarloChart  from "@/components/charts/monte-carlo-chart";
 
@@ -169,9 +170,8 @@ export default function SimulatePage() {
 
     try {
       const supabase = createClient();
-      const { data: { user } }    = await supabase.auth.getUser();
-      const { data: { session } } = await supabase.auth.getSession();
-      const jwt    = session?.access_token ?? "";
+      const { data: { user } } = await supabase.auth.getUser();
+      const jwt    = await getJwt();
       const userId = user?.id ?? "";
       const runId  = crypto.randomUUID();
 

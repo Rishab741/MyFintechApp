@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import useSWR from "swr";
 import { useState } from "react";
@@ -8,16 +8,14 @@ import {
 } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { engine } from "@/lib/engine";
+import { getJwt } from "@/lib/jwt";
 import MetricCard from "@/components/ui/metric-card";
 import {
   Activity, BarChart2, Briefcase, Minus, Percent,
   TrendingUp, Target,
 } from "lucide-react";
 
-async function getJwt() {
-  const { data } = await createClient().auth.getSession();
-  return data.session?.access_token ?? "";
-}
+
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PERIODS   = ["1M", "3M", "6M", "1Y", "3Y", "ALL"] as const;

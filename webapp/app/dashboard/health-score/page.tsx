@@ -1,14 +1,12 @@
-"use client";
+﻿"use client";
+import { getJwt } from "@/lib/jwt";
 
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { engine, HealthScoreBreakdown } from "@/lib/engine";
 import { Lightbulb, RefreshCw } from "lucide-react";
 
-async function getJwt() {
-  const { data } = await createClient().auth.getSession();
-  return data.session?.access_token ?? "";
-}
+
 
 function useHealthScore() {
   return useSWR("health-score-detail", async () => {

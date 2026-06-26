@@ -1,14 +1,12 @@
-"use client";
+﻿"use client";
 
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { engine } from "@/lib/engine";
+import { getJwt } from "@/lib/jwt";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
-async function getJwt() {
-  const { data } = await createClient().auth.getSession();
-  return data.session?.access_token ?? "";
-}
+
 
 function useExposure() {
   return useSWR("exposure", async () => {
