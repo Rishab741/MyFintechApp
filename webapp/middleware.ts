@@ -1,6 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// ── Onboarding step → route map ───────────────────────────────────────────────
+// The middleware reads the `platstock_ob` cookie (set by /api/onboarding) to
+// decide where to route the user — no DB call, zero added latency.
+const STEP_ROUTES: Record<string, string> = {
+  PENDING_VERIFICATION:  "/onboarding/verify-email",
+  MFA_SETUP:             "/onboarding/mfa",
+  WORKSPACE_CONFIGURED:  "/onboarding/workspace",
+  INTEGRATION_CONNECTED: "/onboarding/connect",
+};
+
+const OB_COOKIE = "platstock_ob";
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -21,35 +33,51 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // getSession() reads the JWT from the cookie — no network call when the
-  // access token is still valid. It only hits the network when the access
-  // token is expired and needs refreshing. This is the right choice for
-  // middleware: fast path stays in-process; getUser() (used in Server
-  // Components) handles server-side JWT verification on actual page loads.
+  // getSession() reads the JWT from the cookie — no network call on valid token.
   const { data: { session }, error } = await supabase.auth.getSession();
 
-  // Stale refresh token — the user has a cookie from a session that was
-  // revoked or expired server-side. Delete all Supabase auth cookies and
-  // redirect to login so the browser doesn't hammer the refresh endpoint
-  // on every subsequent request.
+  // Stale refresh token — delete all sb-* cookies and send to login.
   if (error && (error.status === 400 || (error as any).code === "refresh_token_not_found")) {
-    const loginUrl = new URL("/", request.url);
-    const redirect = NextResponse.redirect(loginUrl);
+    const redirect = NextResponse.redirect(new URL("/", request.url));
     for (const cookie of request.cookies.getAll()) {
-      if (cookie.name.startsWith("sb-")) {
-        redirect.cookies.delete(cookie.name);
-      }
+      if (cookie.name.startsWith("sb-")) redirect.cookies.delete(cookie.name);
     }
     return redirect;
   }
 
-  // Unauthenticated → login
-  if (!session && pathname.startsWith("/dashboard")) {
-    return NextResponse.redirect(new URL("/", request.url));
+  const isOnboarding = pathname.startsWith("/onboarding");
+  const isDashboard  = pathname.startsWith("/dashboard");
+  const isRoot       = pathname === "/";
+
+  // ── Unauthenticated ───────────────────────────────────────────────────────
+  if (!session) {
+    if (isDashboard || isOnboarding) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+    return response;
   }
 
-  // Already authenticated → skip the login page
-  if (session && pathname === "/") {
+  // ── Authenticated ─────────────────────────────────────────────────────────
+  // Read onboarding step from cookie (no network call).
+  const obStep = request.cookies.get(OB_COOKIE)?.value;
+  const isIncomplete = obStep && obStep !== "COMPLETED";
+  const stepRoute = obStep ? STEP_ROUTES[obStep] : null;
+
+  // 1. Root → redirect based on onboarding state
+  if (isRoot) {
+    if (isIncomplete && stepRoute) {
+      return NextResponse.redirect(new URL(stepRoute, request.url));
+    }
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // 2. Dashboard access while onboarding is incomplete → push to current step
+  if (isDashboard && isIncomplete && stepRoute) {
+    return NextResponse.redirect(new URL(stepRoute, request.url));
+  }
+
+  // 3. Onboarding pages while already completed → go to dashboard
+  if (isOnboarding && (!obStep || obStep === "COMPLETED")) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
@@ -57,7 +85,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Exclude static assets, images, favicon, and Next.js API routes.
-  // Also exclude the Supabase auth callback route so cookies can be set.
   matcher: ["/((?!_next/static|_next/image|favicon.ico|api/).*)"],
 };
