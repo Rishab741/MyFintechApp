@@ -4,9 +4,10 @@
 
 @layer base {
   :root {
-    --color-surface: #0d1117;
-    --color-card:    #161b22;
-    --color-border:  #21262d;
+    --color-surface: #0A0A0F;
+    --color-card:    #111118;
+    --color-border:  #1A1A28;
+    --color-accent:  #8B5CF6;
   }
 
   * {
@@ -15,7 +16,7 @@
 
   body {
     background-color: var(--color-surface);
-    color: #f0f6fc;
+    color: #F9FAFB;
   }
 
   ::-webkit-scrollbar       { width: 6px; height: 6px; }

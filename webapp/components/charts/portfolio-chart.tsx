@@ -59,18 +59,18 @@ export default function PortfolioChart({ data }: PortfolioChartProps) {
             <stop offset="95%" stopColor={color} stopOpacity={0}   />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#21262d" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#1A1A28" vertical={false} />
         <XAxis
           dataKey="time"
           tickFormatter={fmtDate}
-          tick={{ fill: "#8b949e", fontSize: 11 }}
+          tick={{ fill: "#4B5563", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
           tickFormatter={fmt}
-          tick={{ fill: "#8b949e", fontSize: 11 }}
+          tick={{ fill: "#4B5563", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           width={60}

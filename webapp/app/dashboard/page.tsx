@@ -3,50 +3,90 @@
 import useSWR from "swr";
 import { engine } from "@/lib/engine";
 import { getJwt } from "@/lib/jwt";
-import MetricCard from "@/components/ui/metric-card";
 import PortfolioChart from "@/components/charts/portfolio-chart";
-import { TrendingUp, Activity, Shield, Zap, AlertTriangle, Heart } from "lucide-react";
+import {
+  TrendingUp, TrendingDown, Activity, Shield, Zap,
+  AlertTriangle, Heart, ArrowUpRight, ArrowDownRight,
+} from "lucide-react";
 import Link from "next/link";
 
+function useMetrics()    { return useSWR("metrics",     async () => engine.portfolio.metrics(await getJwt(), "1Y")); }
+function useTenant()     { return useSWR("tenant",      async () => engine.tenant.me(await getJwt())); }
+function useUsage()      { return useSWR("usage",       async () => engine.tenant.usage(await getJwt())); }
+function useHistory()    { return useSWR("history-3m",  async () => engine.portfolio.history(await getJwt(), "3M")); }
+function useHealthScore(){ return useSWR("health-score",async () => engine.portfolio.healthScore(await getJwt())); }
 
-function useMetrics() {
-  return useSWR("metrics", async () => {
-    const jwt = await getJwt();
-    return engine.portfolio.metrics(jwt, "1Y");
-  });
+function pct(v: number | null | undefined) {
+  if (v == null) return null;
+  return `${v >= 0 ? "+" : ""}${(v * 100).toFixed(2)}%`;
 }
 
-function useTenant() {
-  return useSWR("tenant", async () => {
-    const jwt = await getJwt();
-    return engine.tenant.me(jwt);
-  });
+function num(v: number | null | undefined, decimals = 2) {
+  if (v == null) return null;
+  return v.toFixed(decimals);
 }
 
-function useUsage() {
-  return useSWR("usage", async () => {
-    const jwt = await getJwt();
-    return engine.tenant.usage(jwt);
-  });
+function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`bg-white/5 rounded animate-pulse ${className}`} />;
 }
 
-function useHistory() {
-  return useSWR("history-3m", async () => {
-    const jwt = await getJwt();
-    return engine.portfolio.history(jwt, "3M");
-  });
-}
+function MetricCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  trend,
+  loading,
+}: {
+  label:    string;
+  value:    string | number | null;
+  sub?:     string;
+  icon?:    React.ElementType;
+  trend?:   "positive" | "negative" | "neutral";
+  loading?: boolean;
+}) {
+  const trendColor =
+    trend === "positive" ? "text-[#10B981]" :
+    trend === "negative" ? "text-[#EF4444]" :
+    "text-white";
 
-function useHealthScore() {
-  return useSWR("health-score", async () => {
-    const jwt = await getJwt();
-    return engine.portfolio.healthScore(jwt);
-  });
-}
+  const TrendIcon =
+    trend === "positive" ? ArrowUpRight :
+    trend === "negative" ? ArrowDownRight :
+    null;
 
-function pct(v: number | null) {
-  if (v === null) return null;
-  return `${(v * 100).toFixed(2)}%`;
+  return (
+    <div
+      className="rounded-xl p-5 flex flex-col gap-3 transition-all hover:border-[#2A2A3E]"
+      style={{ background: "#111118", border: "1px solid #1A1A28" }}
+    >
+      <div className="flex items-start justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#4B5563]">
+          {label}
+        </p>
+        {Icon && (
+          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent/8 shrink-0">
+            <Icon size={13} className="text-accent" />
+          </div>
+        )}
+      </div>
+      {loading ? (
+        <Skeleton className="h-8 w-24" />
+      ) : (
+        <div className="flex items-end gap-2">
+          <span className={`text-[28px] font-bold leading-none ${trendColor}`}>
+            {value ?? "—"}
+          </span>
+          {TrendIcon && value != null && (
+            <TrendIcon size={16} className={`${trendColor} mb-1 shrink-0`} />
+          )}
+        </div>
+      )}
+      {sub && (
+        <p className="text-[12px] text-[#4B5563] -mt-1">{sub}</p>
+      )}
+    </div>
+  );
 }
 
 export default function DashboardOverview() {
@@ -56,45 +96,67 @@ export default function DashboardOverview() {
   const { data: history }                       = useHistory();
   const { data: healthScore }                   = useHealthScore();
 
-  const twr = metrics?.twr !== undefined ? pct(metrics.twr) : null;
-  const twrTrend = metrics?.twr !== undefined && metrics.twr !== null
-    ? (metrics.twr >= 0 ? "positive" : "negative")
-    : "neutral";
+  const twrPct    = pct(metrics?.twr);
+  const twrTrend  = metrics?.twr != null ? (metrics.twr >= 0 ? "positive" : "negative") : "neutral";
+  const cagrPct   = pct(metrics?.cagr);
+  const cagrTrend = metrics?.cagr != null ? (metrics.cagr >= 0 ? "positive" : "negative") : "neutral";
+  const ddPct     = pct(metrics?.max_drawdown);
+
+  const gradeColor =
+    healthScore?.grade === "A" || healthScore?.grade === "B"
+      ? "text-[#10B981]"
+      : healthScore?.grade === "C"
+      ? "text-[#F59E0B]"
+      : "text-[#EF4444]";
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Stale data warning — NAV and all metrics are unreliable when stale */}
+    <div className="max-w-6xl mx-auto space-y-5">
+
+      {/* ── Stale data banner ────────────────────────────────────────────── */}
       {metrics?.is_data_stale && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border bg-yellow-500/10 border-yellow-500/20 text-yellow-400 text-sm">
-          <AlertTriangle size={16} className="shrink-0" />
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+          style={{
+            background: "rgba(245,158,11,0.06)",
+            border: "1px solid rgba(245,158,11,0.18)",
+            color: "#F59E0B",
+          }}
+        >
+          <AlertTriangle size={15} className="shrink-0" />
           <span>
-            Portfolio prices are <strong>{Math.round(metrics.snapshot_age_hours)}h old</strong> —
-            NAV and all derived metrics (TWR, Sharpe, Drawdown) may be incorrect.
-            Trigger a price sync to refresh.
+            Portfolio prices are{" "}
+            <strong>{Math.round(metrics.snapshot_age_hours)}h old</strong> —
+            NAV and all derived metrics may be incorrect. Trigger a price sync to refresh.
           </span>
         </div>
       )}
 
-      {/* Header */}
+      {/* ── Page header ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Overview</h1>
-          <p className="text-sm text-muted mt-0.5">
-            {tenant?.name ?? "—"} · <span className="capitalize">{tenant?.tier ?? "—"}</span>
+          <h1 className="text-[20px] font-semibold text-white">Overview</h1>
+          <p className="text-sm text-[#6B7280] mt-0.5">
+            {tenant?.name ?? "—"}
+            {tenant?.tier && (
+              <>
+                {" · "}
+                <span className="capitalize">{tenant.tier}</span>
+              </>
+            )}
           </p>
         </div>
         {metrics?.computed_at && (
-          <p className="text-xs text-muted">
+          <p className="text-xs text-[#4B5563]">
             Updated {new Date(metrics.computed_at).toLocaleString()}
           </p>
         )}
       </div>
 
-      {/* Key metrics */}
+      {/* ── Metric row 1 ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Time-Weighted Return"
-          value={twr}
+          value={twrPct}
           icon={TrendingUp}
           trend={twrTrend}
           sub="1-year period"
@@ -102,16 +164,16 @@ export default function DashboardOverview() {
         />
         <MetricCard
           label="Sharpe Ratio"
-          value={metrics?.sharpe ?? null}
+          value={num(metrics?.sharpe)}
           icon={Activity}
-          trend={metrics?.sharpe !== null && metrics?.sharpe !== undefined && metrics.sharpe >= 1 ? "positive" : "neutral"}
+          trend={metrics?.sharpe != null && metrics.sharpe >= 1 ? "positive" : "neutral"}
           sub="Risk-adjusted return"
           loading={mLoading}
         />
         <MetricCard
           label="Max Drawdown"
-          value={metrics?.max_drawdown !== undefined && metrics?.max_drawdown !== null ? pct(metrics.max_drawdown) : null}
-          icon={TrendingUp}
+          value={ddPct}
+          icon={TrendingDown}
           trend="negative"
           sub="Peak to trough"
           loading={mLoading}
@@ -125,64 +187,86 @@ export default function DashboardOverview() {
         />
       </div>
 
-      {/* Second row */}
+      {/* ── Metric row 2 ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard label="CAGR"        value={pct(metrics?.cagr ?? null)}          trend={metrics?.cagr !== null && metrics?.cagr !== undefined && metrics.cagr >= 0 ? "positive" : "negative"} loading={mLoading} />
-        <MetricCard label="Sortino"     value={metrics?.sortino ?? null}                                                         loading={mLoading} />
-        <MetricCard label="Beta"        value={metrics?.beta ?? null}                                                            loading={mLoading} />
-        <MetricCard label="Volatility"  value={pct(metrics?.volatility ?? null)}                                                  loading={mLoading} />
+        <MetricCard label="CAGR"       value={cagrPct}                        trend={cagrTrend} loading={mLoading} />
+        <MetricCard label="Sortino"    value={num(metrics?.sortino)}           loading={mLoading} />
+        <MetricCard label="Beta"       value={num(metrics?.beta)}              loading={mLoading} />
+        <MetricCard label="Volatility" value={pct(metrics?.volatility)}        loading={mLoading} />
       </div>
 
-      {/* Health Score + NAV Chart row */}
+      {/* ── Health + NAV row ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Health Score card */}
-        <Link href="/dashboard/health-score" className="block">
-          <div className="bg-card border border-border rounded-xl p-5 hover:border-accent/40 transition-colors h-full">
-            <div className="flex items-center gap-2 mb-3">
-              <Heart size={14} className="text-accent" />
-              <p className="text-xs text-muted font-medium uppercase tracking-wide">Portfolio Health</p>
+
+        {/* Health score card */}
+        <Link href="/dashboard/health-score" className="block group">
+          <div
+            className="rounded-xl p-5 h-full flex flex-col transition-all group-hover:border-accent/25"
+            style={{ background: "#111118", border: "1px solid #1A1A28" }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent/8">
+                <Heart size={13} className="text-accent" />
+              </div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#4B5563]">
+                Portfolio Health
+              </p>
             </div>
+
             {healthScore ? (
-              <>
-                <div className="flex items-end gap-2 mb-2">
-                  <span className="text-5xl font-bold text-white">{healthScore.score}</span>
-                  <span className="text-2xl font-semibold text-accent mb-1">/ 100</span>
-                  <span className={`text-xl font-bold mb-1 ml-auto ${
-                    healthScore.grade === "A" ? "text-positive" :
-                    healthScore.grade === "B" ? "text-positive" :
-                    healthScore.grade === "C" ? "text-yellow-400" :
-                    "text-negative"
-                  }`}>{healthScore.grade}</span>
+              <div className="flex-1 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-end gap-2 mb-2">
+                    <span className="text-[60px] font-bold text-white leading-none">
+                      {healthScore.score}
+                    </span>
+                    <span className="text-[24px] font-semibold text-accent mb-1">/ 100</span>
+                    <span className={`text-[22px] font-bold mb-1 ml-auto ${gradeColor}`}>
+                      {healthScore.grade}
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-[#6B7280] leading-relaxed line-clamp-2">
+                    {healthScore.insights[0]}
+                  </p>
                 </div>
-                <p className="text-xs text-muted line-clamp-2">{healthScore.insights[0]}</p>
-              </>
+                <p className="text-[12px] text-accent mt-4 flex items-center gap-1">
+                  View details <ArrowUpRight size={11} />
+                </p>
+              </div>
             ) : (
-              <div className="space-y-2">
-                <div className="h-12 w-32 bg-white/5 rounded animate-pulse" />
-                <div className="h-3 w-full bg-white/5 rounded animate-pulse" />
+              <div className="flex-1 space-y-3">
+                <Skeleton className="h-14 w-36" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-3/4" />
               </div>
             )}
           </div>
         </Link>
 
-        {/* NAV Chart — spans 2 columns */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5">
-          <p className="text-xs text-muted font-medium uppercase tracking-wide mb-3">
+        {/* NAV chart */}
+        <div
+          className="lg:col-span-2 rounded-xl p-5"
+          style={{ background: "#111118", border: "1px solid #1A1A28" }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#4B5563] mb-4">
             Portfolio NAV — 3 Months
           </p>
           {history?.nav_series && history.nav_series.length > 1 ? (
             <PortfolioChart
-              data={history.nav_series.map(p => ({ time: p.time, total_value: p.total_value }))}
+              data={history.nav_series.map((p) => ({
+                time: p.time,
+                total_value: p.total_value,
+              }))}
             />
           ) : (
-            <div className="h-40 flex items-center justify-center text-muted text-sm">
-              No NAV history available
+            <div className="h-40 flex items-center justify-center text-[#4B5563] text-sm">
+              {mLoading ? <Skeleton className="h-40 w-full rounded-lg" /> : "No NAV history — run a sync to populate"}
             </div>
           )}
         </div>
       </div>
 
-      {/* Ledger status banner */}
+      {/* ── Ledger status ────────────────────────────────────────────────── */}
       <LedgerBanner />
     </div>
   );
@@ -190,20 +274,21 @@ export default function DashboardOverview() {
 
 function LedgerBanner() {
   const { data, isLoading } = useSWR("ledger-verify", async () => {
-    const jwt = await getJwt();
-    return engine.ledger.verify(jwt);
+    return engine.ledger.verify(await getJwt());
   });
 
-  if (isLoading) return null;
-  if (!data) return null;
+  if (isLoading || !data) return null;
 
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm ${
-      data.chain_ok
-        ? "bg-positive/10 border-positive/20 text-positive"
-        : "bg-negative/10 border-negative/20 text-negative"
-    }`}>
-      <Shield size={16} />
+    <div
+      className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+      style={
+        data.chain_ok
+          ? { background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.18)", color: "#10B981" }
+          : { background: "rgba(239,68,68,0.06)",  border: "1px solid rgba(239,68,68,0.18)",  color: "#EF4444" }
+      }
+    >
+      <Shield size={15} className="shrink-0" />
       {data.chain_ok
         ? `Ledger chain intact — ${data.tx_count.toLocaleString()} transactions verified`
         : `⚠ ${data.broken_links.length} broken link(s) detected in transaction chain`}

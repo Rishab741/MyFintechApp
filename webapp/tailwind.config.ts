@@ -9,18 +9,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Platstock brand palette
-        surface:  "#0d1117",
-        card:     "#161b22",
-        border:   "#21262d",
-        muted:    "#8b949e",
+        // Platstock brand palette — Platstock Dark
+        surface:  "#0A0A0F",
+        card:     "#111118",
+        border:   "#1A1A28",
+        muted:    "#6B7280",
         accent: {
-          DEFAULT: "#3b82f6",
-          hover:   "#2563eb",
+          DEFAULT: "#8B5CF6",
+          hover:   "#7C3AED",
         },
-        positive: "#10b981",
-        negative: "#ef4444",
-        warning:  "#f59e0b",
+        positive: "#10B981",
+        negative: "#EF4444",
+        warning:  "#F59E0B",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
