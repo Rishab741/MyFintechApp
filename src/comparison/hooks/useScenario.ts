@@ -134,8 +134,19 @@ export function useScenario(): UseScenarioReturn {
           refreshList();
         }
       } catch (e) {
-        // Transient network error — keep polling
-        console.warn("poll-scenario transient error:", e);
+        const msg = e instanceof Error ? e.message : String(e);
+        // 404 = function not deployed or run not found; 401/403 = auth issue.
+        // These are permanent failures — stop polling immediately.
+        const isPermanent = /poll-scenario (404|401|403)/.test(msg);
+        if (isPermanent) {
+          stopPoll();
+          setIsRunning(false);
+          setRunError("Simulation service unavailable — please try again later");
+          console.error("poll-scenario permanent error:", msg);
+        } else {
+          // Transient network hiccup — keep polling
+          console.warn("poll-scenario transient error:", e);
+        }
       }
     }, POLL_INTERVAL_MS);
   }, [stopPoll, refreshList]);
