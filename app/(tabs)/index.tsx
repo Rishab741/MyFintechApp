@@ -393,6 +393,15 @@ export default function ProfileScreen() {
           <Row icon="🌐" iconBg={`${T3}25`}   label="Region"        value="UTC"    onPress={() => Alert.alert('Coming Soon')} last />
         </Group>
 
+        {/* ─── Portfolio Tools ─────────────────────────────── */}
+        <SectionHead title="Portfolio Tools" />
+        <Group>
+          <Row icon="🏦" iconBg={TEAL_D}  label="Connected Accounts" onPress={() => router.navigate('/(tabs)/Onboarding')} />
+          <Row icon="📥" iconBg={IND_D}   label="Import Data"        onPress={() => router.navigate('/(tabs)/Import')} />
+          <Row icon="📊" iconBg={VIO_D}   label="Reports"            onPress={() => router.navigate('/(tabs)/Reports')} />
+          <Row icon="⚙️" iconBg={AMB_D}   label="Investment Profile"  onPress={() => router.navigate('/(tabs)/InvestmentProfile')} last />
+        </Group>
+
         {/* ─── Security ─────────────────────────────────────── */}
         <SectionHead title="Security" />
         <Group>

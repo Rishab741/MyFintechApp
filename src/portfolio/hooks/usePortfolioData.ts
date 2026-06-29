@@ -162,8 +162,10 @@ async function triggerSync(sources: ConnectionSources): Promise<void> {
 export function usePortfolioData(): PortfolioDataResult {
   const [period,     setPeriod]     = useState<Period>('ALL');
   const [refreshing, setRefreshing] = useState(false);
-  const headerAnim = useRef(new Animated.Value(0)).current;
+  const headerAnim  = useRef(new Animated.Value(0)).current;
   const hasAnimated = useRef(false);
+  // Unique ID per hook instance so concurrent callers never share a Supabase channel
+  const instanceId  = useRef(`${Math.random().toString(36).slice(2, 9)}`);
 
   const { session }            = useAuthStore();
   const { brokerageConnected } = useConnectionStore();
@@ -250,10 +252,13 @@ export function usePortfolioData(): PortfolioDataResult {
   }, [brokerageConnected, userId]);
 
   // ── Realtime: invalidate snapshot query when a new row is inserted ─────────
+  // Channel name includes a per-instance ID so multiple concurrent callers
+  // (e.g. HomeScreen + PortfolioScreen both mounting this hook) each get their
+  // own channel and never hit "cannot add postgres_changes after subscribe()".
   useEffect(() => {
     if (!userId || !connected) return;
     const channel = supabase
-      .channel(`portfolio_rt_${userId}`)
+      .channel(`portfolio_rt_${userId}_${instanceId.current}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'portfolio_snapshots' },

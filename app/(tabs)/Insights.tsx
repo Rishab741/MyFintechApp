@@ -3,10 +3,12 @@
  * Aesthetic: Luxury Terminal — obsidian depth, gold hairlines, monospaced data, serif headlines
  */
 
-import React from 'react';
+import { router } from 'expo-router';
+import React, { useState } from 'react';
 import {
     ActivityIndicator,
     Platform,
+    Pressable,
     RefreshControl,
     ScrollView,
     StatusBar,
@@ -609,6 +611,7 @@ const EmptyState: React.FC<{ onGenerate: () => void; loading: boolean }> = ({ on
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function InsightsScreen() {
+    const [subTab] = useState<'signals' | 'compare'>('signals');
     const { data, loading, refreshing, error, noDataset, onRefresh, generateAndFetch } = useInsights();
     const recs = useRecommendations();
 
@@ -691,12 +694,33 @@ export default function InsightsScreen() {
                 {/* ── Nav ── */}
                 <View style={s.nav}>
                     <View>
-                        <Text style={s.navTitle}>VESTARA INSIGHTS</Text>
+                        <Text style={s.navTitle}>AI INSIGHTS</Text>
                         <Text style={s.navSub}>UPDATED {genDate.toUpperCase()}</Text>
                     </View>
                     <TouchableOpacity style={s.refreshBtn} onPress={onRefresh} disabled={refreshing}>
                         <Text style={s.refreshBtnText}>↺</Text>
                     </TouchableOpacity>
+                </View>
+
+                {/* ── Sub-tab row ── */}
+                <View style={s.subTabRow}>
+                    {(['signals', 'compare'] as const).map(tab => {
+                        const labels = { signals: 'Signals', compare: 'Scenarios' };
+                        const active = subTab === tab;
+                        return (
+                            <Pressable
+                                key={tab}
+                                onPress={() => {
+                                    if (tab === 'compare') router.navigate('/(tabs)/Compare');
+                                }}
+                                style={[s.subTabBtn, active && s.subTabBtnActive]}
+                            >
+                                <Text style={[s.subTabTxt, active && s.subTabTxtActive]}>
+                                    {labels[tab]}
+                                </Text>
+                            </Pressable>
+                        );
+                    })}
                 </View>
 
                 {/* ── Health Score ── */}
@@ -1385,5 +1409,32 @@ const s = StyleSheet.create({
         marginHorizontal: 24,
         marginTop: 8,
         opacity: 0.7,
+    },
+
+    // Sub-tab row
+    subTabRow: {
+        flexDirection: 'row',
+        paddingHorizontal: 4,
+        paddingVertical: 8,
+        gap: 6,
+        marginBottom: 8,
+    },
+    subTabBtn: {
+        paddingHorizontal: 16,
+        paddingVertical: 7,
+        borderRadius: 20,
+    },
+    subTabBtnActive: {
+        backgroundColor: `${GOLD}18`,
+    },
+    subTabTxt: {
+        fontFamily: sans,
+        fontSize: 13,
+        color: MUTED,
+        fontWeight: '500',
+    },
+    subTabTxtActive: {
+        color: GOLD,
+        fontWeight: '700',
     },
 });

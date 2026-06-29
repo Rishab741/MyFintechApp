@@ -18,26 +18,17 @@ export default function RootLayout() {
   const [routeDecided, setRouteDecided] = useState(false);
 
   // ── 1. Hydrate session on cold start + listen for all future changes ────────
+  // onAuthStateChange fires INITIAL_SESSION on mount with whatever is in local
+  // storage — no network call needed. Using getSession() alongside it creates a
+  // race where both resolve near-simultaneously and trigger a double route-guard
+  // run that surfaces auth API errors. A single listener is sufficient.
   useEffect(() => {
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        setSession(session);
-        setInitialized(true);
-      })
-      .catch(() => {
-        // Supabase unreachable (bad env vars, offline) — unblock the router
-        // so the user lands on the login screen rather than an infinite spinner.
-        setSession(null);
-        setInitialized(true);
-      });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
         setInitialized(true);
       }
     );
-
     return () => subscription.unsubscribe();
   }, []);
 
@@ -162,7 +153,7 @@ export default function RootLayout() {
         try {
           const { data: { user } } = await supabase.auth.getUser();
           if (user?.user_metadata?.onboarded) {
-            router.replace('/(tabs)');
+            router.replace('/(tabs)/home');
           } else {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             router.replace('/onboard' as any);

@@ -1,6 +1,8 @@
+import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -108,6 +110,8 @@ function StatBadge({ label, value, color }: { label: string; value: string; colo
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function MarketScreen() {
+  const [subTab, setSubTab] = useState<'live' | 'explorer'>('live');
+
   const {
     indices,
     selectedIdx,
@@ -152,7 +156,7 @@ export default function MarketScreen() {
       {/* ── Fixed Header ─────────────────────────────────────────────── */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.screenTitle}>GLOBAL MARKETS</Text>
+          <Text style={styles.screenTitle}>MARKETS</Text>
           <LiveClock />
         </View>
         <View style={[styles.statusBadge, { borderColor: marketStatus.color }]}>
@@ -161,6 +165,31 @@ export default function MarketScreen() {
             {marketStatus.label}
           </Text>
         </View>
+      </View>
+
+      {/* ── Sub-tab row ────────────────────────────────────────────────── */}
+      <View style={styles.subTabRow}>
+        {(['live', 'explorer'] as const).map(tab => {
+          const labels = { live: 'Indices', explorer: 'Stocks & ETFs' };
+          const active = subTab === tab;
+          return (
+            <Pressable
+              key={tab}
+              onPress={() => {
+                if (tab === 'explorer') {
+                  router.navigate('/(tabs)/GlobalMarkets');
+                } else {
+                  setSubTab(tab);
+                }
+              }}
+              style={[styles.subTabBtn, active && styles.subTabBtnActive]}
+            >
+              <Text style={[styles.subTabTxt, active && styles.subTabTxtActive]}>
+                {labels[tab]}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* ── Quick stats strip ────────────────────────────────────────── */}
@@ -303,6 +332,33 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: BG,
+  },
+  subTabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    backgroundColor: BG,
+  },
+  subTabBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  subTabBtnActive: {
+    backgroundColor: `${GOLD}18`,
+  },
+  subTabTxt: {
+    fontFamily: sans,
+    fontSize: 13,
+    color: MUTED,
+    fontWeight: '500',
+  },
+  subTabTxtActive: {
+    color: GOLD,
+    fontWeight: '700',
   },
   header: {
     flexDirection: 'row',

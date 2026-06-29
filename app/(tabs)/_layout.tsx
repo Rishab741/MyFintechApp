@@ -1,327 +1,150 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
-import React, { useRef, useState } from 'react';
-import {
-  Animated,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-
 // ─── Tokens ───────────────────────────────────────────────────────────────────
-const BG    = '#060E1F';
-const CYAN  = '#0EA5E9';
-const TXT   = '#E8F4FD';
-const MUTED = '#607A93';
-const SIDEBAR_W = 252;
-const mono = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
-const sans = Platform.OS === 'ios' ? 'SF Pro Text' : 'sans-serif';
+const BG     = '#060E1F';
+const CYAN   = '#0EA5E9';
+const INDIGO = '#818CF8';
+const MUTED  = '#607A93';
+const BORDER = '#1E3347';
+const sans   = Platform.OS === 'ios' ? 'SF Pro Text' : 'sans-serif';
 
-// ─── Nav items ────────────────────────────────────────────────────────────────
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-interface NavItem { name: string; label: string; icon: IconName; iconActive: IconName }
 
-const NAV_ITEMS: NavItem[] = [
-  { name: 'index',             label: 'Profile',  icon: 'account-outline',        iconActive: 'account'         },
-  { name: 'Market',            label: 'Markets',  icon: 'chart-line',              iconActive: 'chart-line'      },
-  { name: 'Portfolio',         label: 'Vault',    icon: 'chart-donut',             iconActive: 'chart-donut'     },
-  { name: 'Holdings',          label: 'Assets',   icon: 'view-grid-outline',       iconActive: 'view-grid'       },
-  { name: 'Insights',          label: 'AI',       icon: 'brain',                   iconActive: 'brain'           },
-  { name: 'GlobalMarkets',     label: 'Macro',    icon: 'earth',                   iconActive: 'earth'           },
-  { name: 'Compare',           label: 'Compare',  icon: 'chart-multiple',          iconActive: 'chart-multiple'  },
-  { name: 'Onboarding',        label: 'Accounts', icon: 'bank-outline',            iconActive: 'bank'            },
-  { name: 'Import',            label: 'Import',   icon: 'file-upload-outline',     iconActive: 'file-upload'     },
-  { name: 'Reports',           label: 'Reports',  icon: 'download-circle-outline', iconActive: 'download-circle' },
-  { name: 'InvestmentProfile', label: 'Setup',    icon: 'tune-variant',            iconActive: 'tune-variant'    },
-];
-
-// ─── Nav row ──────────────────────────────────────────────────────────────────
-function NavRow({ item, active, onPress }: { item: NavItem; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [nr.row, active && nr.rowActive, pressed && nr.rowPressed]}
-    >
-      <View style={nr.iconWrap}>
-        <MaterialCommunityIcons
-          name={active ? item.iconActive : item.icon}
-          size={20}
-          color={active ? CYAN : MUTED}
-        />
-      </View>
-      <Text numberOfLines={1} style={[nr.label, active && nr.labelActive]}>
-        {item.label}
-      </Text>
-      {active && <View style={nr.activePip} />}
-    </Pressable>
-  );
+interface TabConfig {
+  name: string;
+  label: string;
+  icon: IconName;
+  iconActive: IconName;
+  activeColor: string;
 }
 
-// ─── Sidebar + FAB ────────────────────────────────────────────────────────────
-function SidebarNav({ state, navigation }: any) {
+const TABS: TabConfig[] = [
+  { name: 'home',      label: 'Home',    icon: 'home-outline',        iconActive: 'home',         activeColor: CYAN   },
+  { name: 'Market',    label: 'Markets', icon: 'chart-line',          iconActive: 'chart-line',   activeColor: CYAN   },
+  { name: 'Portfolio', label: 'Vault',   icon: 'safe-square-outline', iconActive: 'safe-square',  activeColor: CYAN   },
+  { name: 'Insights',  label: 'AI',      icon: 'brain',               iconActive: 'brain',        activeColor: INDIGO },
+  { name: 'index',     label: 'Profile', icon: 'account-outline',     iconActive: 'account',      activeColor: CYAN   },
+];
+
+// ─── Parent tab map: secondary screen → primary tab name ─────────────────────
+const PARENT_TAB: Record<string, string> = {
+  GlobalMarkets:     'Market',
+  Holdings:          'Portfolio',
+  Compare:           'Insights',
+  Onboarding:        'index',
+  Import:            'index',
+  Reports:           'index',
+  InvestmentProfile: 'index',
+  Connect:           'index',
+};
+
+// ─── Bottom Tab Bar ───────────────────────────────────────────────────────────
+function BottomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
-  const [open, setOpen] = useState(false);
 
-  const slideAnim    = useRef(new Animated.Value(-SIDEBAR_W)).current;
-  const backdropAnim = useRef(new Animated.Value(0)).current;
-  const fabRotate    = useRef(new Animated.Value(0)).current;
+  const currentRouteName: string = state.routes[state.index]?.name ?? '';
+  const effectiveActiveName = PARENT_TAB[currentRouteName] ?? currentRouteName;
 
-  const openSidebar = () => {
-    setOpen(true);
-    Animated.parallel([
-      Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 65, useNativeDriver: true }),
-      Animated.timing(backdropAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(fabRotate, { toValue: 1, friction: 8, tension: 65, useNativeDriver: true }),
-    ]).start();
-  };
-
-  const closeSidebar = (cb?: () => void) => {
-    Animated.parallel([
-      Animated.spring(slideAnim, { toValue: -SIDEBAR_W, friction: 8, tension: 65, useNativeDriver: true }),
-      Animated.timing(backdropAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.spring(fabRotate, { toValue: 0, friction: 8, tension: 65, useNativeDriver: true }),
-    ]).start(() => { setOpen(false); cb?.(); });
-  };
-
-  const fabSpin = fabRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
-  const activeItem = NAV_ITEMS[state.index];
+  // Only render tab items that are in our TABS config (primary 5)
+  const visibleRoutes = state.routes.filter((r: any) =>
+    TABS.some(t => t.name === r.name)
+  );
 
   return (
-    <>
-      {/* ── Backdrop ── */}
-      <Animated.View
-        pointerEvents={open ? 'auto' : 'none'}
-        style={[s.backdrop, { opacity: backdropAnim }]}
-      >
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => closeSidebar()} />
-      </Animated.View>
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={styles.barInner}>
+        {visibleRoutes.map((route: any) => {
+          const tab = TABS.find(t => t.name === route.name)!;
+          const active = effectiveActiveName === route.name;
+          const color = active ? tab.activeColor : MUTED;
 
-      {/* ── Sidebar panel ── */}
-      <Animated.View
-        style={[s.panel, { paddingTop: insets.top, transform: [{ translateX: slideAnim }] }]}
-      >
-        <BlurView
-          intensity={Platform.OS === 'ios' ? 60 : 100}
-          tint="dark"
-          style={StyleSheet.absoluteFill}
-        />
-        {/* Extra tint on top of blur */}
-        <View style={s.panelTint} />
-
-        <View style={s.panelInner}>
-          {/* Brand */}
-          <View style={s.brand}>
-            <View style={s.brandMark}>
-              <Text style={s.brandV}>↗</Text>
-            </View>
-            <View>
-              <Text style={s.brandName}>PLATSTOCK</Text>
-              <Text style={s.brandSub}>Digital Markets</Text>
-            </View>
-            {/* Close button inside sidebar header */}
+          return (
             <Pressable
-              onPress={() => closeSidebar()}
-              style={s.sidebarClose}
-              hitSlop={10}
+              key={route.key}
+              onPress={() => {
+                const event = navigation.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                });
+                if (!active && !event.defaultPrevented) {
+                  navigation.navigate(route.name);
+                }
+              }}
+              style={({ pressed }) => [styles.tabItem, pressed && styles.tabItemPressed]}
+              accessibilityRole="button"
+              accessibilityState={active ? { selected: true } : {}}
+              accessibilityLabel={tab.label}
             >
-              <MaterialCommunityIcons name="close" size={18} color={MUTED} />
+              <MaterialCommunityIcons
+                name={active ? tab.iconActive : tab.icon}
+                size={23}
+                color={color}
+              />
+              <Text style={[styles.tabLabel, { color }]}>{tab.label}</Text>
             </Pressable>
-          </View>
-
-          <View style={s.divider} />
-
-          {/* Nav items */}
-          <View style={s.navList}>
-            {state.routes.map((route: any, index: number) => {
-              const item = NAV_ITEMS.find(n => n.name === route.name);
-              if (!item) return null;
-              const active = state.index === index;
-              return (
-                <NavRow
-                  key={route.key}
-                  item={item}
-                  active={active}
-                  onPress={() => {
-                    const event = navigation.emit({ type: 'tabPress', target: route.key });
-                    closeSidebar(() => {
-                      if (!active && !event.defaultPrevented) navigation.navigate(route.name);
-                    });
-                  }}
-                />
-              );
-            })}
-          </View>
-
-          <View style={s.divider} />
-          <Text style={s.version}>v1.0 · PlatStock</Text>
-        </View>
-      </Animated.View>
-
-      {/* ── FAB — bottom right, never overlaps any header ── */}
-      <View
-        style={[s.fabWrap, { bottom: insets.bottom + 28 }]}
-        pointerEvents="box-none"
-      >
-        {/* Active section label chip */}
-        {!open && activeItem && (
-          <View style={s.fabLabel}>
-            <Text style={s.fabLabelTxt}>{activeItem.label}</Text>
-          </View>
-        )}
-
-        <Pressable
-          onPress={open ? () => closeSidebar() : openSidebar}
-          style={({ pressed }) => [s.fab, pressed && s.fabPressed]}
-          hitSlop={6}
-        >
-          <BlurView
-            intensity={Platform.OS === 'ios' ? 50 : 100}
-            tint="dark"
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={s.fabTint} />
-          <Animated.View style={{ transform: [{ rotate: fabSpin }] }}>
-            <MaterialCommunityIcons
-              name={open ? 'close' : 'menu'}
-              size={21}
-              color={CYAN}
-            />
-          </Animated.View>
-        </Pressable>
+          );
+        })}
       </View>
-    </>
+    </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  // Backdrop
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.60)',
+const styles = StyleSheet.create({
+  bar: {
+    backgroundColor: BG,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: BORDER,
   },
-
-  // Sidebar panel
-  panel: {
-    position: 'absolute',
-    left: 0, top: 0, bottom: 0,
-    width: SIDEBAR_W,
-    zIndex: 20,
-    overflow: 'hidden',
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: 'rgba(14,165,233,0.18)',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 10, height: 0 }, shadowOpacity: 0.7, shadowRadius: 30 },
-      android: { elevation: 24 },
-    }),
-  },
-  panelTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(6,14,31,0.85)' },
-  panelInner: { flex: 1, paddingHorizontal: 18, paddingVertical: 20 },
-
-  brand: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: 12, paddingBottom: 4,
-  },
-  brandMark: {
-    width: 38, height: 38, borderRadius: 11,
-    backgroundColor: 'rgba(14,165,233,0.10)',
-    borderWidth: 1.5, borderColor: 'rgba(14,165,233,0.35)',
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#0EA5E9', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
-  },
-  brandV:    { color: CYAN, fontSize: 16, fontWeight: '800', fontFamily: mono },
-  brandName: { color: CYAN, fontSize: 12, fontWeight: '800', letterSpacing: 2.5, fontFamily: mono },
-  brandSub:  { color: MUTED, fontSize: 10, marginTop: 1 },
-  sidebarClose: {
-    marginLeft: 'auto',
-    width: 32, height: 32, borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.09)', marginVertical: 14 },
-  navList: { flex: 1, gap: 2 },
-  version: { color: MUTED, fontSize: 10, fontFamily: mono, textAlign: 'center', paddingTop: 4 },
-
-  // FAB
-  fabWrap: {
-    position: 'absolute',
-    right: 18,
-    zIndex: 30,
+  barInner: {
     flexDirection: 'row',
+    paddingTop: 8,
+  },
+  tabItem: {
+    flex: 1,
     alignItems: 'center',
-    gap: 10,
+    gap: 3,
+    paddingVertical: 4,
   },
-  fabLabel: {
-    backgroundColor: 'rgba(4,7,15,0.80)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+  tabItemPressed: {
+    opacity: 0.65,
   },
-  fabLabelTxt: { color: MUTED, fontSize: 12, fontFamily: mono, letterSpacing: 0.4 },
-
-  fab: {
-    width: 48, height: 48, borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(14,165,233,0.3)',
-    alignItems: 'center', justifyContent: 'center',
-    ...Platform.select({
-      ios: { shadowColor: CYAN, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.35, shadowRadius: 14 },
-      android: { elevation: 10 },
-    }),
-  },
-  fabTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(6,14,31,0.80)' },
-  fabPressed: { opacity: 0.7 },
-});
-
-const nr = StyleSheet.create({
-  row: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 12, paddingVertical: 12, paddingHorizontal: 12,
-    gap: 12,
-  },
-  rowActive:  { backgroundColor: 'rgba(14,165,233,0.08)' },
-  rowPressed: { backgroundColor: 'rgba(255,255,255,0.04)' },
-  iconWrap:   { width: 24, alignItems: 'center' },
-  label:       { flex: 1, fontSize: 14, color: MUTED, fontFamily: sans, fontWeight: '500' },
-  labelActive: { color: TXT, fontWeight: '700' },
-  activePip: {
-    width: 4, height: 20, borderRadius: 2, backgroundColor: CYAN,
+  tabLabel: {
+    fontSize: 10,
+    fontFamily: sans,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
 });
 
-// ─── Root layout ──────────────────────────────────────────────────────────────
+// ─── Root tab layout ──────────────────────────────────────────────────────────
 export default function TabLayout() {
   return (
     <Tabs
-      screenOptions={{
-        headerShown: useClientOnlyValue(false, true),
-        headerStyle: { backgroundColor: BG, borderBottomWidth: 0, elevation: 0 },
-        headerTintColor: TXT,
-        headerTitleStyle: { fontWeight: '700', fontSize: 18 },
-        tabBarStyle: { display: 'none' },
-      }}
-      tabBar={(props) => <SidebarNav {...props} />}
+      screenOptions={{ headerShown: false }}
+      tabBar={(props) => <BottomTabBar {...props} />}
     >
-      <Tabs.Screen name="index"             options={{ title: 'PLATSTOCK' }} />
-      <Tabs.Screen name="Market"            options={{ headerShown: false }} />
-      <Tabs.Screen name="Portfolio"         options={{ headerShown: false }} />
-      <Tabs.Screen name="Holdings"          options={{ headerShown: false }} />
-      <Tabs.Screen name="Insights"          options={{ headerShown: false }} />
-      <Tabs.Screen name="GlobalMarkets"     options={{ headerShown: false }} />
-      <Tabs.Screen name="Compare"           options={{ headerShown: false }} />
-      <Tabs.Screen name="Onboarding"         options={{ headerShown: false }} />
-      <Tabs.Screen name="Import"            options={{ headerShown: false }} />
-      <Tabs.Screen name="Reports"           options={{ headerShown: false }} />
-      <Tabs.Screen name="InvestmentProfile" options={{ headerShown: false }} />
-      {/* Connect is kept as a route but not in the nav — accessible only via deep links */}
-      <Tabs.Screen name="Connect"           options={{ headerShown: false, href: null }} />
+      {/* ── Primary 5 tabs (visible in bottom bar, in order) ── */}
+      <Tabs.Screen name="home"      options={{ title: 'Home' }} />
+      <Tabs.Screen name="Market"    options={{ title: 'Markets' }} />
+      <Tabs.Screen name="Portfolio" options={{ title: 'Vault' }} />
+      <Tabs.Screen name="Insights"  options={{ title: 'AI' }} />
+      <Tabs.Screen name="index"     options={{ title: 'Profile' }} />
+
+      {/* ── Secondary screens — accessible via router.push(), hidden from bar ── */}
+      <Tabs.Screen name="Holdings"          options={{ href: null }} />
+      <Tabs.Screen name="GlobalMarkets"     options={{ href: null }} />
+      <Tabs.Screen name="Compare"           options={{ href: null }} />
+      <Tabs.Screen name="Onboarding"        options={{ href: null }} />
+      <Tabs.Screen name="Import"            options={{ href: null }} />
+      <Tabs.Screen name="Reports"           options={{ href: null }} />
+      <Tabs.Screen name="InvestmentProfile" options={{ href: null }} />
+      <Tabs.Screen name="Connect"           options={{ href: null }} />
     </Tabs>
   );
 }
