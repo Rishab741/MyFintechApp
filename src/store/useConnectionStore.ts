@@ -8,6 +8,7 @@ interface ConnectionState {
   isConnecting: boolean;
   setBrokerageConnected: (val: boolean) => void;
   setConnecting: (val: boolean) => void;
+  reset: () => void;
 }
 
 export const useConnectionStore = create<ConnectionState>()(
@@ -17,6 +18,7 @@ export const useConnectionStore = create<ConnectionState>()(
       isConnecting: false,
       setBrokerageConnected: (val) => set({ brokerageConnected: val }),
       setConnecting: (val) => set({ isConnecting: val }),
+      reset: () => set({ brokerageConnected: false, isConnecting: false }),
     }),
     {
       name: 'connection-store',

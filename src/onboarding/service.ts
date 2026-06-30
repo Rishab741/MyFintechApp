@@ -42,10 +42,13 @@ export async function getBrokerageSummary(): Promise<BrokerageSummary | null> {
 }
 
 export async function disconnectAccount(accountId: string): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not authenticated");
   const { error } = await supabase
     .from("brokerage_accounts")
     .update({ is_active: false, sync_error: null })
-    .eq("id", accountId);
+    .eq("id", accountId)
+    .eq("user_id", session.user.id);
   if (error) throw new Error(error.message);
 }
 

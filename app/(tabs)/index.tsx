@@ -1,5 +1,7 @@
 import { supabase } from '@/src/lib/supabase';
+import { queryClient } from '@/src/lib/queryClient';
 import { useAuthStore } from '@/src/store/useAuthStore';
+import { useConnectionStore } from '@/src/store/useConnectionStore';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -244,7 +246,8 @@ const rw = StyleSheet.create({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
-  const { setLoading } = useAuthStore();
+  const { setLoading, reset: resetAuth }       = useAuthStore();
+  const { reset: resetConnection }              = useConnectionStore();
   const [user, setUser]           = useState<any>(null);
   const [meta, setMeta]           = useState<any>({});
   const [connected, setConnected] = useState(false);
@@ -278,7 +281,14 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: async () => {
         setLoading(true);
-        try { await supabase.auth.signOut(); }
+        try {
+          await supabase.auth.signOut();
+          // Clear all user-specific state so a subsequent login on the same
+          // device never sees data from the previous session.
+          resetAuth();
+          resetConnection();
+          queryClient.clear();
+        }
         catch (e: any) { Alert.alert('Error', e.message); }
         finally { setLoading(false); }
       }},

@@ -35,7 +35,13 @@ export async function listReports(limit = 20): Promise<Report[]> {
 
 /** Deletes a report record (and its storage file, handled by edge fn / cron). */
 export async function deleteReport(reportId: string): Promise<void> {
-  const { error } = await supabase.from("reports").delete().eq("id", reportId);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not authenticated");
+  const { error } = await supabase
+    .from("reports")
+    .delete()
+    .eq("id", reportId)
+    .eq("user_id", session.user.id);
   if (error) throw new Error(error.message);
 }
 

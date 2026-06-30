@@ -7,10 +7,11 @@ interface AuthState {
   session: Session | null;
   user: User | null;
   initialized: boolean;
-  isLoading: boolean; // For handling low-latency transitions
+  isLoading: boolean;
   setSession: (session: Session | null) => void;
   setInitialized: (val: boolean) => void;
   setLoading: (val: boolean) => void;
+  reset: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -23,6 +24,7 @@ export const useAuthStore = create<AuthState>()(
       setSession: (session) => set({ session, user: session?.user ?? null, isLoading: false }),
       setInitialized: (val) => set({ initialized: val }),
       setLoading: (val) => set({ isLoading: val }),
+      reset: () => set({ session: null, user: null, initialized: true, isLoading: false }),
     }),
     {
       name: 'auth-store',

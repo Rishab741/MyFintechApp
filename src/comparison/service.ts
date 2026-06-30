@@ -73,10 +73,13 @@ export async function deleteScenario(id: string): Promise<void> {
 }
 
 export async function toggleBookmark(id: string, bookmarked: boolean): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not authenticated");
   const { error } = await supabase
     .from("scenarios")
     .update({ is_bookmarked: bookmarked })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", session.user.id);
   if (error) throw new Error(error.message);
 }
 
