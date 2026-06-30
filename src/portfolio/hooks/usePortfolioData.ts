@@ -261,7 +261,14 @@ export function usePortfolioData(): PortfolioDataResult {
       .channel(`portfolio_rt_${userId}_${instanceId.current}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'portfolio_snapshots' },
+        {
+          event:  'INSERT',
+          schema: 'public',
+          table:  'portfolio_snapshots',
+          // Only fire for THIS user's inserts — without this filter every user's
+          // snapshot write would invalidate every other user's React Query cache.
+          filter: `user_id=eq.${userId}`,
+        },
         () => {
           queryClient.invalidateQueries({ queryKey: portfolioKeys.snapshots(userId) });
         },

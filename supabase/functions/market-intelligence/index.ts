@@ -37,8 +37,9 @@ const json = (body: unknown, status = 200) =>
     headers: { ...cors, 'Content-Type': 'application/json' },
   })
 
-const CACHE_TTL_MS = 6 * 60 * 60 * 1_000   // 6 hours
-const FRED_BASE    = 'https://api.stlouisfed.org/fred/series/observations'
+const CACHE_TTL_MS        = 6 * 60 * 60 * 1_000   // 6 hours  — macro signals
+const SECTOR_CACHE_TTL_MS = 5 * 60 * 1_000         // 5 minutes — sector ETF prices
+const FRED_BASE           = 'https://api.stlouisfed.org/fred/series/observations'
 
 // ── FRED helpers ──────────────────────────────────────────────────────────────
 
@@ -498,11 +499,15 @@ serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
 
-  // ── Check macro cache (6h TTL) ──
-  // Sector quotes are fetched fresh every time (cached separately for 5 min
-  // so rapid refreshes don't hammer Yahoo Finance).
-  let cachedMacro: any = null
-  let cacheAgeMs  = Infinity
+  // ── Check macro cache (6h TTL) + sector cache (5-min TTL) ──────────────────
+  // Macro signals are expensive (6 FRED API calls); sectors are cheap but still
+  // rate-limited by Yahoo Finance. Both use the single cache row to avoid a
+  // second table; sector freshness is tracked via sectors_fetched_at in the JSONB.
+  let cachedMacro:   any    = null
+  let cachedSectors: any[]  = []
+  let cacheAgeMs            = Infinity
+  let sectorAgeMs           = Infinity
+
   try {
     const { data: cached } = await supabaseAdmin
       .from('market_intelligence_cache')
@@ -511,21 +516,41 @@ serve(async (req: Request) => {
       .single()
 
     if (cached) {
-      cacheAgeMs = Date.now() - new Date(cached.fetched_at).getTime()
+      cacheAgeMs  = Date.now() - new Date(cached.fetched_at).getTime()
+      const data  = cached.data as any
+
       if (cacheAgeMs < CACHE_TTL_MS) {
-        cachedMacro = cached.data
+        cachedMacro = data
+      }
+
+      // Sectors stored inside the cached JSONB alongside a timestamp
+      if (data?.sectors_fetched_at) {
+        sectorAgeMs = Date.now() - new Date(data.sectors_fetched_at).getTime()
+        if (sectorAgeMs < SECTOR_CACHE_TTL_MS && Array.isArray(data.sectors)) {
+          cachedSectors = data.sectors
+        }
       }
     }
   } catch {
     // cache table may not exist yet — continue to fresh fetch
   }
 
-  // Fetch sectors in parallel (always fresh — 5-min server cache via headers)
-  const sectorsPromise = fetchSectorQuotes()
+  // Only fetch sectors from Yahoo if the 5-min sector cache is stale
+  const sectorsPromise = cachedSectors.length > 0
+    ? Promise.resolve(cachedSectors)
+    : fetchSectorQuotes()
 
   if (cachedMacro) {
-    // Macro is fresh from cache; still return live sector quotes
     const sectors = await sectorsPromise
+    // If we re-fetched sectors, persist them back into the cache row
+    if (cachedSectors.length === 0) {
+      try {
+        await supabaseAdmin
+          .from('market_intelligence_cache')
+          .update({ data: { ...cachedMacro, sectors, sectors_fetched_at: new Date().toISOString() } })
+          .eq('singleton_key', 1)
+      } catch { /* non-fatal */ }
+    }
     return json({
       ...(cachedMacro as object),
       sectors,
@@ -603,15 +628,20 @@ serve(async (req: Request) => {
     cache_age_min: 0,
   }
 
-  // ── Persist macro to cache (sectors not cached — always fresh) ──
+  // ── Persist to cache: macro (6h TTL) + sectors (5-min TTL) ─────────────────
   try {
-    // Store without sectors in cache so they are always re-fetched live
-    const { sectors: _s, ...cachePayload } = result
+    // Store sectors alongside macro so rapid re-calls serve sectors from cache.
+    // sectors_fetched_at lets the next call decide whether to re-fetch Yahoo Finance.
+    const { cached: _c, cache_age_min: _a, ...cachePayload } = result
     await supabaseAdmin
       .from('market_intelligence_cache')
-      .upsert({ singleton_key: 1, data: cachePayload, fetched_at: new Date().toISOString() })
+      .upsert({
+        singleton_key: 1,
+        data: { ...cachePayload, sectors_fetched_at: new Date().toISOString() },
+        fetched_at: new Date().toISOString(),
+      })
   } catch {
-    // Non-fatal — table may not exist
+    // Non-fatal — table may not exist yet
   }
 
   return json(result)

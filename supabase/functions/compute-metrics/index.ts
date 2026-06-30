@@ -22,7 +22,8 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 const ENGINE_URL         = Deno.env.get('ENGINE_URL')          ?? '';
 const ENGINE_SERVICE_KEY = Deno.env.get('ENGINE_SERVICE_KEY')  ?? '';
 const MAX_RETRIES        = 3;
-const RETRY_DELAY_MS     = 1000;
+const ENGINE_TIMEOUT_MS  = 8_000;   // abort if engine doesn't respond in 8s
+const RETRY_BASE_MS      = 1_000;   // base delay; exponential with jitter
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ComputePayload {
@@ -30,7 +31,7 @@ interface ComputePayload {
   mode?:    'single' | 'all';
 }
 
-// ── HTTP helper with retry ─────────────────────────────────────────────────────
+// ── HTTP helper with timeout + exponential backoff + jitter ───────────────────
 async function callEngine(
   path: string,
   attempt = 1,
@@ -43,19 +44,24 @@ async function callEngine(
         'Authorization': `Bearer ${ENGINE_SERVICE_KEY}`,
       },
       body: '{}',
+      // Hard timeout — prevents pg_net trigger from hanging indefinitely
+      signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
     });
 
     const body = await res.json().catch(() => ({}));
 
     if (!res.ok && attempt < MAX_RETRIES) {
-      await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+      // Exponential backoff with ±30% jitter to prevent thundering herd
+      const delay = RETRY_BASE_MS * attempt * (0.7 + Math.random() * 0.6);
+      await new Promise(r => setTimeout(r, delay));
       return callEngine(path, attempt + 1);
     }
 
     return { ok: res.ok, body };
   } catch (err) {
     if (attempt < MAX_RETRIES) {
-      await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+      const delay = RETRY_BASE_MS * attempt * (0.7 + Math.random() * 0.6);
+      await new Promise(r => setTimeout(r, delay));
       return callEngine(path, attempt + 1);
     }
     return { ok: false, body: { error: String(err) } };
