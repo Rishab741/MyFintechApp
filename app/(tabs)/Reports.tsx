@@ -1,5 +1,5 @@
 /**
- * Reports.tsx — Vestara Report Generation
+ * Reports.tsx — Platstock Report Generation
  * Download portfolio reports in CSV, Excel, or PDF.
  * Gated behind connected brokerage account.
  */
@@ -140,7 +140,7 @@ function NotConnectedState() {
       </Text>
       <View style={s.emptyHint}>
         <MaterialCommunityIcons name="shield-check-outline" size={14} color={CYAN} />
-        <Text style={s.emptyHintTxt}>Your data never leaves Vestara servers</Text>
+        <Text style={s.emptyHintTxt}>Your data never leaves Platstock servers</Text>
       </View>
     </View>
   );

@@ -1,5 +1,5 @@
 /**
- * Insights.tsx — Vestara AI Insights & Portfolio Analytics
+ * Insights.tsx — Platstock AI Insights & Portfolio Analytics
  * Aesthetic: Luxury Terminal — obsidian depth, gold hairlines, monospaced data, serif headlines
  */
 
@@ -280,7 +280,7 @@ const AIPicks: React.FC<{
         return (
             <View style={rc.promptCard}>
                 <Text style={rc.promptIcon}>✦</Text>
-                <Text style={rc.promptTitle}>VESTARA AI PICKS</Text>
+                <Text style={rc.promptTitle}>PLATSTOCK AI PICKS</Text>
                 <Text style={rc.promptBody}>
                     Generate personalised stock, ETF, forex, and crypto recommendations tailored to your exact portfolio metrics — powered by Gemini AI.
                 </Text>
@@ -634,7 +634,7 @@ export default function InsightsScreen() {
                 <View style={s.glow1} />
                 <View style={s.glow2} />
                 <View style={s.nav}>
-                    <Text style={s.navTitle}>VESTARA INSIGHTS</Text>
+                    <Text style={s.navTitle}>PLATSTOCK INSIGHTS</Text>
                     <Text style={s.navSub}>AI-POWERED ANALYTICS</Text>
                 </View>
                 <EmptyState onGenerate={generateAndFetch} loading={false} />

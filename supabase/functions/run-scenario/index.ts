@@ -1,5 +1,5 @@
 /**
- * run-scenario — Vestara Edge Function
+ * run-scenario — Platstock Edge Function
  *
  * Creates a scenario_run record, forwards the simulation request to the
  * Python engine, and returns the run_id for the client to poll.

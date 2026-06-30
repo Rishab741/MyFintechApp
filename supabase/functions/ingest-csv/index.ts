@@ -1,5 +1,5 @@
 /**
- * ingest-csv — Vestara Edge Function
+ * ingest-csv — Platstock Edge Function
  *
  * Two-step bridge to the Python engine for universal CSV/XLSX import:
  *

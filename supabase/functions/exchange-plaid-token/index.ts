@@ -480,7 +480,7 @@ serve(async (req: Request) => {
         },
         body: JSON.stringify({
           user: { client_user_id: userId },
-          client_name: 'Vestara',
+          client_name: 'Platstock',
           products: ['investments'],
           country_codes: ['US'],
           language: 'en',

@@ -1,5 +1,5 @@
 /**
- * Compare.tsx — Vestara Counterfactual Intelligence Engine (VCIE)
+ * Compare.tsx — Platstock Counterfactual Intelligence Engine (VCIE)
  * Scenario builder, multi-series chart, Decision Impact Tree, Behavioral Profile, TOI
  */
 

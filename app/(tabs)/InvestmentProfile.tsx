@@ -278,7 +278,7 @@ export default function InvestmentProfileScreen() {
 
         {/* ── Hero header ── */}
         <Animated.View style={[s.header, { opacity: fade, transform: [{ translateY: slide }] }]}>
-          <Text style={s.overline}>VESTARA · PORTFOLIO</Text>
+          <Text style={s.overline}>PLATSTOCK · PORTFOLIO</Text>
           <Text style={s.heroTitle}>Investment{'\n'}Profile</Text>
           <Text style={s.heroSub}>Configure the markets you want to track, your risk tolerance, and preferred asset classes.</Text>
           <Summary profile={profile} />
@@ -359,7 +359,7 @@ export default function InvestmentProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={s.wordmark}><Text style={s.wordmarkTxt}>◈  VESTARA PRIVATE MARKETS</Text></View>
+        <View style={s.wordmark}><Text style={s.wordmarkTxt}>◈  PLATSTOCK PRIVATE MARKETS</Text></View>
       </ScrollView>
     </View>
   );

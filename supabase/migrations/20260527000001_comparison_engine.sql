@@ -1,5 +1,5 @@
 -- =============================================================================
--- Vestara Counterfactual Intelligence Engine (VCIE) — Database Schema
+-- Platstock Counterfactual Intelligence Engine (VCIE) — Database Schema
 --
 -- New tables (all scoped per user_id with RLS):
 --   scenarios                  — saved simulation configurations

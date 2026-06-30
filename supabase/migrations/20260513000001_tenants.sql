@@ -6,7 +6,7 @@
 --   tenant_members — maps Supabase auth users → tenant (many users per tenant)
 --
 -- Single-user consumer accounts get a tenant auto-created on first engine call.
--- B2B licensees are provisioned by a Vestara admin via create_tenant().
+-- B2B licensees are provisioned by a Platstock admin via create_tenant().
 --
 -- Every table that holds portfolio data already has user_id for RLS.
 -- The tenant layer sits above: tenant_id is used by the Python engine for

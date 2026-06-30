@@ -1,5 +1,5 @@
 /**
- * build-behavioral-profile — Vestara Edge Function
+ * build-behavioral-profile — Platstock Edge Function
  *
  * Triggers the Python engine to rebuild the BTF profile for a given user.
  * Called by:

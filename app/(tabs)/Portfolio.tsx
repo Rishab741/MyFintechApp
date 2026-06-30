@@ -324,7 +324,7 @@ export default function PortfolioScreen() {
 
                         <View style={s.footer}>
                             <View style={s.footerLine} />
-                            <Text style={s.footerTxt}>VESTARA · LIVE DATA</Text>
+                            <Text style={s.footerTxt}>PLATSTOCK · LIVE DATA</Text>
                             <View style={s.footerLine} />
                         </View>
                     </Animated.View>

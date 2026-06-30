@@ -1,5 +1,5 @@
 /**
- * list-brokerages — Vestara Edge Function
+ * list-brokerages — Platstock Edge Function
  *
  * Returns the full catalogue of brokerages Platstock can connect to.
  * Sources: SnapTrade /brokerages + our brokerage_catalogue table.

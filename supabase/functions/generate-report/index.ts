@@ -330,7 +330,7 @@ async function toPdf(
 
   // Title block
   page.drawRectangle({ x: 0, y: PAGE_H - 70, width: PAGE_W, height: 70, color: dark });
-  page.drawText("Vestara", { x: MARGIN, y: PAGE_H - 28, size: 14, font: bold, color: accent });
+  page.drawText("Platstock", { x: MARGIN, y: PAGE_H - 28, size: 14, font: bold, color: accent });
   page.drawText(title,     { x: MARGIN, y: PAGE_H - 46, size: 11, font: bold, color: rgb(1,1,1) });
   page.drawText(subtitle,  { x: MARGIN, y: PAGE_H - 62, size: 8,  font: reg,  color: mutedColor });
   y = PAGE_H - 80;

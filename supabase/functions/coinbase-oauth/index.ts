@@ -1,5 +1,5 @@
 /**
- * coinbase-oauth — Vestara Edge Function
+ * coinbase-oauth — Platstock Edge Function
  *
  * Handles the server-side legs of Coinbase's OAuth 2.0 flow.
  *

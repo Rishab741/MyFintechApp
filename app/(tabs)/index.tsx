@@ -437,7 +437,7 @@ export default function ProfileScreen() {
 
         {/* ─── Footer ───────────────────────────────────────── */}
         <View style={s.footer}>
-          <Text style={s.footerTxt}>Vestara · v1.0.0</Text>
+          <Text style={s.footerTxt}>Platstock · v1.0.0</Text>
         </View>
 
       </ScrollView>

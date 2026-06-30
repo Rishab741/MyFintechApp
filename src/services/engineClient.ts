@@ -1,5 +1,5 @@
 /**
- * Vestara Portfolio Engine — TypeScript client
+ * Platstock Portfolio Engine — TypeScript client
  *
  * Typed wrapper around the FastAPI service.
  * All requests attach the user's Supabase JWT as the Bearer token,

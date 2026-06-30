@@ -1,5 +1,5 @@
 /**
- * poll-scenario — Vestara Edge Function
+ * poll-scenario — Platstock Edge Function
  *
  * Returns the current status and (when complete) full results for a scenario run.
  *

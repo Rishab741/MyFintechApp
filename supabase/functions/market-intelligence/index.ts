@@ -1,5 +1,5 @@
 /**
- * market-intelligence — Vestara Global Macro Intelligence Engine
+ * market-intelligence — Platstock Global Macro Intelligence Engine
  *
  * Fetches live macroeconomic data from the FRED API (Federal Reserve Economic Data),
  * runs a rule-based regime-detection and signal engine, caches the result for 6 hours,

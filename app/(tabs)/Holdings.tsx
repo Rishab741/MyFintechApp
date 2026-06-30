@@ -1,5 +1,5 @@
 /**
- * Holdings.tsx — Vestara Asset Analytics
+ * Holdings.tsx — Platstock Asset Analytics
  * Real-time per-asset visualization: sparklines, value timeline, delta bars.
  * Data & real-time updates sourced entirely from usePortfolioData (Supabase RT + 5-min poll).
  */
@@ -296,7 +296,7 @@ export default function HoldingsScreen() {
                     <Text style={s.backArrow}>‹</Text>
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
-                    <Text style={s.navSup}>VESTARA</Text>
+                    <Text style={s.navSup}>PLATSTOCK</Text>
                     <Text style={s.navTitle}>Holdings</Text>
                 </View>
                 <View style={s.liveWrap}>
