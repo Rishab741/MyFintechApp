@@ -226,7 +226,8 @@ describe('momentum', () => {
   });
 
   it('sums the last `window` returns', () => {
-    expect(momentum([1, 2, 3, 4, 5], 4, 3)).toBe(2 + 3 + 4 + 5);
+    // window=3, idx=4: last 3 elements ending at index 4 → [3, 4, 5] = 12
+    expect(momentum([1, 2, 3, 4, 5], 4, 3)).toBe(3 + 4 + 5);
   });
 });
 

@@ -48,7 +48,11 @@ export function annualizedVol(dailyReturns: number[]): number {
 export function var95(dailyReturns: number[]): number {
   if (dailyReturns.length === 0) return 0;
   const sorted = [...dailyReturns].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length * 0.05)] ?? 0;
+  // Nearest-rank method: ceil(n * 0.05) - 1 gives the index of the 5th percentile.
+  // Math.floor would land one position too high when n * 0.05 is a whole number
+  // (e.g., n=20 → floor(1.0)=1 → index 1, but the 5th percentile is index 0).
+  const idx = Math.max(0, Math.ceil(sorted.length * 0.05) - 1);
+  return sorted[idx] ?? 0;
 }
 
 /** Percentage of days with non-negative returns. */
