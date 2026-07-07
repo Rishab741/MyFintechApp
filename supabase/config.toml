@@ -6,13 +6,19 @@ entrypoint = "./functions/exchange-plaid-token/index.ts"
 
 [functions.ml-pipeline]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/ml-pipeline/deno.json"
 entrypoint = "./functions/ml-pipeline/index.ts"
 
 [functions.market-intelligence]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/market-intelligence/deno.json"
 entrypoint = "./functions/market-intelligence/index.ts"
+
+[functions.refresh-benchmark-cache]
+enabled = true
+verify_jwt = false
+import_map = "./functions/refresh-benchmark-cache/deno.json"
+entrypoint = "./functions/refresh-benchmark-cache/index.ts"
 

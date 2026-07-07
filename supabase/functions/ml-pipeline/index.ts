@@ -13,13 +13,34 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 
-// ── S&P 500 monthly reference values (same dict as Portfolio.tsx) ──────────────
-const SP500: Record<string, number> = {
-  '2023-10': 4194, '2023-11': 4568, '2023-12': 4769,
-  '2024-01': 4845, '2024-02': 5137, '2024-03': 5254, '2024-04': 5035,
-  '2024-05': 5277, '2024-06': 5460, '2024-07': 5522, '2024-08': 5648,
-  '2024-09': 5762, '2024-10': 5705, '2024-11': 6032, '2024-12': 5882,
-  '2025-01': 6059, '2025-02': 5954, '2025-03': 5600,
+// ── SP500 benchmark loader ────────────────────────────────────────────────────
+// Reads from price_cache (symbol='SP500'), kept current by refresh-benchmark-cache
+// (daily cron). Falls back to SP500_FLOOR only before the first cron run.
+const SP500_FLOOR = 5_600  // Mar 2025 emergency floor — removed after first cache seed
+
+async function loadSP500Map(
+  supabase: any,
+  startDate: string,
+  endDate: string,
+): Promise<Map<string, number>> {
+  try {
+    const padded = new Date(startDate)
+    padded.setMonth(padded.getMonth() - 3)  // 3-month buffer for baseline calculation
+    const { data } = await supabase
+      .from('price_cache')
+      .select('date, adj_close')
+      .eq('symbol', 'SP500')
+      .gte('date', padded.toISOString().split('T')[0])
+      .lte('date', endDate)
+      .order('date', { ascending: true })
+    const map = new Map<string, number>()
+    for (const row of (data ?? [])) {
+      const d   = new Date(row.date)
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+      map.set(key, Number(row.adj_close))
+    }
+    return map
+  } catch { return new Map() }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -52,10 +73,16 @@ function snapshotTotalValue(snap: any): number {
        + balances.reduce((s: number, b: any)  => s + (b.cash ?? 0), 0)
 }
 
-function sp500ForDate(dateStr: string): number {
+function sp500ForDate(dateStr: string, sp500Map: Map<string, number>): number {
   const d   = new Date(dateStr)
-  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  return SP500[key] ?? SP500['2025-03']
+  const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+  if (sp500Map.has(key)) return sp500Map.get(key)!
+  if (sp500Map.size > 0) {
+    // Use most recent cached month as proxy for any gap
+    const sorted = [...sp500Map.keys()].sort()
+    return sp500Map.get(sorted[sorted.length - 1])!
+  }
+  return SP500_FLOOR
 }
 
 function rollingStd(values: number[], window: number, idx: number): number {
@@ -78,7 +105,7 @@ function drawdownAt(values: number[], idx: number): number {
 }
 
 // ── Portfolio-level feature computation ──────────────────────────────────────
-function buildFeatureRows(rows: any[]): any[] {
+function buildFeatureRows(rows: any[], sp500Map: Map<string, number>): any[] {
   if (rows.length < 2) return []
 
   const totalValues = rows.map(r => snapshotTotalValue(r.snapshot))
@@ -98,8 +125,8 @@ function buildFeatureRows(rows: any[]): any[] {
     const totalValue = totalValues[i]
     const cash       = balances.reduce((s: number, b: any) => s + (b.cash ?? 0), 0)
     const cashPct    = totalValue > 0 ? (cash / totalValue) * 100 : 0
-    const sp500Val   = sp500ForDate(row.captured_at)
-    const benchBase  = sp500ForDate(rows[0].captured_at) || 1
+    const sp500Val   = sp500ForDate(row.captured_at, sp500Map)
+    const benchBase  = sp500ForDate(rows[0].captured_at, sp500Map) || 1
 
     const benchReturn = ((sp500Val - benchBase) / benchBase) * 100
     const cumReturn   = base > 0 ? ((totalValue - base) / base) * 100 : 0
@@ -115,8 +142,8 @@ function buildFeatureRows(rows: any[]): any[] {
     const mom5         = momentum(dailyReturns, i, 5)
     const dd           = drawdownAt(totalValues, i)
     const alpha        = i > 0
-      ? dailyReturns[i] - (sp500Val > 0 && sp500ForDate(rows[i - 1]?.captured_at) > 0
-          ? ((sp500Val - sp500ForDate(rows[i - 1].captured_at)) / sp500ForDate(rows[i - 1].captured_at)) * 100
+      ? dailyReturns[i] - (sp500Val > 0 && sp500ForDate(rows[i - 1]?.captured_at, sp500Map) > 0
+          ? ((sp500Val - sp500ForDate(rows[i - 1].captured_at, sp500Map)) / sp500ForDate(rows[i - 1].captured_at, sp500Map)) * 100
           : 0)
       : 0
 
@@ -204,17 +231,57 @@ function toCSV(rows: any[]): string {
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+  // ── Authentication ──────────────────────────────────────────────────────────
+  // verify_jwt=true in config.toml means Supabase Edge Runtime rejects requests
+  // with a missing or invalid JWT before this code even runs.
+  // We still extract user.id here so user_id is NEVER trusted from the body —
+  // a user should not be able to request data for another user's account by
+  // supplying a different user_id in the JSON payload.
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
+
+  // Service-role client: used for all data operations (bypasses RLS)
+  const supabaseAdmin = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  )
+  // User-scoped client: used only for identity verification
+  const supabaseUser = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!,
+    { global: { headers: { Authorization: authHeader } } },
+  )
+  const { data: { user }, error: authErr } = await supabaseUser.auth.getUser()
+  if (authErr || !user) return json({ error: 'Unauthorized' }, 401)
+
+  // user_id from JWT — canonical, unforgeable
+  const userId = user.id
+
   try {
-    const body = await req.json()
-    const { action, user_id } = body
+    const body         = await req.json()
+    const { action }   = body
+    // user_id variable kept for downstream compatibility; always sourced from JWT
+    const user_id      = userId
 
-    if (!user_id) return json({ error: 'user_id required' }, 400)
-
-    // Use service role key so we can bypass RLS when reading portfolio_snapshots
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
+    // ── Rate limiting ───────────────────────────────────────────────────────
+    // Principle of Least Privilege: each action gets only the quota it needs.
+    // get_recommendations calls Gemini (expensive, limited quota) → tight limit.
+    // Dataset generation is CPU-heavy on the Python engine → moderate limit.
+    // The check_and_increment_rate_limit RPC is a single atomic DB operation.
+    const maxCalls = action === 'get_recommendations' ? 5 : 60
+    const { data: rateData } = await supabaseAdmin.rpc('check_and_increment_rate_limit', {
+      p_user_id:   userId,
+      p_function:  `ml-pipeline:${action ?? 'unknown'}`,
+      p_max_calls: maxCalls,
+    })
+    if (rateData?.[0]?.allowed === false) {
+      return json({
+        error:                'Rate limit exceeded. You may retry in the next hour.',
+        action,
+        retry_after_seconds:  3600,
+        current_count:        rateData[0].current_count,
+      }, 429)
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // generate_dataset — fetch snapshots, compute features, persist to ml_datasets
@@ -232,7 +299,8 @@ serve(async (req: Request) => {
         return json({ error: 'Not enough snapshots (minimum 2 required)' }, 422)
       }
 
-      const featureRows  = buildFeatureRows(snapshots)
+      const sp500Map     = await loadSP500Map(supabaseAdmin, snapshots[0].captured_at, snapshots[snapshots.length - 1].captured_at)
+      const featureRows  = buildFeatureRows(snapshots, sp500Map)
       const positionRows = buildPositionRows(snapshots)
 
       // Compute summary stats

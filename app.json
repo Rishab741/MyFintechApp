@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "MyFintechApp",
-    "slug": "MyFintechApp",
+    "name": "Platstock",
+    "slug": "platstock",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myfintechapp",
+    "scheme": "platstock",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.MyFintechApp",
+      "bundleIdentifier": "com.platstock.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -27,7 +27,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.MyFintechApp"
+      "package": "com.platstock.app"
     },
     "web": {
       "bundler": "metro",

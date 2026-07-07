@@ -494,10 +494,41 @@ async function fetchSectorQuotes(): Promise<Array<{ name: string; etf: string; c
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
+  // ── Authentication ──────────────────────────────────────────────────────────
+  // verify_jwt=true in config.toml rejects unsigned requests before we run.
+  // We still identify the user here so rate limiting is per-user, not per-IP.
+  // Without this, 1,000 users firing simultaneously would hit FRED rate limits
+  // and result in a Yahoo Finance IP ban — taking market data down for everyone.
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
+
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
+  const supabaseUser = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!,
+    { global: { headers: { Authorization: authHeader } } },
+  )
+  const { data: { user }, error: authErr } = await supabaseUser.auth.getUser()
+  if (authErr || !user) return json({ error: 'Unauthorized' }, 401)
+
+  // ── Rate limiting ───────────────────────────────────────────────────────────
+  // 120 calls/hour is generous — the 6h macro cache means real FRED calls happen
+  // at most once per 6 hours per user. The rate limit protects against burst
+  // abuse (e.g. a polling bug or malicious script), not normal usage.
+  const { data: rateData } = await supabaseAdmin.rpc('check_and_increment_rate_limit', {
+    p_user_id:   user.id,
+    p_function:  'market-intelligence',
+    p_max_calls: 120,
+  })
+  if (rateData?.[0]?.allowed === false) {
+    return json({
+      error:               'Rate limit exceeded. Try again in the next hour.',
+      retry_after_seconds: 3600,
+    }, 429)
+  }
 
   // ── Check macro cache (6h TTL) + sector cache (5-min TTL) ──────────────────
   // Macro signals are expensive (6 FRED API calls); sectors are cheap but still
