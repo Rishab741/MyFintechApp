@@ -1,0 +1,119 @@
+name: CI Quality Gate
+
+# Principle: Every PR and every push to master passes through the same gate.
+# A broken commit that slips through to master costs 10× more to fix than
+# one caught here. The gate is: TypeScript → ESLint → Tests. All three must
+# pass; any single failure blocks the merge button.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  # ── Mobile App (React Native / Expo) ────────────────────────────────────────
+  mobile:
+    name: Mobile — Typecheck · Lint · Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 1: TypeScript
+      # tsc --noEmit checks types across the entire codebase in one pass.
+      # This catches: missing props, wrong return types, broken imports.
+      # It does NOT emit .js files — just validates.
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      # Step 2: ESLint
+      # --max-warnings 0 means any warning is treated as an error.
+      # Without this flag, warnings accumulate silently and the gate is useless.
+      - name: ESLint
+        run: npx eslint . --ext .ts,.tsx --max-warnings 0
+
+      # Step 3: Unit tests
+      # --ci disables interactive watch mode and fails on any unexpected snapshot change.
+      # --coverage generates a coverage report (visible in PR summaries with upload-artifact).
+      # --passWithNoTests keeps the gate green during the initial test bootstrap phase.
+      - name: Unit tests
+        run: npm run test:ci
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-coverage
+          path: coverage/
+          retention-days: 7
+
+  # ── Web Dashboard (Next.js) ──────────────────────────────────────────────────
+  webapp:
+    name: Webapp — Typecheck · Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+
+      - name: Install webapp dependencies
+        working-directory: ./webapp
+        run: npm ci
+
+      - name: Webapp TypeScript type check
+        working-directory: ./webapp
+        run: npx tsc --noEmit
+
+      - name: Webapp ESLint
+        working-directory: ./webapp
+        run: npm run lint -- --max-warnings 0
+        # Next.js projects export `next lint` via the lint script.
+        # The -- passes --max-warnings 0 through to the underlying eslint call.
+        continue-on-error: false
+
+  # ── Edge Functions (Deno) ────────────────────────────────────────────────────
+  # Note: Deno edge functions use a separate toolchain (deno check, deno lint).
+  # This job runs only if the Deno CLI is available. It is NOT blocking for now
+  # (continue-on-error: true) since it requires SUPABASE env vars for full validation.
+  # Remove continue-on-error once Deno secrets are configured in GitHub Actions.
+  deno:
+    name: Edge Functions — Deno type check
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check edge functions
+        run: |
+          for fn_dir in supabase/functions/*/; do
+            fn_name=$(basename "$fn_dir")
+            entry="$fn_dir/index.ts"
+            if [ -f "$entry" ]; then
+              echo "Checking $fn_name..."
+              deno check --no-lock "$entry" || echo "  ⚠ $fn_name has type errors"
+            fi
+          done

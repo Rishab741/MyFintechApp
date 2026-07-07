@@ -82,7 +82,7 @@ async function snapTradeLogin(
   userSecret: string
 ): Promise<{ status: number; data: any }> {
   const timestamp = Math.floor(Date.now() / 1000).toString()
-  const redirectUri = encodeURIComponent('myfintechapp://snaptrade-callback')
+  const redirectUri = encodeURIComponent('platstock://snaptrade-callback')
   const query = `clientId=${clientId}&timestamp=${timestamp}&userId=${userId}&userSecret=${userSecret}&customRedirect=${redirectUri}&immediateRedirect=true`
   const path = '/api/v1/snapTrade/login'
   const signature = await snapTradeSign(consumerKey, path, query, null)

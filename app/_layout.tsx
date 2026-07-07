@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -9,7 +10,16 @@ import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useConnectionStore } from '../src/store/useConnectionStore';
 
-export default function RootLayout() {
+// Initialise once at module load — before any component renders.
+// Sentry silently no-ops when DSN is empty, so local dev without a key is safe.
+// tracesSampleRate: 100% in dev (full traces), 20% in prod (cost-effective sampling).
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  environment: __DEV__ ? 'development' : 'production',
+  tracesSampleRate: __DEV__ ? 1.0 : 0.2,
+});
+
+function RootLayout() {
   const { session, setSession, initialized, setInitialized } = useAuthStore();
   const { setConnecting, setBrokerageConnected } = useConnectionStore();
   const segments = useSegments();
@@ -84,7 +94,7 @@ export default function RootLayout() {
     });
   };
 
-  // Trigger A: deep link (myfintechapp://snaptrade-callback)
+  // Trigger A: deep link (platstock://snaptrade-callback)
   useEffect(() => {
     const handleUrl = ({ url }: { url: string }) => {
       if (!url.includes('snaptrade-callback')) return;
@@ -192,3 +202,7 @@ export default function RootLayout() {
     </QueryClientProvider>
   );
 }
+
+// Sentry.wrap adds a top-level React error boundary and touch-event tracing.
+// Any unhandled render crash is captured and reported before the app goes blank.
+export default Sentry.wrap(RootLayout);
