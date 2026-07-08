@@ -2,7 +2,6 @@ import React, { useCallback, useRef, useState } from 'react';
 import {
     Animated,
     Easing,
-    Platform,
     RefreshControl,
     ScrollView,
     StatusBar,
@@ -23,19 +22,18 @@ import RiskTab        from '@/src/portfolio/components/tabs/RiskTab';
 import PositionsTab   from '@/src/portfolio/components/tabs/PositionsTab';
 
 import {
-    BG, CARD, CARD2, BORDER,
-    GOLD, GOLD_D, GOLD_B, GOLD_L,
+    BG, CARD, CARD2,
+    GOLD, GOLD_D,
     GREEN, GREEN_D, RED, RED_D,
-    MUTED, TXT, TXT2,
+    MUTED, TXT,
     sans, mono,
 } from '@/src/portfolio/tokens';
 import { fmtCurrency, fmt2, sign, getTicker, getUnits } from '@/src/portfolio/helpers';
 import type { AllocSeg } from '@/src/portfolio/types';
 
 // ─── Tokens aligned to Quantum Ledger ────────────────────────────────────────
-const CYAN   = '#0EA5E9';
-const CYAN_D = 'rgba(14,165,233,0.10)';
-const CYAN_B = 'rgba(14,165,233,0.22)';
+const CYAN   = GOLD;
+const CYAN_D = GOLD_D;
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 type InternalTab = 'overview' | 'performance' | 'risk' | 'positions' | 'holdings';

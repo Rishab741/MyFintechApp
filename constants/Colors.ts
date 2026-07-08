@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 const tintColorLight = '#2f95dc';
 const tintColorDark  = '#fff';
 
@@ -58,4 +60,16 @@ export const QL = {
   TXT2:      '#7C9AB5',
   MUTED:     '#607A93',
   SUB:       '#1E3347',
+} as const;
+
+export const sans   = Platform.OS === 'ios' ? 'SF Pro Text' : 'sans-serif';
+export const mono   = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
+
+export const SP = {
+  XS: 4, SM: 8, MD: 12, LG: 16, XL: 20, XXL: 24,
+  '2XL': 32, '3XL': 40, '4XL': 48,
+} as const;
+
+export const RADIUS = {
+  XS: 4, SM: 6, MD: 8, LG: 10, XL: 12, '2XL': 14, '3XL': 16, '4XL': 20, PILL: 100,
 } as const;

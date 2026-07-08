@@ -4,7 +4,6 @@ import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,35 +13,36 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Path, Svg } from 'react-native-svg';
+import { Defs, LinearGradient, Path, Stop, Svg } from 'react-native-svg';
 import { useInsights } from '@/src/insights/hooks/useInsights';
 import { usePortfolioData } from '@/src/portfolio/hooks/usePortfolioData';
 import { fmtCurrency, sign, getTicker, getUnits } from '@/src/portfolio/helpers';
 import { InsightSeverity } from '@/src/services/mlPipeline';
 import { useAuthStore } from '@/src/store/useAuthStore';
+import { QL, sans } from '@/constants/Colors';
 
-// ─── Tokens ───────────────────────────────────────────────────────────────────
-const BG      = '#060E1F';
-const CARD    = '#0E1D35';
-const BORDER  = '#1E3347';
-const CYAN    = '#0EA5E9';
-const INDIGO  = '#818CF8';
-const GREEN   = '#10B981';
-const CORAL   = '#FF716C';
-const AMBER   = '#F59E0B';
-const TXT     = '#E8F4FD';
-const TXT2    = '#7C9AB5';
-const MUTED   = '#607A93';
-const sans    = Platform.OS === 'ios' ? 'SF Pro Text' : 'sans-serif';
+// ─── Tokens (Quantum Ledger) ─────────────────────────────────────────────────
+const BG     = QL.BG;
+const CARD   = QL.CARD;
+const BORDER = QL.BORDER;
+const CYAN   = QL.GOLD;
+const INDIGO = QL.BLUE;
+const GREEN  = QL.GREEN;
+const CORAL  = QL.RED;
+const AMBER  = QL.AMBER;
+const TXT    = QL.TXT;
+const TXT2   = QL.TXT2;
+const MUTED  = QL.MUTED;
 
 const SCREEN_W = Dimensions.get('window').width;
-const SPARK_W  = SCREEN_W - 48;
-const SPARK_H  = 56;
+// 16px scroll padding × 2 + 20px card padding × 2 = 72px
+const SPARK_W  = SCREEN_W - 72;
+const SPARK_H  = 52;
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 function Sparkline({ values }: { values: number[] }) {
-  const path = useMemo(() => {
-    if (values.length < 2) return '';
+  const { linePath, areaPath } = useMemo(() => {
+    if (values.length < 2) return { linePath: '', areaPath: '' };
     const min = Math.min(...values);
     const max = Math.max(...values);
     const range = max - min || 1;
@@ -50,15 +50,24 @@ function Sparkline({ values }: { values: number[] }) {
       x: (i / (values.length - 1)) * SPARK_W,
       y: SPARK_H - ((v - min) / range) * (SPARK_H - 8) - 4,
     }));
-    return pts
+    const line = pts
       .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
       .join(' ');
+    const area = `${line} L${SPARK_W.toFixed(1)},${SPARK_H} L0,${SPARK_H} Z`;
+    return { linePath: line, areaPath: area };
   }, [values]);
 
-  if (!path) return null;
+  if (!linePath) return null;
   return (
     <Svg width={SPARK_W} height={SPARK_H} style={styles.sparkline}>
-      <Path d={path} stroke={CYAN} strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <Defs>
+        <LinearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor={CYAN} stopOpacity={0.28} />
+          <Stop offset="100%" stopColor={CYAN} stopOpacity={0} />
+        </LinearGradient>
+      </Defs>
+      <Path d={areaPath} fill="url(#sparkGrad)" />
+      <Path d={linePath} stroke={CYAN} strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
@@ -78,16 +87,11 @@ const SEVERITY_LABEL: Record<InsightSeverity, string> = {
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-function StatCard({
-  label, value, icon, color = TXT,
-}: {
-  label: string; value: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; color?: string;
-}) {
+function StatChip({ label, value, color = TXT }: { label: string; value: string; color?: string }) {
   return (
-    <View style={styles.statCard}>
-      <MaterialCommunityIcons name={icon} size={16} color={MUTED} style={{ marginBottom: 8 }} />
-      <Text style={styles.statValue} numberOfLines={1}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.statChip}>
+      <Text style={[styles.chipValue, { color }]} numberOfLines={1}>{value}</Text>
+      <Text style={styles.chipLabel}>{label}</Text>
     </View>
   );
 }
@@ -178,9 +182,9 @@ export default function HomeScreen() {
           </View>
         ) : (
           <>
-            {/* ── Net-worth hero ── */}
-            <View style={styles.heroWrap}>
-              <Text style={styles.heroLabel}>Total Portfolio Value</Text>
+            {/* ── Hero card ── */}
+            <View style={styles.heroCard}>
+              <Text style={styles.heroLabel}>Portfolio Value</Text>
               <Text style={styles.heroValue}>
                 {totalVal > 0 ? fmtCurrency(totalVal, currency) : '—'}
               </Text>
@@ -193,41 +197,44 @@ export default function HomeScreen() {
                   />
                   <Text style={[styles.changePillTxt, { color: todayUp ? GREEN : CORAL }]}>
                     {sign(todayChange)}{fmtCurrency(Math.abs(todayChange), currency)}
-                    {'  '}
-                    {sign(todayChangePct)}{todayChangePct.toFixed(2)}% today
+                    {'  '}{sign(todayChangePct)}{todayChangePct.toFixed(2)}% today
                   </Text>
                 </View>
               )}
+
+              {/* Sparkline with gradient */}
               {snapValues.length >= 2 && (
                 <View style={styles.sparkWrap}>
                   <Sparkline values={snapValues} />
                 </View>
               )}
-            </View>
 
-            {/* ── Quick stats grid ── */}
-            <View style={styles.statsGrid}>
-              <StatCard
-                label="Day's Gain"
-                value={todayChange !== 0 ? `${sign(todayChange)}${fmtCurrency(Math.abs(todayChange), currency)}` : '—'}
-                icon="trending-up"
-              />
-              <StatCard
-                label="Positions"
-                value={positionCount > 0 ? `${positionCount} assets` : '—'}
-                icon="briefcase-outline"
-              />
-              <StatCard
-                label="Best Performer"
-                value={bestPerformer ? `${bestPerformer.ticker} ${sign(bestPerformer.pct)}${bestPerformer.pct.toFixed(1)}%` : '—'}
-                icon="star-outline"
-                color={GREEN}
-              />
-              <StatCard
-                label="Cash Available"
-                value={cash > 0 ? fmtCurrency(cash, currency) : '—'}
-                icon="wallet-outline"
-              />
+              {/* Horizontal stat chips */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipRow}
+                style={styles.chipScroll}
+              >
+                <StatChip
+                  label="Day's gain"
+                  value={todayChange !== 0 ? `${sign(todayChange)}${fmtCurrency(Math.abs(todayChange), currency)}` : '—'}
+                  color={todayUp ? GREEN : CORAL}
+                />
+                <StatChip
+                  label="Positions"
+                  value={positionCount > 0 ? `${positionCount}` : '—'}
+                />
+                <StatChip
+                  label="Best today"
+                  value={bestPerformer ? `${bestPerformer.ticker} +${bestPerformer.pct.toFixed(1)}%` : '—'}
+                  color={GREEN}
+                />
+                <StatChip
+                  label="Cash"
+                  value={cash > 0 ? fmtCurrency(cash, currency) : '—'}
+                />
+              </ScrollView>
             </View>
 
             {/* ── AI Signals ── */}
@@ -310,11 +317,15 @@ const styles = StyleSheet.create({
 
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
 
-  // Hero
-  heroWrap: {
-    alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 20,
+  // Hero card
+  heroCard: {
+    backgroundColor: QL.CARD,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: QL.BORDER,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    overflow: 'hidden',
   },
   heroLabel: {
     fontSize: 11,
@@ -322,15 +333,15 @@ const styles = StyleSheet.create({
     fontFamily: sans,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   heroValue: {
-    fontSize: 38,
+    fontSize: 36,
     color: TXT,
     fontFamily: sans,
     fontWeight: '700',
     letterSpacing: -0.5,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   changePill: {
     flexDirection: 'row',
@@ -339,41 +350,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
-    marginBottom: 16,
+    marginBottom: 14,
+    alignSelf: 'flex-start',
   },
   changePillTxt: { fontSize: 12, fontFamily: sans, fontWeight: '600' },
-  sparkWrap:    { width: SPARK_W, height: SPARK_H },
+  sparkWrap:    { marginBottom: 14 },
   sparkline:    {},
 
-  // Stats grid
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 24,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: CARD,
+  // Stat chips (horizontal scroll)
+  chipScroll:  { marginHorizontal: -4 },
+  chipRow:     { gap: 8, paddingHorizontal: 4 },
+  statChip: {
+    backgroundColor: QL.CARD2,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-    borderRadius: 12,
-    padding: 14,
+    borderColor: QL.BORDER,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: 88,
   },
-  statValue: {
-    fontSize: 14,
-    color: TXT,
+  chipValue: {
+    fontSize: 13,
     fontFamily: sans,
     fontWeight: '700',
+    color: TXT,
     marginBottom: 2,
   },
-  statLabel: {
-    fontSize: 10,
+  chipLabel: {
+    fontSize: 9,
     color: MUTED,
     fontFamily: sans,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
 
   // Section

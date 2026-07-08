@@ -17,42 +17,40 @@ import {
     View,
 } from 'react-native';
 import ConnectInvestment from '../../components/ConnectInvestments';
+import { QL, sans, mono } from '@/constants/Colors';
 
-// ─── Palette — Slate Indigo ───────────────────────────────────────────────────
-const BG      = '#0C1019';
-const CARD    = '#131A27';
-const CARD2   = '#1A2235';
-const BORDER  = 'rgba(255,255,255,0.07)';
-const BORDER2 = 'rgba(255,255,255,0.11)';
+// ─── Palette — Quantum Ledger (unified) ───────────────────────────────────────
+const BG      = QL.BG;
+const CARD    = QL.CARD;
+const CARD2   = QL.CARD2;
+const BORDER  = QL.BORDER;
+const BORDER2 = QL.BORDER_HI;
 
-const IND     = '#7C6CF0';   // electric violet — primary
-const IND_L   = '#A89CF5';
-const IND_D   = 'rgba(124,108,240,0.10)';
-const IND_B   = 'rgba(124,108,240,0.22)';
+const IND     = QL.BLUE;
+const IND_L   = '#A5B4FC';
+const IND_D   = QL.BLUE_D;
+const IND_B   = 'rgba(129,140,248,0.22)';
 
-const VIO     = '#9B8CF4';   // violet — secondary (lighter shade)
-const VIO_L   = '#C4B5FD';
-const VIO_D   = 'rgba(155,140,244,0.12)';
+const VIO     = QL.BLUE;
+const VIO_L   = '#C7D2FE';
+const VIO_D   = QL.BLUE_D;
 
-const TEAL    = '#0EA5E9';   // sky blue — links / info
-const TEAL_D  = 'rgba(14,165,233,0.10)';
+const TEAL    = QL.GOLD;
+const TEAL_D  = QL.GOLD_D;
 
-const GRN     = '#10B981';   // emerald — success / verified
-const GRN_D   = 'rgba(16,185,129,0.10)';
+const GRN     = QL.GREEN;
+const GRN_D   = QL.GREEN_D;
 
-const AMB     = '#F59E0B';   // amber — warnings
-const AMB_D   = 'rgba(245,158,11,0.10)';
+const AMB     = QL.AMBER;
+const AMB_D   = QL.AMBER_D;
 
-const RED     = '#EF4444';   // danger
-const RED_D   = 'rgba(239,68,68,0.08)';
+const RED     = QL.RED;
+const RED_D   = QL.RED_D;
 
-const T1      = '#F1F5F9';   // primary text
-const T2      = '#94A3B8';   // secondary text
-const T3      = '#475569';   // muted text
-const DIVID   = 'rgba(255,255,255,0.055)';
-
-const sans  = Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif';
-const mono  = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
+const T1      = QL.TXT;
+const T2      = QL.TXT2;
+const T3      = QL.MUTED;
+const DIVID   = QL.BORDER;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getInitials = (n: string) => {

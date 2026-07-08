@@ -4,9 +4,11 @@
  */
 
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
+    LayoutAnimation,
     Platform,
     Pressable,
     RefreshControl,
@@ -15,8 +17,13 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
+    UIManager,
     View,
 } from 'react-native';
+
+if (Platform.OS === 'android') {
+    UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 
 import { useInsights } from '@/src/insights/hooks/useInsights';
 import { useRecommendations } from '@/src/insights/hooks/useRecommendations';
@@ -126,42 +133,78 @@ const MetricTile: React.FC<{ label: string; value: string; color?: string; sub?:
     </View>
 );
 
-// ── Signal Card ────────────────────────────────────────────────────────────────
+// ── Signal Card (expandable) ──────────────────────────────────────────────────
 const SignalCard: React.FC<{ signal: InsightSignal }> = ({ signal }) => {
-    const color   = SEV_COLOR[signal.severity];
-    const bg      = SEV_BG[signal.severity];
-    const catCol  = CAT_COLOR[signal.category];
+    const [expanded, setExpanded] = useState(false);
+    const chevronAnim = useRef(new Animated.Value(0)).current;
+    const scaleAnim   = useRef(new Animated.Value(1)).current;
+
+    const color  = SEV_COLOR[signal.severity];
+    const bg     = SEV_BG[signal.severity];
+    const catCol = CAT_COLOR[signal.category];
+
+    const toggle = () => {
+        LayoutAnimation.configureNext({
+            duration: 260,
+            create: { type: 'easeInEaseOut', property: 'opacity' },
+            update: { type: 'easeInEaseOut' },
+            delete: { type: 'easeInEaseOut', property: 'opacity' },
+        });
+        const next = !expanded;
+        setExpanded(next);
+        Animated.timing(chevronAnim, { toValue: next ? 1 : 0, duration: 220, useNativeDriver: true }).start();
+    };
+
+    const chevronDeg = chevronAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+
     return (
-        <View style={[s.signalCard, { borderLeftColor: color }]}>
-            {/* Header row */}
-            <View style={s.signalHeader}>
-                <View style={[s.catBadge, { backgroundColor: `${catCol}18` }]}>
-                    <Text style={[s.catBadgeText, { color: catCol }]}>{CAT_LABEL[signal.category]}</Text>
-                </View>
-                <View style={[s.sevBadge, { backgroundColor: bg }]}>
-                    <Text style={[s.sevBadgeText, { color }]}>{SEV_LABEL[signal.severity]}</Text>
-                </View>
-            </View>
-
-            {/* Title + value */}
-            <View style={s.signalTitleRow}>
-                <Text style={s.signalTitle}>{signal.title}</Text>
-                {signal.value && (
-                    <View style={[s.valuePill, { borderColor: `${color}40` }]}>
-                        <Text style={[s.valuePillText, { color }]}>{signal.value}</Text>
+        <Animated.View style={[s.signalWrap, { transform: [{ scale: scaleAnim }] }]}>
+            <Pressable
+                style={[s.signalCard, { borderLeftColor: color }]}
+                onPress={toggle}
+                onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.975, useNativeDriver: true, speed: 50 }).start()}
+                onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 40 }).start()}
+                android_ripple={{ color: 'rgba(255,255,255,0.04)' }}
+            >
+                {/* Badge row + chevron */}
+                <View style={s.signalHeader}>
+                    <View style={[s.catBadge, { backgroundColor: `${catCol}18` }]}>
+                        <Text style={[s.catBadgeText, { color: catCol }]}>{CAT_LABEL[signal.category]}</Text>
                     </View>
+                    <View style={[s.sevBadge, { backgroundColor: bg }]}>
+                        <Text style={[s.sevBadgeText, { color }]}>{SEV_LABEL[signal.severity]}</Text>
+                    </View>
+                    <View style={{ flex: 1 }} />
+                    <Animated.Text style={[s.signalChevron, { transform: [{ rotate: chevronDeg }] }]}>▾</Animated.Text>
+                </View>
+
+                {/* Title + optional value pill */}
+                <View style={s.signalTitleRow}>
+                    <Text style={s.signalTitle} numberOfLines={expanded ? undefined : 2}>{signal.title}</Text>
+                    {signal.value !== undefined && (
+                        <View style={[s.valuePill, { borderColor: `${color}40` }]}>
+                            <Text style={[s.valuePillText, { color }]}>{signal.value}</Text>
+                        </View>
+                    )}
+                </View>
+
+                {/* Collapsed hint */}
+                {!expanded && (
+                    <Text style={s.signalHint}>Tap to read full analysis ›</Text>
                 )}
-            </View>
 
-            {/* Body */}
-            <Text style={s.signalBody}>{signal.body}</Text>
-
-            {/* Action */}
-            <View style={s.signalActionRow}>
-                <Text style={s.signalActionLabel}>ACTION  </Text>
-                <Text style={s.signalAction}>{signal.action}</Text>
-            </View>
-        </View>
+                {/* Expanded: body + action */}
+                {expanded && (
+                    <>
+                        <Text style={s.signalBody}>{signal.body}</Text>
+                        <View style={s.signalActionRow}>
+                            <Text style={s.signalActionLabel}>ACTION  </Text>
+                            <Text style={s.signalAction}>{signal.action}</Text>
+                        </View>
+                    </>
+                )}
+            </Pressable>
+        </Animated.View>
     );
 };
 
@@ -1140,25 +1183,43 @@ const s = StyleSheet.create({
     },
 
     // ── Signal card ──
+    signalWrap: {
+        marginHorizontal: 16,
+        marginBottom: 10,
+    },
     signalCard: {
         backgroundColor: CARD,
         borderRadius: 14,
         borderWidth: 1,
         borderColor: BORDER,
         borderLeftWidth: 4,
-        marginHorizontal: 16,
-        marginBottom: 10,
         padding: 16,
         shadowColor: '#000',
         shadowOpacity: 0.2,
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 2 },
         elevation: 4,
+        overflow: 'hidden',
+    },
+    signalChevron: {
+        fontSize: 16,
+        color: MUTED,
+        lineHeight: 20,
+        flexShrink: 0,
+    },
+    signalHint: {
+        color: MUTED,
+        fontSize: 10,
+        fontFamily: mono,
+        letterSpacing: 0.5,
+        marginTop: 2,
+        opacity: 0.75,
     },
     signalHeader: {
         flexDirection: 'row',
         gap: 8,
         marginBottom: 10,
+        alignItems: 'center',
     },
     catBadge: {
         paddingHorizontal: 8,

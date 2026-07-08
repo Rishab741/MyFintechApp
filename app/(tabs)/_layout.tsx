@@ -1,36 +1,29 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import React from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-// ─── Tokens ───────────────────────────────────────────────────────────────────
-const BG     = '#060E1F';
-const CYAN   = '#0EA5E9';
-const INDIGO = '#818CF8';
-const MUTED  = '#607A93';
-const BORDER = '#1E3347';
-const sans   = Platform.OS === 'ios' ? 'SF Pro Text' : 'sans-serif';
+import { QL, sans } from '@/constants/Colors';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 interface TabConfig {
-  name: string;
-  label: string;
-  icon: IconName;
-  iconActive: IconName;
+  name:        string;
+  label:       string;
+  icon:        IconName;
+  iconActive:  IconName;
   activeColor: string;
 }
 
 const TABS: TabConfig[] = [
-  { name: 'home',      label: 'Home',    icon: 'home-outline',        iconActive: 'home',         activeColor: CYAN   },
-  { name: 'Market',    label: 'Markets', icon: 'chart-line',          iconActive: 'chart-line',   activeColor: CYAN   },
-  { name: 'Portfolio', label: 'Vault',   icon: 'safe-square-outline', iconActive: 'safe-square',  activeColor: CYAN   },
-  { name: 'Insights',  label: 'AI',      icon: 'brain',               iconActive: 'brain',        activeColor: INDIGO },
-  { name: 'index',     label: 'Profile', icon: 'account-outline',     iconActive: 'account',      activeColor: CYAN   },
+  { name: 'home',      label: 'Home',    icon: 'home-outline',        iconActive: 'home',        activeColor: QL.GOLD   },
+  { name: 'Market',    label: 'Markets', icon: 'chart-line',          iconActive: 'chart-line',  activeColor: QL.GOLD   },
+  { name: 'Portfolio', label: 'Vault',   icon: 'safe-square-outline', iconActive: 'safe-square', activeColor: QL.GOLD   },
+  { name: 'Insights',  label: 'AI',      icon: 'brain',               iconActive: 'brain',       activeColor: QL.BLUE   },
+  { name: 'index',     label: 'Profile', icon: 'account-outline',     iconActive: 'account',     activeColor: QL.GOLD   },
 ];
 
-// ─── Parent tab map: secondary screen → primary tab name ─────────────────────
+// Secondary screen → primary tab name (keeps the active highlight correct)
 const PARENT_TAB: Record<string, string> = {
   GlobalMarkets:     'Market',
   Holdings:          'Portfolio',
@@ -42,14 +35,66 @@ const PARENT_TAB: Record<string, string> = {
   Connect:           'index',
 };
 
+// ─── Single tab item with press-scale animation ───────────────────────────────
+interface TabItemProps {
+  tab:         TabConfig;
+  active:      boolean;
+  badge?:      number;
+  onPress:     () => void;
+}
+
+function TabItem({ tab, active, badge, onPress }: TabItemProps) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const pressIn  = () => Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
+  const pressOut = () => Animated.spring(scale, { toValue: 1.00, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+
+  const color = active ? tab.activeColor : QL.MUTED;
+
+  // Active colour determines the pill tint (BLUE tab gets blue pill, others get GOLD)
+  const pillBg     = active ? (tab.activeColor === QL.BLUE ? QL.BLUE_D  : QL.GOLD_D)  : 'transparent';
+  const pillBorder = active ? (tab.activeColor === QL.BLUE ? 'rgba(129,140,248,0.20)' : QL.GOLD_B) : 'transparent';
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={pressIn}
+      onPressOut={pressOut}
+      style={styles.tabItem}
+      accessibilityRole="button"
+      accessibilityState={active ? { selected: true } : {}}
+      accessibilityLabel={tab.label}
+    >
+      <Animated.View
+        style={[
+          styles.tabInner,
+          { backgroundColor: pillBg, borderColor: pillBorder, transform: [{ scale }] },
+        ]}
+      >
+        {/* Badge overlay */}
+        {badge !== undefined && badge > 0 && (
+          <View style={styles.badge} pointerEvents="none">
+            <Text style={styles.badgeTxt}>{badge > 9 ? '9+' : badge}</Text>
+          </View>
+        )}
+        <MaterialCommunityIcons
+          name={active ? tab.iconActive : tab.icon}
+          size={22}
+          color={color}
+        />
+        <Text style={[styles.tabLabel, { color }]}>{tab.label}</Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 // ─── Bottom Tab Bar ───────────────────────────────────────────────────────────
-function BottomTabBar({ state, navigation }: any) {
+function BottomTabBar({ state, navigation, insightBadge = 0 }: any) {
   const insets = useSafeAreaInsets();
 
   const currentRouteName: string = state.routes[state.index]?.name ?? '';
   const effectiveActiveName = PARENT_TAB[currentRouteName] ?? currentRouteName;
 
-  // Only render tab items that are in our TABS config (primary 5)
   const visibleRoutes = state.routes.filter((r: any) =>
     TABS.some(t => t.name === r.name)
   );
@@ -60,11 +105,14 @@ function BottomTabBar({ state, navigation }: any) {
         {visibleRoutes.map((route: any) => {
           const tab = TABS.find(t => t.name === route.name)!;
           const active = effectiveActiveName === route.name;
-          const color = active ? tab.activeColor : MUTED;
+          const badge = route.name === 'Insights' ? insightBadge : undefined;
 
           return (
-            <Pressable
+            <TabItem
               key={route.key}
+              tab={tab}
+              active={active}
+              badge={badge}
               onPress={() => {
                 const event = navigation.emit({
                   type: 'tabPress',
@@ -75,18 +123,7 @@ function BottomTabBar({ state, navigation }: any) {
                   navigation.navigate(route.name);
                 }
               }}
-              style={({ pressed }) => [styles.tabItem, pressed && styles.tabItemPressed]}
-              accessibilityRole="button"
-              accessibilityState={active ? { selected: true } : {}}
-              accessibilityLabel={tab.label}
-            >
-              <MaterialCommunityIcons
-                name={active ? tab.iconActive : tab.icon}
-                size={23}
-                color={color}
-              />
-              <Text style={[styles.tabLabel, { color }]}>{tab.label}</Text>
-            </Pressable>
+            />
           );
         })}
       </View>
@@ -97,28 +134,54 @@ function BottomTabBar({ state, navigation }: any) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   bar: {
-    backgroundColor: BG,
+    backgroundColor: QL.BG,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
+    borderTopColor: QL.BORDER,
   },
   barInner: {
     flexDirection: 'row',
-    paddingTop: 8,
+    paddingTop: 6,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
-    gap: 3,
-    paddingVertical: 4,
   },
-  tabItemPressed: {
-    opacity: 0.65,
+  tabInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    position: 'relative',
   },
   tabLabel: {
     fontSize: 10,
     fontFamily: sans,
     fontWeight: '500',
     letterSpacing: 0.2,
+  },
+  badge: {
+    position: 'absolute',
+    top: 2,
+    right: 6,
+    minWidth: 15,
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: QL.RED,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: QL.BG,
+    zIndex: 1,
+  },
+  badgeTxt: {
+    fontSize: 8,
+    color: '#fff',
+    fontWeight: '700',
+    fontFamily: sans,
   },
 });
 
@@ -129,14 +192,14 @@ export default function TabLayout() {
       screenOptions={{ headerShown: false }}
       tabBar={(props) => <BottomTabBar {...props} />}
     >
-      {/* ── Primary 5 tabs (visible in bottom bar, in order) ── */}
+      {/* ── Primary 5 tabs ── */}
       <Tabs.Screen name="home"      options={{ title: 'Home' }} />
       <Tabs.Screen name="Market"    options={{ title: 'Markets' }} />
       <Tabs.Screen name="Portfolio" options={{ title: 'Vault' }} />
       <Tabs.Screen name="Insights"  options={{ title: 'AI' }} />
       <Tabs.Screen name="index"     options={{ title: 'Profile' }} />
 
-      {/* ── Secondary screens — accessible via router.push(), hidden from bar ── */}
+      {/* ── Secondary screens — hidden from tab bar, accessible via router.push() ── */}
       <Tabs.Screen name="Holdings"          options={{ href: null }} />
       <Tabs.Screen name="GlobalMarkets"     options={{ href: null }} />
       <Tabs.Screen name="Compare"           options={{ href: null }} />
