@@ -26,3 +26,8 @@ python-dateutil==2.9.0.post0
 
 # Observability
 sentry-sdk[fastapi]==2.22.0
+
+# Redis — shared cross-worker cache for benchmark data and rate-limit counters.
+# hiredis is a C extension that accelerates response parsing (~5-10x).
+# Optional: the app falls back to in-process state if REDIS_URL is not set.
+redis[hiredis]==5.2.1

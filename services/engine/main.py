@@ -1,5 +1,5 @@
 """
-Vestara Portfolio Engine — FastAPI entry point.
+Platstock Portfolio Engine — FastAPI entry point.
 
 All financial computation that would exceed Supabase Edge Function CPU limits
 lives here: TWR, Sharpe, Sortino, Beta, Max Drawdown, CAGR, sector exposure,
@@ -52,7 +52,7 @@ log = logging.getLogger("engine")
 async def lifespan(app: FastAPI):
     from supabase import acreate_client
     s = get_settings()
-    log.info("Vestara Portfolio Engine starting up — connecting to Supabase")
+    log.info("Platstock Portfolio Engine starting up — connecting to Supabase")
     app.state.db = await acreate_client(s.supabase_url, s.supabase_service_role_key)
     log.info("Supabase async client ready")
     yield
@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="Vestara Portfolio Engine",
+    title="Platstock Portfolio Engine",
     version="2.0.0",
     description=(
         "Production-grade financial computation service. "

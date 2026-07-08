@@ -11,6 +11,7 @@ Used to:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -33,16 +34,55 @@ _HEADERS = {
 # Max concurrent v8 chart requests (v7 batch is blocked on server-side)
 _CONCURRENT_QUOTES = 20
 
-# In-process benchmark cache: {"{symbol}:{period}": (fetched_at, returns_dict)}
-# Shared across all concurrent compute requests in the same worker process.
-# TTL of 1 hour — benchmark daily returns change at most once per trading day.
-_benchmark_cache: dict[str, tuple[float, dict[str, float]]] = {}
+# ── Benchmark cache ────────────────────────────────────────────────────────────
+# Two-tier cache: Redis (shared across all workers) → in-process dict (this worker).
+#
+# Why two tiers?
+#   Redis miss is ~0.5ms; in-process hit is ~0µs.  After the first Redis read
+#   we populate the in-process dict so the next 3 599 requests in the same
+#   worker don't even touch Redis.
+#
+# Why Redis at all?
+#   Without it, 4 Railway workers each maintain their own dict.  Every hour,
+#   all 4 miss their cache simultaneously and fire 4 Yahoo Finance fetches
+#   at the same IP.  Yahoo rate-limits by IP, causing empty returns for users
+#   whose request hit a worker that got rate-limited.
 _BENCHMARK_TTL_S = 3_600
+_REDIS_BENCH_NS  = "platstock:bench:"   # Redis key namespace
 
-# Per-key asyncio Lock: prevents a cache stampede where N concurrent requests
-# all miss the cache simultaneously and each fires a separate Yahoo Finance fetch.
-# Only the first acquires the lock; the rest wait and then read from cache.
+# In-process layer (per-worker fallback)
+_benchmark_cache: dict[str, tuple[float, dict[str, float]]] = {}
 _benchmark_locks: dict[str, asyncio.Lock] = {}
+
+
+async def _redis_bench_get(symbol: str, period: str) -> dict[str, float] | None:
+    """Read benchmark returns from Redis. Returns None on miss or error."""
+    from lib.redis_client import get_redis
+    r = await get_redis()
+    if r is None:
+        return None
+    try:
+        raw = await r.get(f"{_REDIS_BENCH_NS}{symbol}:{period}")
+        return json.loads(raw) if raw else None
+    except Exception as exc:
+        log.debug("Redis bench get failed: %s", exc)
+        return None
+
+
+async def _redis_bench_set(symbol: str, period: str, data: dict[str, float]) -> None:
+    """Write benchmark returns to Redis. Silently no-ops on error."""
+    from lib.redis_client import get_redis
+    r = await get_redis()
+    if r is None:
+        return
+    try:
+        await r.setex(
+            f"{_REDIS_BENCH_NS}{symbol}:{period}",
+            _BENCHMARK_TTL_S,
+            json.dumps(data),
+        )
+    except Exception as exc:
+        log.debug("Redis bench set failed (non-fatal): %s", exc)
 
 
 # ── Batch current quotes ──────────────────────────────────────────────────────
@@ -158,26 +198,38 @@ async def fetch_benchmark_returns(
     """
     Fetch daily percentage returns for the benchmark.
     Returns {date_str: daily_return} e.g. {"2026-01-15": 0.012}.
-    Results are cached in-process for 1 hour so that compute/all with 1 000+
-    users only hits Yahoo Finance once per worker rather than once per user.
+
+    Cache resolution order (fastest → slowest):
+      1. In-process dict  — zero latency, per-worker, resets on restart.
+      2. Redis            — ~0.5ms, shared across all workers, persists across restarts.
+      3. Yahoo Finance    — ~500ms network call, populates both caches for next hour.
     """
     cache_key = f"{symbol}:{period}"
-
-    # Fast path: cache hit (no lock needed — just read)
     now = time.monotonic()
+
+    # Tier 1: in-process hit (this worker already fetched within the last hour)
     cached = _benchmark_cache.get(cache_key)
     if cached is not None:
         fetched_at, cached_returns = cached
         if now - fetched_at < _BENCHMARK_TTL_S:
             return cached_returns
 
-    # Slow path: acquire per-key lock so only ONE coroutine fetches from Yahoo;
-    # all others wait then read from the populated cache.
+    # Tier 2: Redis hit (another worker already fetched; share their result)
+    redis_data = await _redis_bench_get(symbol, period)
+    if redis_data is not None:
+        log.debug("Benchmark cache hit (Redis): %s/%s (%d days)", symbol, period, len(redis_data))
+        # Warm the in-process cache so subsequent requests skip Redis
+        _benchmark_cache[cache_key] = (now, redis_data)
+        return redis_data
+
+    # Tier 3: Yahoo Finance — acquire per-key lock so only ONE coroutine fetches;
+    # all others wait and read from the freshly-populated in-process cache.
     if cache_key not in _benchmark_locks:
         _benchmark_locks[cache_key] = asyncio.Lock()
 
     async with _benchmark_locks[cache_key]:
-        # Re-check inside lock — another coroutine may have populated while waiting
+        # Double-check inside the lock — a concurrent coroutine may have
+        # fetched from Yahoo while this one was waiting to acquire the lock.
         now = time.monotonic()
         cached = _benchmark_cache.get(cache_key)
         if cached is not None:
@@ -197,6 +249,8 @@ async def fetch_benchmark_returns(
                 date_str = closes[i]["time"].strftime("%Y-%m-%d")
                 returns[date_str] = (curr - prev) / prev
 
+        # Write to both tiers so every worker benefits immediately.
         _benchmark_cache[cache_key] = (time.monotonic(), returns)
+        await _redis_bench_set(symbol, period, returns)
         log.info("Benchmark cache populated for %s/%s (%d days)", symbol, period, len(returns))
         return returns

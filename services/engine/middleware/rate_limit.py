@@ -1,10 +1,17 @@
 """
 Per-tenant rate limiting middleware.
 
-Limits are enforced in-memory (resets on process restart / redeploy).
-This is intentional — it's simple, adds zero latency, and is sufficient
-for a single-process Railway deployment. Promote to Redis when horizontally
-scaling.
+Enforcement uses two modes, selected automatically:
+
+  Redis mode (when REDIS_URL is set):
+    Counters live in Redis — shared across all Uvicorn workers.
+    A 4-worker deployment enforces the same daily cap across all workers,
+    not 4× the cap.  Uses INCR + EXPIRE for atomic increment without a
+    read-modify-write race.
+
+  In-process mode (fallback, single-worker):
+    Counters live in a dict — resets on restart/redeploy.
+    Sufficient for Railway single-process deployments.
 
 Tier daily limits:
     self_serve    →    500 req/day
@@ -45,6 +52,7 @@ def _utc_day_start() -> float:
 
 
 def _enforce(key: str, tier: str) -> None:
+    """In-process rate limiter (single-worker fallback)."""
     limit = TIER_DAILY_LIMITS.get(tier, 500)
     if limit == -1:
         return
@@ -60,6 +68,32 @@ def _enforce(key: str, tier: str) -> None:
         raise _LimitExceeded(tier, limit, retry_after)
 
     _counters[key] = (count + 1, window)
+
+
+async def _enforce_redis(r, key: str, tier: str) -> None:
+    """
+    Redis-backed rate limiter (multi-worker).
+
+    Uses INCR + EXPIRE — atomic at the Redis level.  Two workers
+    cannot both read 0, both write 1, and both think they're first.
+    INCR returns the new value, so the first writer gets 1 and every
+    subsequent writer gets a higher number.  The TTL of 90 000 s (25 h)
+    gives a generous safety margin past the UTC midnight reset boundary.
+    """
+    limit = TIER_DAILY_LIMITS.get(tier, 500)
+    if limit == -1:
+        return
+
+    utc_day = int(time.time() // 86400)
+    redis_key = f"platstock:rl:{key}:{utc_day}"
+
+    count = await r.incr(redis_key)
+    if count == 1:
+        await r.expire(redis_key, 90_000)
+
+    if count > limit:
+        retry_after = int(((utc_day + 1) * 86400) - time.time())
+        raise _LimitExceeded(tier, limit, retry_after)
 
 
 class _LimitExceeded(Exception):
@@ -140,7 +174,12 @@ async def rate_limit_middleware(request: Request, call_next):
 
         rate_key, tier = _resolve(token, settings)
         if rate_key:
-            _enforce(rate_key, tier)
+            from lib.redis_client import get_redis
+            r = await get_redis()
+            if r is not None:
+                await _enforce_redis(r, rate_key, tier)
+            else:
+                _enforce(rate_key, tier)
 
     except _LimitExceeded as exc:
         return JSONResponse(
@@ -149,7 +188,7 @@ async def rate_limit_middleware(request: Request, call_next):
                 "error": "rate_limit_exceeded",
                 "detail": (
                     f"Tier '{exc.tier}' allows {exc.limit:,} requests/day. "
-                    "Upgrade your plan at vestara.io/pricing."
+                    "Upgrade your plan at platstock.app/pricing."
                 ),
             },
             headers={"Retry-After": str(exc.retry_after)},

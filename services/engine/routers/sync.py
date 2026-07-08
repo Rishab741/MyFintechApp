@@ -17,7 +17,9 @@ import math
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from uuid import uuid4
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from calculations.returns import (
     compute_cagr,
@@ -155,17 +157,98 @@ async def sync_prices(
     )
 
 
+# ── POST /sync/prices/all ─────────────────────────────────────────────────────
+@router.post("/prices/all", response_model=dict)
+async def sync_prices_all(
+    background_tasks: BackgroundTasks,
+    _: Annotated[None, Depends(require_service)],
+) -> dict:
+    """
+    Nightly job: fetch latest market prices for every active user.
+    Returns 202 immediately — syncs run as a background task so pg_cron's
+    pg_net call returns before the HTTP timeout.
+    """
+    job_id    = str(uuid4())
+    started_at = datetime.now(tz=timezone.utc)
+    background_tasks.add_task(_run_price_sync_all_job, job_id, started_at)
+    return {
+        "job_id":     job_id,
+        "status":     "accepted",
+        "started_at": started_at.isoformat(),
+        "message":    "Price sync running in background. Check audit_log for completion.",
+    }
+
+
+async def _run_price_sync_all_job(job_id: str, started_at: datetime) -> None:
+    """Background task: sync prices for every user with active holdings."""
+    db = get_db()
+    res = db.table("holdings").select("user_id").gt("quantity", 0).execute()
+    user_ids = list({r["user_id"] for r in (res.data or [])})
+
+    ok = fails = 0
+    for uid in user_ids:
+        try:
+            symbols   = fetch_all_active_symbols(uid)
+            price_map = await fetch_quotes(symbols) if symbols else {}
+            if price_map:
+                update_holding_prices(uid, price_map)
+            ok += 1
+        except Exception as exc:
+            log.warning("price sync failed for user %s: %s", uid, exc)
+            fails += 1
+
+    duration_s = (datetime.now(tz=timezone.utc) - started_at).total_seconds()
+    write_audit_log(
+        event_type="sync.prices_all.completed",
+        actor_id="system",
+        resource="holdings",
+        metadata={
+            "job_id":      job_id,
+            "users_ok":    ok,
+            "users_failed": fails,
+            "duration_s":  round(duration_s, 2),
+        },
+    )
+    log.info(
+        "Price sync all completed: %d ok, %d failed in %.1fs",
+        ok, fails, duration_s,
+    )
+
+
 # ── POST /sync/compute/all ────────────────────────────────────────────────────
 # IMPORTANT: this route must be registered BEFORE /compute/{user_id} so that
 # FastAPI does not match the literal string "all" as a path parameter.
 @router.post("/compute/all", response_model=dict)
 async def compute_all(
+    background_tasks: BackgroundTasks,
     _: Annotated[None, Depends(require_service)],
 ) -> dict:
     """
     Nightly job: recompute performance_cache for every user that has snapshot data.
-    Runs user computations concurrently (with a semaphore to prevent DB overload).
+
+    Returns 202 immediately — computation runs as a background task.
+
+    Why: With 1 000+ users this job takes minutes.  HTTP has a ~30–60s
+    timeout on Railway and most load balancers.  A synchronous response
+    would be killed partway through, leaving some users with fresh data
+    and others with stale data.  BackgroundTasks decouples the HTTP
+    handshake from the computation — the caller gets a fast 200 with a
+    job ID, and the compute finishes in the same worker process without
+    the request lifecycle constraining it.
     """
+    job_id     = str(uuid4())
+    started_at = datetime.now(tz=timezone.utc)
+    background_tasks.add_task(_run_compute_all_job, job_id, started_at)
+    return {
+        "job_id":     job_id,
+        "status":     "accepted",
+        "started_at": started_at.isoformat(),
+        "message":    "Computation queued as background task. Check audit_log for completion.",
+    }
+
+
+async def _run_compute_all_job(job_id: str, started_at: datetime) -> None:
+    """Background task: compute performance_cache for every user with snapshot data."""
     db = get_db()
     res = (
         db.table("portfolio_snapshots_v2")
@@ -175,9 +258,15 @@ async def compute_all(
     user_ids = list({r["user_id"] for r in (res.data or [])})
 
     if not user_ids:
-        return {"users_computed": 0, "errors": 0}
+        write_audit_log(
+            event_type="sync.compute_all.completed",
+            actor_id="system",
+            resource="performance_cache",
+            metadata={"job_id": job_id, "users_computed": 0, "errors": 0, "duration_s": 0},
+        )
+        return
 
-    semaphore = asyncio.Semaphore(5)   # max 5 concurrent users
+    semaphore = asyncio.Semaphore(5)   # max 5 concurrent per-user computations
 
     async def bounded_compute(uid: str) -> bool:
         async with semaphore:
@@ -188,15 +277,26 @@ async def compute_all(
                 log.warning("compute failed for user %s: %s", uid, exc)
                 return False
 
-    results = await asyncio.gather(*[bounded_compute(uid) for uid in user_ids])
-    ok    = sum(1 for r in results if r)
-    fails = sum(1 for r in results if not r)
+    results   = await asyncio.gather(*[bounded_compute(uid) for uid in user_ids])
+    ok        = sum(1 for r in results if r)
+    fails     = sum(1 for r in results if not r)
+    duration_s = (datetime.now(tz=timezone.utc) - started_at).total_seconds()
 
-    return {
-        "users_computed": ok,
-        "errors":         fails,
-        "computed_at":    datetime.now(tz=timezone.utc).isoformat(),
-    }
+    write_audit_log(
+        event_type="sync.compute_all.completed",
+        actor_id="system",
+        resource="performance_cache",
+        metadata={
+            "job_id":         job_id,
+            "users_computed": ok,
+            "errors":         fails,
+            "duration_s":     round(duration_s, 2),
+        },
+    )
+    log.info(
+        "Compute all completed: %d ok, %d failed in %.1fs (job %s)",
+        ok, fails, duration_s, job_id,
+    )
 
 
 # ── POST /sync/compute/{user_id} ─────────────────────────────────────────────

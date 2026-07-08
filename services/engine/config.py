@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     default_benchmark: str = "SPY"
     risk_free_rate_annual: float = 0.045   # 4.5% — update when Fed rate changes
 
+    # ── Redis ─────────────────────────────────────────────────────────────────
+    # Optional. When set, enables a shared cross-worker cache for Yahoo Finance
+    # benchmark returns and rate-limit counters. Without it the app runs
+    # correctly in single-worker mode using in-process dicts.
+    # Example: redis://default:password@redis-host:6379/0
+    redis_url: str = ""
+
     # ── Observability ─────────────────────────────────────────────────────────
     sentry_dsn: str = ""   # leave blank to disable Sentry
 
