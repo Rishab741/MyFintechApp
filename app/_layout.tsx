@@ -156,22 +156,14 @@ function RootLayout() {
     }
 
     if (session && inAuthGroup) {
-      // New sign-in: check user_metadata.onboarded flag.
-      // First-time user (flag absent/false) → onboarding wizard.
-      // Returning user → dashboard directly.
-      (async () => {
-        try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user?.user_metadata?.onboarded) {
-            router.replace('/(tabs)/home');
-          } else {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            router.replace('/onboard' as any);
-          }
-        } catch {
-          router.replace('/(tabs)'); // fail-safe: always reach the app
-        }
-      })();
+      // session.user already contains user_metadata from the auth token —
+      // no need for an extra getUser() server round-trip here.
+      if (session.user?.user_metadata?.onboarded) {
+        router.replace('/(tabs)/home');
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.replace('/onboard' as any);
+      }
       return;
     }
 
