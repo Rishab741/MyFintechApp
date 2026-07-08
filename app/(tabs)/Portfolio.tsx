@@ -2,14 +2,22 @@ import React, { useCallback, useRef, useState } from 'react';
 import {
     Animated,
     Easing,
+    LayoutAnimation,
+    Platform,
+    Pressable,
     RefreshControl,
     ScrollView,
     StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
+    UIManager,
     View,
 } from 'react-native';
+
+if (Platform.OS === 'android') {
+    UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePortfolioData } from '@/src/portfolio/hooks/usePortfolioData';
@@ -70,6 +78,81 @@ const sk = StyleSheet.create({
     title: { height: 12, width: '38%', backgroundColor: 'rgba(255,255,255,0.09)', borderRadius: 4, marginBottom: 14 },
     line:  { height: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, marginBottom: 10 },
 });
+
+// ─── Expandable holding row ───────────────────────────────────────────────────
+function HoldingRow({ pos, currency, totalPos }: { pos: any; currency: string; totalPos: number }) {
+    const [expanded, setExpanded] = useState(false);
+    const chevronAnim = useRef(new Animated.Value(0)).current;
+
+    const ticker   = getTicker(pos.symbol);
+    const units    = getUnits(pos);
+    const price    = pos.price ?? 0;
+    const value    = units * price;
+    const pnl      = pos.open_pnl ?? 0;
+    const pnlPct   = value > 0 ? (pnl / (value - pnl)) * 100 : 0;
+    const allocPct = totalPos > 0 ? (value / totalPos) * 100 : 0;
+    const up       = pnl >= 0;
+
+    const toggle = () => {
+        LayoutAnimation.configureNext({
+            duration: 240,
+            create: { type: 'easeInEaseOut', property: 'opacity' },
+            update: { type: 'easeInEaseOut' },
+            delete: { type: 'easeInEaseOut', property: 'opacity' },
+        });
+        const next = !expanded;
+        setExpanded(next);
+        Animated.timing(chevronAnim, { toValue: next ? 1 : 0, duration: 220, useNativeDriver: true }).start();
+    };
+
+    const chevronDeg = chevronAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+
+    return (
+        <Pressable
+            onPress={toggle}
+            style={[s.holdingRow, expanded && s.holdingRowOpen]}
+            android_ripple={{ color: 'rgba(255,255,255,0.04)' }}
+        >
+            <View style={s.holdingRowMain}>
+                <View style={s.holdingAvatar}>
+                    <Text style={s.holdingAvatarTxt}>{ticker.slice(0, 2)}</Text>
+                </View>
+                <View style={s.holdingInfo}>
+                    <Text style={s.holdingTicker}>{ticker}</Text>
+                    <Text style={s.holdingUnits}>{units.toLocaleString('en-US', { maximumFractionDigits: 4 })} units</Text>
+                </View>
+                <View style={s.holdingRight}>
+                    <Text style={s.holdingValue}>{fmtCurrency(value, currency)}</Text>
+                    <Text style={[s.holdingPnl, { color: up ? GREEN : RED }]}>
+                        {sign(pnlPct)}{Math.abs(pnlPct).toFixed(2)}%
+                    </Text>
+                </View>
+                <Animated.Text style={[s.holdingChevron, { transform: [{ rotate: chevronDeg }] }]}>▾</Animated.Text>
+            </View>
+
+            {expanded && (
+                <View style={s.holdingDetail}>
+                    <View style={s.holdingDetailItem}>
+                        <Text style={s.holdingDetailLbl}>PRICE</Text>
+                        <Text style={s.holdingDetailVal}>{fmtCurrency(price, currency)}</Text>
+                    </View>
+                    <View style={s.holdingDetailDivider} />
+                    <View style={s.holdingDetailItem}>
+                        <Text style={s.holdingDetailLbl}>P&L</Text>
+                        <Text style={[s.holdingDetailVal, { color: up ? GREEN : RED }]}>
+                            {sign(pnl)}{fmtCurrency(Math.abs(pnl), currency)}
+                        </Text>
+                    </View>
+                    <View style={s.holdingDetailDivider} />
+                    <View style={s.holdingDetailItem}>
+                        <Text style={s.holdingDetailLbl}>ALLOC</Text>
+                        <Text style={s.holdingDetailVal}>{allocPct.toFixed(1)}%</Text>
+                    </View>
+                </View>
+            )}
+        </Pressable>
+    );
+}
 
 // ─── Quick stat cell ──────────────────────────────────────────────────────────
 const QuickCell: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = TXT }) => (
@@ -212,30 +295,30 @@ export default function PortfolioScreen() {
                         )}
                     </View>
 
-                    {/* ── Horizontal scrollable tab bar ── */}
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={s.tabScroll}
-                        style={s.tabScrollWrap}
-                    >
-                        {TABS.map(tab => {
-                            const active = activeTab === tab.key;
-                            return (
-                                <TouchableOpacity
-                                    key={tab.key}
-                                    style={[s.tabBtn, active && s.tabBtnActive]}
-                                    onPress={() => switchTab(tab.key)}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={[s.tabTxt, active && s.tabTxtActive]}>
-                                        {tab.label}
-                                    </Text>
-                                    {active && <View style={s.tabUnderline} />}
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </ScrollView>
+                    {/* ── Pill segmented control ── */}
+                    <View style={s.segTrack}>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={s.segScroll}
+                        >
+                            {TABS.map(tab => {
+                                const active = activeTab === tab.key;
+                                return (
+                                    <TouchableOpacity
+                                        key={tab.key}
+                                        style={[s.segItem, active && s.segItemActive]}
+                                        onPress={() => switchTab(tab.key)}
+                                        activeOpacity={0.75}
+                                    >
+                                        <Text style={[s.segTxt, active && s.segTxtActive]}>
+                                            {tab.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
 
                     {/* ── Tab content ── */}
                     <Animated.View style={{ opacity: tabAnim, transform: [{ translateY: slideAnim }] }}>
@@ -293,27 +376,13 @@ export default function PortfolioScreen() {
                                 ) : (
                                     positions.map((pos, i) => {
                                         const ticker = getTicker(pos.symbol);
-                                        const units  = getUnits(pos);
-                                        const value  = units * (pos.price ?? 0);
-                                        const pnl    = pos.open_pnl ?? 0;
-                                        const pnlPct = value > 0 ? (pnl / (value - pnl)) * 100 : 0;
-                                        const up     = pnl >= 0;
                                         return (
-                                            <View key={`${ticker}-${i}`} style={s.holdingRow}>
-                                                <View style={s.holdingAvatar}>
-                                                    <Text style={s.holdingAvatarTxt}>{ticker.slice(0, 2)}</Text>
-                                                </View>
-                                                <View style={s.holdingInfo}>
-                                                    <Text style={s.holdingTicker}>{ticker}</Text>
-                                                    <Text style={s.holdingUnits}>{units.toLocaleString('en-US', { maximumFractionDigits: 4 })} units</Text>
-                                                </View>
-                                                <View style={s.holdingRight}>
-                                                    <Text style={s.holdingValue}>{fmtCurrency(value, currency)}</Text>
-                                                    <Text style={[s.holdingPnl, { color: up ? GREEN : RED }]}>
-                                                        {sign(pnlPct)}{Math.abs(pnlPct).toFixed(2)}%
-                                                    </Text>
-                                                </View>
-                                            </View>
+                                            <HoldingRow
+                                                key={`${ticker}-${i}`}
+                                                pos={pos}
+                                                currency={currency}
+                                                totalPos={totalPos}
+                                            />
                                         );
                                     })
                                 )}
@@ -404,31 +473,34 @@ const s = StyleSheet.create({
     qVal:        { fontSize: 12, fontWeight: '700', fontFamily: mono, color: TXT },
     statDivider: { width: StyleSheet.hairlineWidth, height: 28, backgroundColor: 'rgba(65,72,87,0.6)' },
 
-    // Tab bar — horizontally scrollable to prevent overflow
-    tabScrollWrap: {
+    // Pill segmented control
+    segTrack: {
+        backgroundColor: CARD2,
+        borderRadius: 10,
+        padding: 3,
         marginBottom: 16,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: 'rgba(65,72,87,0.5)',
     },
-    tabScroll: {
-        paddingHorizontal: 0,
-        gap: 4,
+    segScroll: {
+        gap: 2,
     },
-    tabBtn: {
-        paddingHorizontal: 16, paddingVertical: 10,
-        borderRadius: 8, position: 'relative',
+    segItem: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 8,
         alignItems: 'center',
     },
-    tabBtnActive: {
+    segItemActive: {
         backgroundColor: CYAN_D,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: `${CYAN}30`,
     },
-    tabTxt: {
-        color: MUTED, fontSize: 13, fontWeight: '600', fontFamily: sans,
+    segTxt: {
+        color: MUTED, fontSize: 12, fontWeight: '600', fontFamily: sans,
         letterSpacing: 0.1,
     },
-    tabTxtActive: { color: CYAN },
-    tabUnderline: {
-        position: 'absolute', bottom: 4, left: '20%', right: '20%',
-        height: 2, backgroundColor: CYAN, borderRadius: 1,
-    },
+    segTxtActive: { color: CYAN, fontWeight: '700' },
 
     // Empty state
     empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36, gap: 12 },
@@ -444,16 +516,25 @@ const s = StyleSheet.create({
     // Holdings tab
     holdingsWrap:  { paddingTop: 4 },
     holdingsEmpty: { color: MUTED, fontSize: 13, fontFamily: sans, textAlign: 'center', paddingVertical: 32 },
+
     holdingRow: {
-        flexDirection: 'row', alignItems: 'center', gap: 12,
-        paddingVertical: 13,
         borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: 'rgba(65,72,87,0.5)',
+        paddingVertical: 4,
+    },
+    holdingRowOpen: {
+        backgroundColor: 'rgba(14,165,233,0.04)',
+        borderBottomColor: `${CYAN}25`,
+    },
+    holdingRowMain: {
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        paddingVertical: 10, paddingHorizontal: 2,
     },
     holdingAvatar: {
         width: 38, height: 38, borderRadius: 10,
         backgroundColor: CYAN_D,
         alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
     },
     holdingAvatarTxt: { color: CYAN, fontSize: 12, fontWeight: '700', fontFamily: mono },
     holdingInfo:      { flex: 1, minWidth: 0 },
@@ -462,4 +543,28 @@ const s = StyleSheet.create({
     holdingRight:     { alignItems: 'flex-end' },
     holdingValue:     { color: TXT,  fontSize: 14, fontWeight: '600', fontFamily: mono },
     holdingPnl:       { fontSize: 11, fontFamily: mono, marginTop: 2 },
+    holdingChevron:   { color: MUTED, fontSize: 14, lineHeight: 18, flexShrink: 0 },
+
+    holdingDetail: {
+        flexDirection: 'row',
+        paddingHorizontal: 50,
+        paddingBottom: 12,
+        gap: 0,
+    },
+    holdingDetailItem: {
+        flex: 1,
+        backgroundColor: CARD2,
+        borderRadius: 7,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        alignItems: 'center',
+    },
+    holdingDetailLbl: {
+        color: MUTED, fontSize: 8, fontFamily: mono,
+        letterSpacing: 1.2, marginBottom: 3, textTransform: 'uppercase',
+    },
+    holdingDetailVal: {
+        color: TXT, fontSize: 12, fontWeight: '700', fontFamily: mono,
+    },
+    holdingDetailDivider: { width: 4 },
 });
