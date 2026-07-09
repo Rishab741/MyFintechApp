@@ -84,6 +84,66 @@ def _safe(v: float) -> float:
     return max(min(v, 9_999_999.0), -9_999_999.0)
 
 
+# ── POST /sync/prices/all ─────────────────────────────────────────────────────
+# IMPORTANT: this route must be registered BEFORE /prices/{user_id} so that
+# FastAPI does not match the literal string "all" as a path parameter.
+@router.post("/prices/all", response_model=dict)
+async def sync_prices_all(
+    background_tasks: BackgroundTasks,
+    _: Annotated[None, Depends(require_service)],
+) -> dict:
+    """
+    Nightly job: fetch latest market prices for every active user.
+    Returns 202 immediately — syncs run as a background task so pg_cron's
+    pg_net call returns before the HTTP timeout.
+    """
+    job_id    = str(uuid4())
+    started_at = datetime.now(tz=timezone.utc)
+    background_tasks.add_task(_run_price_sync_all_job, job_id, started_at)
+    return {
+        "job_id":     job_id,
+        "status":     "accepted",
+        "started_at": started_at.isoformat(),
+        "message":    "Price sync running in background. Check audit_log for completion.",
+    }
+
+
+async def _run_price_sync_all_job(job_id: str, started_at: datetime) -> None:
+    """Background task: sync prices for every user with active holdings."""
+    db = get_db()
+    res = db.table("holdings").select("user_id").gt("quantity", 0).execute()
+    user_ids = list({r["user_id"] for r in (res.data or [])})
+
+    ok = fails = 0
+    for uid in user_ids:
+        try:
+            symbols   = fetch_all_active_symbols(uid)
+            price_map = await fetch_quotes(symbols) if symbols else {}
+            if price_map:
+                update_holding_prices(uid, price_map)
+            ok += 1
+        except Exception as exc:
+            log.warning("price sync failed for user %s: %s", uid, exc)
+            fails += 1
+
+    duration_s = (datetime.now(tz=timezone.utc) - started_at).total_seconds()
+    write_audit_log(
+        event_type="sync.prices_all.completed",
+        actor_id="system",
+        resource="holdings",
+        metadata={
+            "job_id":      job_id,
+            "users_ok":    ok,
+            "users_failed": fails,
+            "duration_s":  round(duration_s, 2),
+        },
+    )
+    log.info(
+        "Price sync all completed: %d ok, %d failed in %.1fs",
+        ok, fails, duration_s,
+    )
+
+
 # ── POST /sync/prices/{user_id} ───────────────────────────────────────────────
 @router.post("/prices/{user_id}", response_model=PriceSyncResult)
 async def sync_prices(
@@ -154,64 +214,6 @@ async def sync_prices(
         price_rows_written=len(price_rows),
         holdings_updated=symbols_synced,
         synced_at=now,
-    )
-
-
-# ── POST /sync/prices/all ─────────────────────────────────────────────────────
-@router.post("/prices/all", response_model=dict)
-async def sync_prices_all(
-    background_tasks: BackgroundTasks,
-    _: Annotated[None, Depends(require_service)],
-) -> dict:
-    """
-    Nightly job: fetch latest market prices for every active user.
-    Returns 202 immediately — syncs run as a background task so pg_cron's
-    pg_net call returns before the HTTP timeout.
-    """
-    job_id    = str(uuid4())
-    started_at = datetime.now(tz=timezone.utc)
-    background_tasks.add_task(_run_price_sync_all_job, job_id, started_at)
-    return {
-        "job_id":     job_id,
-        "status":     "accepted",
-        "started_at": started_at.isoformat(),
-        "message":    "Price sync running in background. Check audit_log for completion.",
-    }
-
-
-async def _run_price_sync_all_job(job_id: str, started_at: datetime) -> None:
-    """Background task: sync prices for every user with active holdings."""
-    db = get_db()
-    res = db.table("holdings").select("user_id").gt("quantity", 0).execute()
-    user_ids = list({r["user_id"] for r in (res.data or [])})
-
-    ok = fails = 0
-    for uid in user_ids:
-        try:
-            symbols   = fetch_all_active_symbols(uid)
-            price_map = await fetch_quotes(symbols) if symbols else {}
-            if price_map:
-                update_holding_prices(uid, price_map)
-            ok += 1
-        except Exception as exc:
-            log.warning("price sync failed for user %s: %s", uid, exc)
-            fails += 1
-
-    duration_s = (datetime.now(tz=timezone.utc) - started_at).total_seconds()
-    write_audit_log(
-        event_type="sync.prices_all.completed",
-        actor_id="system",
-        resource="holdings",
-        metadata={
-            "job_id":      job_id,
-            "users_ok":    ok,
-            "users_failed": fails,
-            "duration_s":  round(duration_s, 2),
-        },
-    )
-    log.info(
-        "Price sync all completed: %d ok, %d failed in %.1fs",
-        ok, fails, duration_s,
     )
 
 
