@@ -159,7 +159,7 @@ export default function RiskTab({ risk, metrics, snapValues, displayAlpha }: Pro
                             </View>
                         }
                     />
-                    <DrawdownChart values={snapValues} w={CHART_W} h={90} />
+                    <DrawdownChart values={snapValues} w={CHART_W} h={160} />
                 </Card>
             )}
         </>

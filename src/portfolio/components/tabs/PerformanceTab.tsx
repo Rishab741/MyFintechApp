@@ -6,7 +6,7 @@ import Metric from '../Metric';
 import PeriodTabs from '../PeriodTabs';
 import { LineChart, ReturnsHistogram } from '../../charts';
 import {
-    GOLD, GOLD_D, GREEN, GREEN_D, RED, PURPLE, PURPLE_D,
+    GOLD, GOLD_D, GREEN, GREEN_D, RED, AMBER, AMBER_D,
     MUTED, SUB,
     sans, mono, CHART_W,
 } from '../../tokens';
@@ -90,10 +90,10 @@ export default function PerformanceTab({
 
                 <LineChart
                     series={[
-                        { values: chartPortfolio, color: lineColor, width: 2.5 },
-                        { values: chartBench, color: MUTED, width: 1.5, opacity: 0.35 },
+                        { values: chartPortfolio, color: lineColor, width: 2.5, fill: true },
+                        { values: chartBench, color: MUTED, width: 1.5, opacity: 0.30 },
                     ]}
-                    w={CHART_W} h={130}
+                    w={CHART_W} h={200}
                 />
 
                 {chartLabels[0] && (
@@ -121,12 +121,12 @@ export default function PerformanceTab({
                 <SHead
                     title="Returns Distribution"
                     right={
-                        <View style={[s.badge, { backgroundColor: PURPLE_D, borderColor: `${PURPLE}35` }]}>
-                            <Text style={[s.badgeTxt, { color: PURPLE }]}>HISTOGRAM</Text>
+                        <View style={[s.badge, { backgroundColor: AMBER_D, borderColor: `${AMBER}35` }]}>
+                            <Text style={[s.badgeTxt, { color: AMBER }]}>HISTOGRAM</Text>
                         </View>
                     }
                 />
-                <ReturnsHistogram returns={dailyReturns} w={CHART_W} h={90} />
+                <ReturnsHistogram returns={dailyReturns} w={CHART_W} h={150} />
             </Card>
 
             {/* ── Engine detail metrics (when available) ── */}
