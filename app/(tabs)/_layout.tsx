@@ -41,47 +41,36 @@ const PARENT_TAB: Record<string, string> = {
   InvestmentProfile: 'index', Connect: 'index',
 };
 
-const RAIL_W     = 42;   // collapsed — icon-only rail
-const EXPANDED_W = 188;  // expanded — icons + labels
-const ANIM_MS    = 220;
+const DRAWER_W   = 220;
+const ANIM_MS    = 260;
+const SIDEBAR_BG = 'rgba(8, 11, 18, 0.96)';
 
-// Semi-transparent surface: deep ink with opacity
-const SIDEBAR_BG   = 'rgba(8, 11, 18, 0.92)';
-const BACKDROP_CLR = 'rgba(0, 0, 0, 0.38)';
-
-// ── Nav item ─────────────────────────────────────────────────────────────────
+// ── Nav item ──────────────────────────────────────────────────────────────────
 function NavItem({
-  tab, active, collapsed, badge, onPress,
+  tab, active, badge, onPress,
 }: {
-  tab: TabConfig; active: boolean; collapsed: boolean; badge?: number; onPress: () => void;
+  tab: TabConfig; active: boolean; badge?: number; onPress: () => void;
 }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const pressIn  = () =>
-    Animated.spring(scale, { toValue: 0.85, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
-  const pressOut = () =>
-    Animated.spring(scale, { toValue: 1,    useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+  const scale    = useRef(new Animated.Value(1)).current;
+  const pressIn  = () => Animated.spring(scale, { toValue: 0.87, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
+  const pressOut = () => Animated.spring(scale, { toValue: 1,    useNativeDriver: true, speed: 40, bounciness: 4 }).start();
 
+  const isBlue     = tab.color === QL.BLUE;
   const iconColor  = active ? tab.color : QL.MUTED;
-  const pillBg     = active
-    ? (tab.color === QL.BLUE ? 'rgba(123,140,196,0.18)' : 'rgba(201,162,75,0.14)')
-    : 'transparent';
-  const pillBorder = active
-    ? (tab.color === QL.BLUE ? 'rgba(123,140,196,0.28)' : 'rgba(201,162,75,0.28)')
-    : 'transparent';
+  const pillBg     = active ? (isBlue ? 'rgba(123,140,196,0.16)' : 'rgba(201,162,75,0.12)') : 'transparent';
+  const pillBorder = active ? (isBlue ? 'rgba(123,140,196,0.26)' : 'rgba(201,162,75,0.26)') : 'transparent';
 
   return (
     <Pressable
       onPress={onPress}
       onPressIn={pressIn}
       onPressOut={pressOut}
-      style={s.navItem}
       accessibilityRole="button"
       accessibilityState={active ? { selected: true } : {}}
       accessibilityLabel={tab.label}
     >
       <Animated.View style={[
         s.pill,
-        collapsed ? s.pillCollapsed : s.pillExpanded,
         { backgroundColor: pillBg, borderColor: pillBorder, transform: [{ scale }] },
       ]}>
         {badge !== undefined && badge > 0 && (
@@ -89,208 +78,179 @@ function NavItem({
             <Text style={s.badgeTxt}>{badge > 9 ? '9+' : badge}</Text>
           </View>
         )}
-        <MaterialCommunityIcons
-          name={active ? tab.iconActive : tab.icon}
-          size={21}
-          color={iconColor}
-        />
-        {!collapsed && (
-          <Text style={[s.label, { color: iconColor }]} numberOfLines={1}>
-            {tab.label}
-          </Text>
-        )}
+        <MaterialCommunityIcons name={active ? tab.iconActive : tab.icon} size={21} color={iconColor} />
+        <Text style={[s.navLabel, { color: iconColor }]} numberOfLines={1}>{tab.label}</Text>
       </Animated.View>
     </Pressable>
   );
 }
 
-// ── Sidebar overlay ───────────────────────────────────────────────────────────
-// position: 'absolute' — does NOT take any layout space; floats over screens.
-// The "ear" tab protrudes past the right edge of the sidebar so users always
-// have a visible, tappable target to expand/collapse — even in the rail state.
-function LeftSidebar({
-  state, navigation, collapsed, widthAnim, backdropAnim, onToggle, insightBadge = 0,
+// ── Drawer ────────────────────────────────────────────────────────────────────
+function Drawer({
+  state, navigation, slideAnim, backdropAnim, onClose, insightBadge = 0,
 }: {
-  state: any; navigation: any; collapsed: boolean;
-  widthAnim: Animated.Value; backdropAnim: Animated.Value;
-  onToggle: () => void; insightBadge?: number;
+  state: any; navigation: any;
+  slideAnim: Animated.Value; backdropAnim: Animated.Value;
+  onClose: () => void; insightBadge?: number;
 }) {
   const insets  = useSafeAreaInsets();
   const current = state.routes[state.index]?.name ?? '';
   const active  = PARENT_TAB[current] ?? current;
   const visible = (state.routes as any[]).filter(r => TABS.some(t => t.name === r.name));
-  const earTop  = Math.max(insets.top, 12) + 44; // sits below the brand mark
 
   return (
     <>
-      {/* Dim backdrop — tap anywhere to collapse */}
+      {/* Backdrop */}
       <Animated.View
-        pointerEvents={collapsed ? 'none' : 'box-only'}
-        style={[StyleSheet.absoluteFill, { backgroundColor: BACKDROP_CLR, opacity: backdropAnim, zIndex: 99 }]}
+        pointerEvents="box-none"
+        style={[StyleSheet.absoluteFill, { opacity: backdropAnim, zIndex: 99 }]}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onToggle} />
+        <Pressable
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
+          onPress={onClose}
+        />
       </Animated.View>
 
-      {/* Sidebar panel — overflow visible so the ear can protrude right */}
-      <Animated.View style={[s.sidebar, {
-        width:      widthAnim,
-        paddingTop: Math.max(insets.top, 12),
-        paddingBottom: Math.max(insets.bottom, 16),
-      }]}>
-
-        {/* Ear toggle — sticks out past the right border, always tappable */}
-        <Pressable
-          onPress={onToggle}
-          hitSlop={8}
-          accessibilityLabel={collapsed ? 'Expand menu' : 'Collapse menu'}
-          style={[s.ear, { top: earTop }]}
-        >
-          <MaterialCommunityIcons
-            name={collapsed ? 'chevron-right' : 'chevron-left'}
-            size={13}
-            color={QL.MUTED}
-          />
-        </Pressable>
-
-        {/* Content — inner wrapper clips text overflow during animation */}
-        <View style={s.sidebarContent}>
-          {/* Brand */}
-          <View style={s.brand}>
+      {/* Drawer panel */}
+      <Animated.View style={[
+        s.drawer,
+        {
+          transform:     [{ translateX: slideAnim }],
+          paddingTop:    Math.max(insets.top, 16),
+          paddingBottom: Math.max(insets.bottom, 20),
+        },
+      ]}>
+        {/* Header */}
+        <View style={s.drawerHeader}>
+          <View style={s.drawerBrand}>
             <View style={s.brandMark}>
-              <MaterialCommunityIcons name="chart-areaspline" size={15} color={QL.GOLD} />
+              <MaterialCommunityIcons name="chart-areaspline" size={16} color={QL.GOLD} />
             </View>
-            {!collapsed && (
-              <Text style={s.brandTxt} numberOfLines={1}>Platstock</Text>
-            )}
+            <Text style={s.brandTxt}>Platstock</Text>
           </View>
+          <Pressable onPress={onClose} hitSlop={12} style={s.closeBtn}>
+            <MaterialCommunityIcons name="close" size={18} color={QL.MUTED} />
+          </Pressable>
+        </View>
 
-          <View style={s.divider} />
+        <View style={s.drawerDivider} />
 
-          {/* Nav items */}
-          <View style={s.list}>
-            {visible.map((route: any) => {
-              const tab      = TABS.find(t => t.name === route.name)!;
-              const isActive = active === route.name;
-              return (
-                <NavItem
-                  key={route.key}
-                  tab={tab}
-                  active={isActive}
-                  collapsed={collapsed}
-                  badge={route.name === 'Insights' ? insightBadge : undefined}
-                  onPress={() => {
-                    const ev = navigation.emit({
-                      type: 'tabPress', target: route.key, canPreventDefault: true,
-                    });
-                    if (!isActive && !ev.defaultPrevented) navigation.navigate(route.name);
-                    if (!collapsed) onToggle(); // auto-collapse after picking a tab
-                  }}
-                />
-              );
-            })}
-          </View>
+        {/* Nav items */}
+        <View style={s.drawerList}>
+          {visible.map((route: any) => {
+            const tab      = TABS.find(t => t.name === route.name)!;
+            const isActive = active === route.name;
+            return (
+              <NavItem
+                key={route.key}
+                tab={tab}
+                active={isActive}
+                badge={route.name === 'Insights' ? insightBadge : undefined}
+                onPress={() => {
+                  onClose(); // close drawer first
+                  const ev = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                  if (!isActive && !ev.defaultPrevented) navigation.navigate(route.name);
+                }}
+              />
+            );
+          })}
         </View>
       </Animated.View>
     </>
   );
 }
 
+// ── Floating trigger button ───────────────────────────────────────────────────
+// Stays visible at top-left when drawer is closed; fades out as drawer opens.
+function TriggerButton({
+  onPress, triggerAnim, insetTop,
+}: {
+  onPress: () => void; triggerAnim: Animated.Value; insetTop: number;
+}) {
+  return (
+    <Animated.View style={[s.trigger, { top: Math.max(insetTop, 12) + 6, opacity: triggerAnim }]}>
+      <Pressable onPress={onPress} hitSlop={10} accessibilityLabel="Open navigation menu">
+        <View style={s.triggerInner}>
+          <MaterialCommunityIcons name="chart-areaspline" size={16} color={QL.GOLD} />
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  sidebar: {
+  // Drawer
+  drawer: {
     position:         'absolute',
     left:             0,
     top:              0,
     bottom:           0,
+    width:            DRAWER_W,
     zIndex:           100,
     backgroundColor:  SIDEBAR_BG,
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: 'rgba(201,162,75,0.18)',
-    // overflow visible so the ear tab can protrude past the right border
+    borderRightColor: 'rgba(201,162,75,0.20)',
   },
-  sidebarContent: {
-    flex:     1,
-    overflow: 'hidden', // clips text/icons during collapse animation
-  },
-  ear: {
-    position:              'absolute',
-    right:                 -18,   // protrudes 18 px past the right border
-    width:                 18,
-    height:                38,
-    backgroundColor:       SIDEBAR_BG,
-    borderTopRightRadius:  10,
-    borderBottomRightRadius: 10,
-    borderTopWidth:        StyleSheet.hairlineWidth,
-    borderRightWidth:      StyleSheet.hairlineWidth,
-    borderBottomWidth:     StyleSheet.hairlineWidth,
-    borderColor:           'rgba(201,162,75,0.18)',
-    alignItems:            'center',
-    justifyContent:        'center',
-    zIndex:                101,
-  },
-  brand: {
+  drawerHeader: {
     flexDirection:    'row',
     alignItems:       'center',
-    gap:              10,
-    paddingHorizontal: 10,
-    marginBottom:     10,
+    justifyContent:   'space-between',
+    paddingHorizontal: 16,
+    paddingBottom:    12,
   },
+  drawerBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   brandMark: {
-    width:           32,
-    height:          32,
-    borderRadius:    9,
+    width:           34,
+    height:          34,
+    borderRadius:    10,
     backgroundColor: 'rgba(201,162,75,0.12)',
     borderWidth:     StyleSheet.hairlineWidth,
-    borderColor:     'rgba(201,162,75,0.25)',
+    borderColor:     'rgba(201,162,75,0.28)',
     alignItems:      'center',
     justifyContent:  'center',
-    flexShrink:      0,
   },
   brandTxt: {
     color:         QL.GOLD,
-    fontSize:      14,
+    fontSize:      15,
     fontFamily:    sans,
     fontWeight:    '700',
     letterSpacing: 0.4,
-    flexShrink:    1,
   },
-  divider: {
+  closeBtn: {
+    width:           30,
+    height:          30,
+    borderRadius:    8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     'rgba(255,255,255,0.08)',
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  drawerDivider: {
     height:           StyleSheet.hairlineWidth,
     backgroundColor:  'rgba(255,255,255,0.07)',
-    marginHorizontal: 10,
+    marginHorizontal: 14,
     marginBottom:     8,
   },
-  list:    { flex: 1, gap: 2, paddingHorizontal: 6 },
-  navItem: { width: '100%' },
+  drawerList: { flex: 1, paddingHorizontal: 10, gap: 2 },
+
+  // Nav item
   pill: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    borderRadius:  10,
-    borderWidth:   StyleSheet.hairlineWidth,
-    position:      'relative',
-  },
-  pillCollapsed: {
-    justifyContent:  'center',
-    paddingVertical: 11,
-    paddingHorizontal: 10,
-  },
-  pillExpanded: {
-    justifyContent:  'flex-start',
-    gap:             10,
-    paddingVertical: 11,
+    flexDirection:    'row',
+    alignItems:       'center',
+    gap:              12,
+    borderRadius:     11,
+    borderWidth:      StyleSheet.hairlineWidth,
+    paddingVertical:  11,
     paddingHorizontal: 12,
+    position:         'relative',
   },
-  label: {
-    fontSize:      13,
-    fontFamily:    sans,
-    fontWeight:    '600',
-    letterSpacing: 0.1,
-    flexShrink:    1,
-  },
+  navLabel: { fontSize: 14, fontFamily: sans, fontWeight: '600', letterSpacing: 0.1, flexShrink: 1 },
   badge: {
     position:        'absolute',
     top:             4,
-    right:           4,
+    left:            24,
     minWidth:        15,
     height:          15,
     borderRadius:    8,
@@ -303,44 +263,75 @@ const s = StyleSheet.create({
     zIndex:          1,
   },
   badgeTxt: { fontSize: 8, color: '#fff', fontWeight: '700', fontFamily: sans },
+
+  // Floating trigger
+  trigger: {
+    position: 'absolute',
+    left:     14,
+    zIndex:   100,
+  },
+  triggerInner: {
+    width:           36,
+    height:          36,
+    borderRadius:    10,
+    backgroundColor: 'rgba(8,11,18,0.88)',
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     'rgba(201,162,75,0.30)',
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
 });
 
 // ── Root layout ───────────────────────────────────────────────────────────────
 export default function TabLayout() {
-  const [collapsed, setCollapsed] = useState(true);
-  const widthAnim    = useRef(new Animated.Value(RAIL_W)).current;
+  const [open, setOpen] = useState(false);
+  // Drawer slides in from left: starts at -DRAWER_W (off screen), goes to 0
+  const slideAnim    = useRef(new Animated.Value(-DRAWER_W)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
+  // Trigger fades out as drawer opens
+  const triggerAnim  = useRef(new Animated.Value(1)).current;
+  const insets       = useSafeAreaInsets();
 
-  const toggle = useCallback(() => {
-    const expanding = collapsed;
+  const openDrawer = useCallback(() => {
+    setOpen(true);
     Animated.parallel([
-      Animated.timing(widthAnim, {
-        toValue:         expanding ? EXPANDED_W : RAIL_W,
-        duration:        ANIM_MS,
-        useNativeDriver: false,
-      }),
-      Animated.timing(backdropAnim, {
-        toValue:         expanding ? 1 : 0,
-        duration:        ANIM_MS,
-        useNativeDriver: false,
-      }),
+      Animated.timing(slideAnim,    { toValue: 0, duration: ANIM_MS, useNativeDriver: true }),
+      Animated.timing(backdropAnim, { toValue: 1, duration: ANIM_MS, useNativeDriver: false }),
+      Animated.timing(triggerAnim,  { toValue: 0, duration: ANIM_MS * 0.6, useNativeDriver: false }),
     ]).start();
-    setCollapsed(c => !c);
-  }, [collapsed, widthAnim, backdropAnim]);
+  }, [slideAnim, backdropAnim, triggerAnim]);
+
+  const closeDrawer = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(slideAnim,    { toValue: -DRAWER_W, duration: ANIM_MS, useNativeDriver: true }),
+      Animated.timing(backdropAnim, { toValue: 0,         duration: ANIM_MS, useNativeDriver: false }),
+      Animated.timing(triggerAnim,  { toValue: 1,         duration: ANIM_MS, useNativeDriver: false }),
+    ]).start(() => setOpen(false));
+  }, [slideAnim, backdropAnim, triggerAnim]);
 
   return (
-    // Screens take full width — sidebar floats absolutely over them
     <View style={{ flex: 1 }}>
       <Tabs
         screenOptions={{ headerShown: false }}
         tabBar={(props) => (
-          <LeftSidebar
-            {...props}
-            collapsed={collapsed}
-            widthAnim={widthAnim}
-            backdropAnim={backdropAnim}
-            onToggle={toggle}
-          />
+          <>
+            {/* Floating logo trigger — fades out when drawer opens */}
+            <TriggerButton
+              onPress={openDrawer}
+              triggerAnim={triggerAnim}
+              insetTop={insets.top}
+            />
+
+            {/* Drawer + backdrop — only rendered when open (or animating) */}
+            {(open) && (
+              <Drawer
+                {...props}
+                slideAnim={slideAnim}
+                backdropAnim={backdropAnim}
+                onClose={closeDrawer}
+              />
+            )}
+          </>
         )}
       >
         <Tabs.Screen name="home"      options={{ title: 'Home' }} />
