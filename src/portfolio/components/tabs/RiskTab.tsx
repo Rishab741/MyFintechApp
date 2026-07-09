@@ -7,7 +7,7 @@ import { DrawdownChart } from '../../charts';
 import {
     GOLD, GOLD_D, GREEN, RED, RED_D,
     MUTED, TXT, TXT2,
-    sans, mono, CHART_W,
+    sans, mono,
 } from '../../tokens';
 import { fmt2, sign } from '../../helpers';
 import type { RiskMetrics } from '../../types';
@@ -149,19 +149,33 @@ export default function RiskTab({ risk, metrics, snapValues, displayAlpha }: Pro
             )}
 
             {/* ── Drawdown chart ── */}
-            {snapValues.length >= 3 && (
-                <Card>
-                    <SHead
-                        title="Drawdown Analysis"
-                        right={
-                            <View style={[s.badge, { backgroundColor: RED_D, borderColor: `${RED}35` }]}>
-                                <Text style={[s.badgeTxt, { color: RED }]}>UNDERWATER</Text>
-                            </View>
-                        }
-                    />
-                    <DrawdownChart values={snapValues} w={CHART_W} h={160} />
-                </Card>
-            )}
+            {snapValues.length >= 3 && (() => {
+                let pk = snapValues[0];
+                const ddNow = snapValues.map(v => {
+                    pk = Math.max(pk, v);
+                    return pk > 0 ? ((v - pk) / pk) * 100 : 0;
+                });
+                const currentDD = ddNow[ddNow.length - 1];
+                const underwater = currentDD < -0.5;
+                return (
+                    <Card glow={underwater ? RED : undefined}>
+                        <SHead
+                            title="Drawdown Analysis"
+                            right={
+                                <View style={[s.badge, {
+                                    backgroundColor: underwater ? `${RED}15` : `${GREEN}12`,
+                                    borderColor: underwater ? `${RED}40` : `${GREEN}35`,
+                                }]}>
+                                    <Text style={[s.badgeTxt, { color: underwater ? RED : GREEN }]}>
+                                        {underwater ? 'UNDERWATER' : 'RECOVERED'}
+                                    </Text>
+                                </View>
+                            }
+                        />
+                        <DrawdownChart values={snapValues} />
+                    </Card>
+                );
+            })()}
         </>
     );
 }

@@ -1,43 +1,158 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
-import { CHART_W, RED, RED_D, GREEN, GOLD, MUTED, CARD2, BORDER, mono, sans } from '../tokens';
+import React, { useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import Svg, {
+    Circle, Defs, Line, LinearGradient, Path,
+    Stop, Text as SvgText,
+} from 'react-native-svg';
+import { RED, GREEN, GOLD, MUTED, mono, sans } from '../tokens';
 import { fmt2 } from '../helpers';
 
-const N_COLS   = 64;
-const Y_LABELS = 4;
-const LABEL_W  = 44;
-
-const sample = (arr: number[], n: number): number[] =>
-    Array.from({ length: n }, (_, i) => {
-        const idx = Math.round((i / (n - 1)) * (arr.length - 1));
-        return arr[Math.min(idx, arr.length - 1)];
-    });
-
+// ── Stat chip ─────────────────────────────────────────────────────────────────
 const Chip: React.FC<{ label: string; value: string; color: string }> = ({ label, value, color }) => (
-    <View style={chip.wrap}>
+    <View style={[chip.wrap, { borderColor: `${color}30`, backgroundColor: `${color}08` }]}>
         <Text style={chip.label}>{label}</Text>
         <Text style={[chip.value, { color }]}>{value}</Text>
     </View>
 );
 const chip = StyleSheet.create({
     wrap:  {
-        flex: 1, backgroundColor: CARD2, borderRadius: 12,
-        borderWidth: 1, borderColor: BORDER,
-        paddingVertical: 14, paddingHorizontal: 14, gap: 6,
+        flex: 1, borderRadius: 14, borderWidth: 1,
+        paddingVertical: 14, paddingHorizontal: 14, gap: 5,
     },
     label: { color: MUTED, fontSize: 8, fontFamily: mono, letterSpacing: 1.8, textTransform: 'uppercase' },
-    value: { fontSize: 16, fontWeight: '700', fontFamily: sans },
+    value: { fontSize: 18, fontWeight: '800', fontFamily: sans },
 });
 
-const DrawdownChart: React.FC<{ values: number[]; w?: number; h?: number }> =
-    ({ values, w = CHART_W, h = 160 }) => {
+// ── SVG area chart ────────────────────────────────────────────────────────────
+const CHART_H  = 180;
+const PAD      = { top: 20, right: 44, bottom: 20, left: 4 };
+const Y_TICKS  = 3;
 
-    const anim = useRef(new Animated.Value(0)).current;
+function DrawdownSvg({ values, w }: { values: number[]; w: number }) {
+    const h   = CHART_H;
+    const IW  = w - PAD.left - PAD.right;
+    const IH  = h - PAD.top - PAD.bottom;
 
-    useEffect(() => {
-        anim.setValue(0);
-        Animated.timing(anim, { toValue: 1, duration: 1000, useNativeDriver: false }).start();
-    }, [values.length]);
+    // Compute drawdown series
+    let peak = values[0];
+    const dd = values.map(v => {
+        peak = Math.max(peak, v);
+        return peak > 0 ? ((v - peak) / peak) * 100 : 0;
+    });
+
+    const minDD     = Math.min(...dd);          // most negative (worst)
+    const currentDD = dd[dd.length - 1];
+    const range     = Math.abs(minDD) || 1;
+    const recovered = currentDD >= -0.5;
+
+    // Map drawdown % → pixel y (0% at top = PAD.top, minDD at bottom = PAD.top + IH)
+    const py = (pct: number) => PAD.top + (Math.abs(pct) / range) * IH;
+    const px = (i: number)   => PAD.left + (i / (dd.length - 1)) * IW;
+
+    // Smooth bezier path
+    const pts = dd.map((v, i) => ({ x: px(i), y: py(v) }));
+    let line = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length; i++) {
+        const cp1x = (pts[i - 1].x + pts[i].x) / 2;
+        const cp2x = cp1x;
+        line += ` C ${cp1x} ${pts[i - 1].y} ${cp2x} ${pts[i].y} ${pts[i].x} ${pts[i].y}`;
+    }
+    // Close area
+    const area = `${line} L ${pts[pts.length - 1].x} ${PAD.top} L ${pts[0].x} ${PAD.top} Z`;
+
+    // Y-axis ticks (evenly spaced from 0 to minDD)
+    const yTicks = Array.from({ length: Y_TICKS + 1 }, (_, i) => {
+        const pct = (minDD * i) / Y_TICKS;
+        return { pct, y: py(pct), label: i === 0 ? '0%' : `${fmt2(pct)}%` };
+    });
+
+    // Worst-DD point
+    const worstIdx  = dd.indexOf(minDD);
+    const worstPt   = pts[worstIdx];
+    const currentPt = pts[pts.length - 1];
+
+    return (
+        <Svg width={w} height={h}>
+            <Defs>
+                <LinearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0"    stopColor={RED} stopOpacity="0.35" />
+                    <Stop offset="0.7"  stopColor={RED} stopOpacity="0.08" />
+                    <Stop offset="1"    stopColor={RED} stopOpacity="0" />
+                </LinearGradient>
+            </Defs>
+
+            {/* Y-axis grid lines + labels */}
+            {yTicks.map((t, i) => (
+                <React.Fragment key={i}>
+                    <Line
+                        x1={PAD.left} y1={t.y}
+                        x2={PAD.left + IW} y2={t.y}
+                        stroke={i === 0 ? `${GOLD}40` : 'rgba(255,255,255,0.06)'}
+                        strokeWidth={i === 0 ? 1.5 : 1}
+                        strokeDasharray={i > 0 ? '3,5' : undefined}
+                    />
+                    <SvgText
+                        x={PAD.left + IW + 6} y={t.y + 4}
+                        fill={i === 0 ? GOLD : MUTED}
+                        fontSize={8} fontFamily={mono}
+                    >
+                        {t.label}
+                    </SvgText>
+                </React.Fragment>
+            ))}
+
+            {/* Worst-drawdown reference dashed line */}
+            <Line
+                x1={PAD.left} y1={worstPt.y}
+                x2={PAD.left + IW} y2={worstPt.y}
+                stroke={`${RED}50`}
+                strokeWidth={1}
+                strokeDasharray="4,4"
+            />
+
+            {/* Area fill */}
+            <Path d={area} fill="url(#ddGrad)" />
+
+            {/* Main line */}
+            <Path
+                d={line} fill="none"
+                stroke={RED} strokeWidth={2}
+                strokeLinecap="round" strokeLinejoin="round"
+            />
+
+            {/* Worst drawdown dot */}
+            <Circle cx={worstPt.x} cy={worstPt.y} r={6}   fill={RED} opacity={0.15} />
+            <Circle cx={worstPt.x} cy={worstPt.y} r={3.5} fill={RED} />
+            <SvgText
+                x={Math.min(worstPt.x + 6, PAD.left + IW - 30)}
+                y={worstPt.y - 6}
+                fill={RED} fontSize={8} fontFamily={mono}
+            >
+                {fmt2(minDD)}%
+            </SvgText>
+
+            {/* Current position dot */}
+            {!recovered && currentDD < -0.5 && (
+                <>
+                    <Circle cx={currentPt.x} cy={currentPt.y} r={5} fill={GOLD} opacity={0.2} />
+                    <Circle cx={currentPt.x} cy={currentPt.y} r={3} fill={GOLD} />
+                </>
+            )}
+            {recovered && (
+                <>
+                    <Circle cx={currentPt.x} cy={currentPt.y} r={5} fill={GREEN} opacity={0.2} />
+                    <Circle cx={currentPt.x} cy={currentPt.y} r={3} fill={GREEN} />
+                </>
+            )}
+        </Svg>
+    );
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+const DrawdownChart: React.FC<{ values: number[]; w?: number; h?: number }> = ({ values }) => {
+    const [chartW, setChartW] = useState(0);
+
+    const onLayout = (e: LayoutChangeEvent) => setChartW(e.nativeEvent.layout.width);
 
     if (values.length < 2) return null;
 
@@ -46,109 +161,44 @@ const DrawdownChart: React.FC<{ values: number[]; w?: number; h?: number }> =
         peak = Math.max(peak, v);
         return peak > 0 ? ((v - peak) / peak) * 100 : 0;
     });
-
     const minDD     = Math.min(...dd);
     const currentDD = dd[dd.length - 1];
-    const range     = Math.abs(minDD) || 1;
     const recovered = currentDD >= -0.5;
 
-    const cols  = sample(dd, N_COLS);
-    const chartW = w - LABEL_W;
-    const colW   = chartW / N_COLS;
-    const barW   = Math.max(colW - 1.5, 1);
-
-    const gridLevels = Array.from({ length: Y_LABELS }, (_, i) =>
-        (minDD * (i + 1)) / Y_LABELS
-    );
-
     return (
-        <View style={{ gap: 14 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                {/* Y-axis labels */}
-                <View style={{ width: LABEL_W, height: h, position: 'relative' }}>
-                    <Text style={[s.yLabel, { top: -6 }]}>0%</Text>
-                    {gridLevels.map((lvl, i) => {
-                        const yPos = (Math.abs(lvl) / range) * h - 6;
-                        return (
-                            <Text key={i} style={[s.yLabel, { top: yPos }]}>
-                                {fmt2(lvl)}%
-                            </Text>
-                        );
-                    })}
-                </View>
-
-                {/* Bars */}
-                <View style={[s.chartArea, { width: chartW, height: h }]}>
-                    {/* Grid lines */}
-                    {gridLevels.map((lvl, i) => {
-                        const yPos = (Math.abs(lvl) / range) * h;
-                        return <View key={i} style={[s.gridLine, { top: yPos }]} />;
-                    })}
-
-                    {/* Baseline */}
-                    <View style={s.baseline} />
-
-                    {/* Bars */}
-                    {cols.map((v, i) => {
-                        const depth  = Math.abs(v) / range;
-                        const barH   = anim.interpolate({
-                            inputRange: [0, 1], outputRange: [0, depth * h],
-                        });
-                        const barColor = depth > 0.65 ? RED : depth > 0.35 ? '#D94060' : '#A83050';
-                        const fillOpacity = anim.interpolate({
-                            inputRange: [0, 1], outputRange: [0, 0.18 + depth * 0.28],
-                        });
-
-                        return (
-                            <View key={i} style={[s.colWrap, { left: i * colW, width: barW, height: h }]}>
-                                <Animated.View style={[s.barFill, {
-                                    height: barH, backgroundColor: RED_D, opacity: fillOpacity,
-                                }]} />
-                                <Animated.View style={[s.barLine, {
-                                    height: barH,
-                                    borderTopWidth: depth > 0.02 ? 1.5 : 0,
-                                    borderTopColor: barColor,
-                                }]} />
-                            </View>
-                        );
-                    })}
-
-                    {/* Current level indicator */}
-                    {currentDD < -0.5 && (
-                        <View style={[s.currentLine, {
-                            top: (Math.abs(currentDD) / range) * h,
-                            borderColor: recovered ? `${GREEN}60` : `${GOLD}50`,
-                        }]}>
-                            <View style={[s.currentDot, { backgroundColor: recovered ? GREEN : GOLD }]} />
-                        </View>
-                    )}
-                </View>
+        <View style={s.root}>
+            {/* SVG chart — fills full container width */}
+            <View style={s.chartWrap} onLayout={onLayout}>
+                {chartW > 0 && <DrawdownSvg values={values} w={chartW} />}
             </View>
 
             {/* Stat chips */}
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Chip label="Max Drawdown" value={`${fmt2(minDD)}%`}     color={RED} />
-                <Chip label="Current"      value={`${fmt2(currentDD)}%`} color={currentDD < -2 ? RED : currentDD < -0.5 ? GOLD : GREEN} />
-                <Chip label="Status"       value={recovered ? 'Recovered' : 'Underwater'} color={recovered ? GREEN : GOLD} />
+            <View style={s.chips}>
+                <Chip
+                    label="Max Drawdown"
+                    value={`${fmt2(minDD)}%`}
+                    color={RED}
+                />
+                <Chip
+                    label="Current DD"
+                    value={`${fmt2(currentDD)}%`}
+                    color={currentDD < -5 ? RED : currentDD < -0.5 ? GOLD : GREEN}
+                />
+                <Chip
+                    label="Status"
+                    value={recovered ? 'Recovered' : 'Underwater'}
+                    color={recovered ? GREEN : GOLD}
+                />
             </View>
         </View>
     );
 };
 
 const s = StyleSheet.create({
-    yLabel:    { position: 'absolute', right: 4, color: MUTED, fontSize: 8, fontFamily: mono, textAlign: 'right' },
-    chartArea: { overflow: 'hidden', position: 'relative' },
-    gridLine:  { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.05)' },
-    baseline:  { position: 'absolute', top: 0, left: 0, right: 0, height: 1.5, backgroundColor: `rgba(201,162,75,0.25)` },
-    colWrap:   { position: 'absolute', top: 0, overflow: 'hidden', justifyContent: 'flex-start' },
-    barFill:   { width: '100%' },
-    barLine:   { position: 'absolute', top: 0, width: '100%' },
-    currentLine: {
-        position: 'absolute', left: 0, right: 0, height: 1,
-        borderWidth: 0, borderTopWidth: 1, borderStyle: 'dashed',
-        flexDirection: 'row', alignItems: 'center',
-    },
-    currentDot: { width: 7, height: 7, borderRadius: 3.5, position: 'absolute', right: 0 },
+    root:      { gap: 16 },
+    chartWrap: { width: '100%', minHeight: CHART_H },
+    chips:     { flexDirection: 'row', gap: 8 },
 });
 
+export { DrawdownChart };
 export default DrawdownChart;
