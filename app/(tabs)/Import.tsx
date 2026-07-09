@@ -30,19 +30,20 @@ import {
   type MappingField,
 } from "@/src/import/types";
 
+import { QL, sans, mono } from "@/constants/Colors";
 // ── Tokens ────────────────────────────────────────────────────────────────────
-const BG     = "#04070F";
-const CARD   = "#0C1525";
-const CARD2  = "#111E33";
-const CYAN   = "#8FF5FF";
-const GREEN  = "#00E09A";
-const RED    = "#FF716C";
-const AMBER  = "#F59E0B";
-const BORDER = "rgba(143,245,255,0.10)";
-const TXT    = "#F8FAFC";
-const MUTED  = "#64748B";
-const SUB    = "#94A3B8";
-const mono   = Platform.OS === "ios" ? "Menlo" : "monospace";
+const BG     = QL.BG;
+const CARD   = QL.CARD;
+const CARD2  = QL.CARD2;
+const GOLD   = QL.GOLD;
+const GOLD_D = QL.GOLD_D;
+const GREEN  = QL.GREEN;
+const RED    = QL.RED;
+const AMBER  = QL.AMBER;
+const BORDER = QL.BORDER;
+const TXT    = QL.TXT;
+const MUTED  = QL.MUTED;
+const SUB    = QL.TXT2;
 
 // ── Step progress bar ─────────────────────────────────────────────────────────
 const STEPS = [
@@ -84,7 +85,7 @@ const sb = StyleSheet.create({
   row:      { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 16 },
   step:     { alignItems: "center", gap: 4 },
   dot:      { width: 32, height: 32, borderRadius: 16, backgroundColor: CARD2, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: BORDER },
-  dotActive:{ backgroundColor: CYAN, borderColor: CYAN },
+  dotActive:{ backgroundColor: GOLD, borderColor: GOLD },
   dotDone:  { backgroundColor: GREEN, borderColor: GREEN },
   lbl:      { fontSize: 10, color: MUTED, fontFamily: mono },
   lblActive:{ color: TXT },
@@ -127,7 +128,7 @@ function FieldRow({
         </Text>
         <MaterialCommunityIcons
           name={open ? "chevron-up" : "chevron-down"}
-          size={16} color={isSet ? CYAN : MUTED}
+          size={16} color={isSet ? GOLD : MUTED}
         />
       </Pressable>
 
@@ -143,7 +144,7 @@ function FieldRow({
               onPress={() => { onSelect(col); setOpen(false); }}
             >
               <Text style={[fr.dropTxt, col === selected && fr.dropTxtActive]}>{col}</Text>
-              {col === selected && <MaterialCommunityIcons name="check" size={14} color={CYAN} />}
+              {col === selected && <MaterialCommunityIcons name="check" size={14} color={GOLD} />}
             </Pressable>
           ))}
         </View>
@@ -160,15 +161,15 @@ const fr = StyleSheet.create({
   opt:           { color: MUTED, fontSize: 10, fontFamily: mono },
   example:       { color: MUTED, fontSize: 11, marginBottom: 8 },
   selector:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: CARD2, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: BORDER },
-  selectorSet:   { borderColor: CYAN + "55" },
-  selectorOpen:  { borderColor: CYAN },
+  selectorSet:   { borderColor: GOLD + "55" },
+  selectorOpen:  { borderColor: GOLD },
   selectorTxt:   { flex: 1, color: MUTED, fontSize: 13, fontFamily: mono },
   selectorTxtSet:{ color: TXT },
   dropdown:      { backgroundColor: CARD, borderRadius: 10, borderWidth: 1, borderColor: BORDER, marginTop: 4, overflow: "hidden", maxHeight: 220 },
   dropItem:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER },
-  dropItemActive:{ backgroundColor: CYAN + "10" },
+  dropItemActive:{ backgroundColor: GOLD + "10" },
   dropTxt:       { color: SUB, fontSize: 13, fontFamily: mono },
-  dropTxtActive: { color: CYAN },
+  dropTxtActive: { color: GOLD },
 });
 
 // ── Import history row ────────────────────────────────────────────────────────
@@ -244,7 +245,7 @@ export default function ImportScreen() {
       {/* Drop zone */}
       <Pressable style={s.dropZone} onPress={pickFile}>
         <View style={s.dropIcon}>
-          <MaterialCommunityIcons name="file-upload-outline" size={40} color={CYAN} />
+          <MaterialCommunityIcons name="file-upload-outline" size={40} color={GOLD} />
         </View>
         <Text style={s.dropTitle}>Select your CSV or Excel file</Text>
         <Text style={s.dropSub}>Binance, Coinbase, Schwab, Fidelity, or any custom export</Text>
@@ -289,14 +290,14 @@ export default function ImportScreen() {
 
       {/* File pill */}
       <View style={s.filePill}>
-        <MaterialCommunityIcons name="file-delimited-outline" size={16} color={CYAN} />
+        <MaterialCommunityIcons name="file-delimited-outline" size={16} color={GOLD} />
         <Text style={s.filePillTxt} numberOfLines={1}>{fileName}</Text>
         {parsed && <Text style={s.filePillCount}>{parsed.row_count} rows</Text>}
       </View>
 
       {isParsing && (
         <View style={s.center}>
-          <ActivityIndicator color={CYAN} />
+          <ActivityIndicator color={GOLD} />
           <Text style={s.loadingTxt}>Reading file…</Text>
         </View>
       )}
@@ -511,20 +512,20 @@ const s = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
   },
-  headerTitle: { color: CYAN, fontSize: 16, fontWeight: "900", fontFamily: mono, letterSpacing: 2 },
+  headerTitle: { color: GOLD, fontSize: 16, fontWeight: "900", fontFamily: mono, letterSpacing: 2 },
   headerSub:   { color: MUTED, fontSize: 10, fontFamily: mono, marginTop: 1 },
 
   // Drop zone
   dropZone: {
     alignItems: "center", justifyContent: "center",
-    borderRadius: 20, borderWidth: 2, borderColor: CYAN + "33",
+    borderRadius: 20, borderWidth: 2, borderColor: GOLD + "33",
     borderStyle: "dashed", paddingVertical: 40, marginBottom: 20,
-    backgroundColor: CYAN + "06",
+    backgroundColor: GOLD + "06",
   },
-  dropIcon:    { width: 72, height: 72, borderRadius: 18, backgroundColor: CYAN + "15", alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  dropIcon:    { width: 72, height: 72, borderRadius: 18, backgroundColor: GOLD + "15", alignItems: "center", justifyContent: "center", marginBottom: 16 },
   dropTitle:   { color: TXT, fontSize: 17, fontWeight: "700", marginBottom: 6, textAlign: "center" },
   dropSub:     { color: MUTED, fontSize: 13, textAlign: "center", paddingHorizontal: 20, lineHeight: 20, marginBottom: 20 },
-  dropBtn:     { backgroundColor: CYAN, borderRadius: 12, paddingHorizontal: 28, paddingVertical: 12 },
+  dropBtn:     { backgroundColor: GOLD, borderRadius: 12, paddingHorizontal: 28, paddingVertical: 12 },
   dropBtnTxt:  { color: BG, fontSize: 14, fontWeight: "800", fontFamily: mono },
 
   // Formats card
@@ -537,11 +538,11 @@ const s = StyleSheet.create({
   // File pill
   filePill: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: CYAN + "15", borderRadius: 10,
+    backgroundColor: GOLD + "15", borderRadius: 10,
     paddingHorizontal: 12, paddingVertical: 8,
-    borderWidth: 1, borderColor: CYAN + "33", marginBottom: 16,
+    borderWidth: 1, borderColor: GOLD + "33", marginBottom: 16,
   },
-  filePillTxt:   { flex: 1, color: CYAN, fontSize: 13, fontFamily: mono },
+  filePillTxt:   { flex: 1, color: GOLD, fontSize: 13, fontFamily: mono },
   filePillCount: { color: MUTED, fontSize: 11, fontFamily: mono },
 
   // Loading / error
@@ -555,7 +556,7 @@ const s = StyleSheet.create({
   sectionSub:   { color: MUTED, fontSize: 13, lineHeight: 20, marginBottom: 16 },
 
   // Primary button
-  primaryBtn:  { backgroundColor: CYAN, borderRadius: 14, paddingVertical: 16, alignItems: "center", marginTop: 16 },
+  primaryBtn:  { backgroundColor: GOLD, borderRadius: 14, paddingVertical: 16, alignItems: "center", marginTop: 16 },
   btnDisabled: { opacity: 0.4 },
   primaryBtnTxt:{ color: BG, fontSize: 15, fontWeight: "800", fontFamily: mono },
 

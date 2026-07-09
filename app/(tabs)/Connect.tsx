@@ -34,20 +34,20 @@ import {
 } from "@/src/import/service";
 import { EXCHANGE_META, type ExchangeConnection, type ExchangeSlug } from "@/src/import/types";
 
+import { QL, sans, mono } from "@/constants/Colors";
 // ── Tokens ────────────────────────────────────────────────────────────────────
-const BG     = "#04070F";
-const CARD   = "#0C1525";
-const CARD2  = "#111E33";
-const CYAN   = "#8FF5FF";
-const GREEN  = "#00E09A";
-const RED    = "#FF716C";
-const AMBER  = "#F59E0B";
-const PURPLE = "#AC89FF";
-const BORDER = "rgba(143,245,255,0.10)";
-const TXT    = "#F8FAFC";
-const MUTED  = "#64748B";
-const SUB    = "#94A3B8";
-const mono   = Platform.OS === "ios" ? "Menlo" : "monospace";
+const BG     = QL.BG;
+const CARD   = QL.CARD;
+const CARD2  = QL.CARD2;
+const GOLD   = QL.GOLD;
+const GOLD_D = QL.GOLD_D;
+const GREEN  = QL.GREEN;
+const RED    = QL.RED;
+const AMBER  = QL.AMBER;
+const BORDER = QL.BORDER;
+const TXT    = QL.TXT;
+const MUTED  = QL.MUTED;
+const SUB    = QL.TXT2;
 const COINBASE_BLUE  = "#0052FF";
 const BINANCE_YELLOW = "#F3BA2F";
 
@@ -63,7 +63,7 @@ function ConnectedCard({
   conn: ExchangeConnection;
   onDisconnect: () => void;
 }) {
-  const meta    = EXCHANGE_META[conn.exchange] ?? { name: conn.label, color: CYAN, icon: "bank" };
+  const meta    = EXCHANGE_META[conn.exchange] ?? { name: conn.label, color: GOLD, icon: "bank" };
   const expired = conn.token_expires_at ? new Date(conn.token_expires_at) < new Date() : false;
 
   return (
@@ -259,7 +259,7 @@ export default function ConnectScreen() {
 
           {/* Connected exchanges */}
           {isLoading ? (
-            <ActivityIndicator color={CYAN} style={{ marginTop: 24 }} />
+            <ActivityIndicator color={GOLD} style={{ marginTop: 24 }} />
           ) : connections.length > 0 ? (
             <>
               <Text style={s.sectionTitle}>Connected</Text>
@@ -319,7 +319,7 @@ export default function ConnectScreen() {
             <MaterialCommunityIcons name="file-upload-outline" size={16} color={MUTED} />
             <Text style={s.csvHintTxt}>
               Don't see your exchange? Use the{" "}
-              <Text style={{ color: CYAN }}>Import</Text>{" "}
+              <Text style={{ color: GOLD }}>Import</Text>{" "}
               tab to upload a CSV or Excel export directly.
             </Text>
           </View>
@@ -481,7 +481,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
   },
-  headerTitle:{ color: CYAN, fontSize: 16, fontWeight: "900", fontFamily: mono, letterSpacing: 2 },
+  headerTitle:{ color: GOLD, fontSize: 16, fontWeight: "900", fontFamily: mono, letterSpacing: 2 },
   headerSub:  { color: MUTED, fontSize: 10, fontFamily: mono, marginTop: 1 },
 
   sectionTitle: { color: TXT, fontSize: 15, fontWeight: "700", marginBottom: 4 },
@@ -537,7 +537,7 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: BORDER, marginBottom: 4,
   },
   secretRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  showTxt:   { color: CYAN, fontSize: 12, fontFamily: mono },
+  showTxt:   { color: GOLD, fontSize: 12, fontFamily: mono },
 
   errorBox:  { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: RED + "15", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: RED + "33", marginTop: 8, marginBottom: 4 },
   errorTxt:  { flex: 1, color: RED, fontSize: 13 },

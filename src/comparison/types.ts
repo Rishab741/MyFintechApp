@@ -156,13 +156,13 @@ export interface ComparisonAsset {
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
 export const ASSET_CLASS_COLORS: Record<AssetClass, string> = {
-  equity:    "#8FF5FF",
-  etf:       "#ac89ff",
+  equity:    "#C9A84C",
+  etf:       "#B8956A",
   crypto:    "#f59e0b",
-  forex:     "#10b981",
+  forex:     "#7FA37A",
   commodity: "#f97316",
-  index:     "#64748b",
-  bond:      "#6366f1",
+  index:     "#7B8CC4",
+  bond:      "#A98BC9",
 };
 
 export const REBALANCING_LABELS: Record<RebalancingStrategy, string> = {
@@ -175,10 +175,10 @@ export const REBALANCING_LABELS: Record<RebalancingStrategy, string> = {
 
 // Series colors for charting — first = actual portfolio
 export const SERIES_COLORS = [
-  "#8FF5FF",  // actual → cyan
-  "#ac89ff",  // first alt
-  "#f59e0b",  // second alt
-  "#10b981",  // third alt
-  "#f97316",  // fourth alt
-  "#6366f1",  // fifth alt
+  "#C9A84C",  // actual → gold
+  "#B8956A",  // first alt → warm brass
+  "#f59e0b",  // second alt → amber
+  "#7FA37A",  // third alt → sage
+  "#f97316",  // fourth alt → orange
+  "#7B8CC4",  // fifth alt → indigo
 ];

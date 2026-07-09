@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { BORDER, BORDER_HI, CARD, GOLD, MUTED, mono, sans, TXT } from '@/src/market/tokens';
+import { BORDER, BORDER_HI, CARD, GOLD, GREEN, RED, MUTED, mono, sans, TXT } from '@/src/market/tokens';
 import type { Sector } from '../types';
 
 // Color-codes a % change: deep red → neutral → deep green
@@ -22,8 +22,8 @@ function heatColor(pct: number): string {
 }
 
 function textColor(pct: number): string {
-  if (pct > 0.3)  return '#34D399';
-  if (pct < -0.3) return '#F87171';
+  if (pct > 0.3)  return GREEN;
+  if (pct < -0.3) return RED;
   return '#B8B2A8';
 }
 
@@ -53,12 +53,12 @@ export function SectorGrid({ sectors }: { sectors: Sector[] }) {
       <View style={styles.card}>
         <View style={styles.legend}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#34D399' }]} />
+            <View style={[styles.legendDot, { backgroundColor: GREEN }]} />
             <Text style={styles.legendTxt}>Bullish</Text>
           </View>
           <Text style={styles.legendSub}>Today's performance by GICS sector</Text>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#F87171' }]} />
+            <View style={[styles.legendDot, { backgroundColor: RED }]} />
             <Text style={styles.legendTxt}>Bearish</Text>
           </View>
         </View>

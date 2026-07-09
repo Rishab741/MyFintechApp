@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     height: 12,
     width: 60,
     borderRadius: 3,
-    backgroundColor: 'rgba(143,245,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     marginTop: 4,
   },
 });

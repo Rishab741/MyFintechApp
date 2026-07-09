@@ -9,6 +9,7 @@ import {
     TXT, TXT2, MUTED, SUB,
     sans, mono,
 } from '../../tokens';
+import { QL } from '@/constants/Colors';
 import { fmtCurrency, fmt2, sign, getTicker } from '../../helpers';
 import type { AllocSeg, PerformerItem, Position } from '../../types';
 
@@ -22,7 +23,7 @@ interface Props {
     allocSegs: AllocSeg[];
 }
 
-const ALLOC_COLORS = ['#8ff5ff', '#ac89ff', '#ff6b98', '#00E09A', '#FFA500', '#a5abbd'];
+const ALLOC_COLORS = [QL.GOLD, QL.AMBER, QL.ORANGE, QL.GREEN, QL.RED, QL.TXT2];
 
 // ── Allocation bar row ────────────────────────────────────────────────────────
 const AllocRow: React.FC<{ label: string; pct: number; color: string; mv: string }> =

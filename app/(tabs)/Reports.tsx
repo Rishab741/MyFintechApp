@@ -26,27 +26,24 @@ import {
   REPORT_TYPE_LABELS,
 } from '@/src/reports/types';
 
+import { QL, sans, mono } from '@/constants/Colors';
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const BG     = '#070e1b';
-const CARD   = '#11192a';
-const CARD2  = '#172031';
-const BORDER = '#414857';
-const CYAN   = '#8ff5ff';
-const CYAN_D = 'rgba(143,245,255,0.08)';
-const CYAN_B = 'rgba(143,245,255,0.22)';
-const GREEN  = '#00E09A';
-const GREEN_D = 'rgba(0,224,154,0.09)';
-const RED    = '#ff716c';
-const RED_D  = 'rgba(255,113,108,0.09)';
-const AMBER  = '#f59e0b';
-const AMBER_D = 'rgba(245,158,11,0.10)';
-const BLUE   = '#ac89ff';
-const BLUE_D = 'rgba(172,137,255,0.10)';
-const TXT    = '#f8fafc';
-const TXT2   = '#cbd5e1';
-const MUTED  = '#64748b';
-const mono   = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
-const sans   = Platform.OS === 'ios' ? 'SF Pro Text' : 'sans-serif';
+const BG      = QL.BG;
+const CARD    = QL.CARD;
+const CARD2   = QL.CARD2;
+const BORDER  = QL.BORDER;
+const GOLD    = QL.GOLD;
+const GOLD_D  = QL.GOLD_D;
+const GOLD_B  = QL.GOLD_B;
+const GREEN   = QL.GREEN;
+const GREEN_D = QL.GREEN_D;
+const RED     = QL.RED;
+const RED_D   = QL.RED_D;
+const AMBER   = QL.AMBER;
+const AMBER_D = QL.AMBER_D;
+const TXT     = QL.TXT;
+const TXT2    = QL.TXT2;
+const MUTED   = QL.MUTED;
 
 // ── Report type config ────────────────────────────────────────────────────────
 const REPORT_TYPES: { key: ReportType; icon: string; description: string; color: string; bg: string }[] = [
@@ -54,8 +51,8 @@ const REPORT_TYPES: { key: ReportType; icon: string; description: string; color:
     key: 'portfolio_summary',
     icon: 'chart-donut',
     description: 'Total value, P&L, cash, and position count',
-    color: CYAN,
-    bg: CYAN_D,
+    color: GOLD,
+    bg: GOLD_D,
   },
   {
     key: 'holdings',
@@ -68,8 +65,8 @@ const REPORT_TYPES: { key: ReportType; icon: string; description: string; color:
     key: 'transactions',
     icon: 'swap-horizontal',
     description: 'Full transaction history with costs and fees',
-    color: BLUE,
-    bg: BLUE_D,
+    color: GOLD,
+    bg: GOLD_D,
   },
   {
     key: 'performance',
@@ -139,7 +136,7 @@ function NotConnectedState() {
         Link an account in the Setup tab to unlock this feature.
       </Text>
       <View style={s.emptyHint}>
-        <MaterialCommunityIcons name="shield-check-outline" size={14} color={CYAN} />
+        <MaterialCommunityIcons name="shield-check-outline" size={14} color={GOLD} />
         <Text style={s.emptyHintTxt}>Your data never leaves Platstock servers</Text>
       </View>
     </View>
@@ -186,7 +183,7 @@ export default function ReportsScreen() {
   if (isCheckingAccess) {
     return (
       <View style={[s.root, s.center]}>
-        <ActivityIndicator size="large" color={CYAN} />
+        <ActivityIndicator size="large" color={GOLD} />
       </View>
     );
   }
@@ -201,7 +198,7 @@ export default function ReportsScreen() {
           <Text style={s.headerTitle}>Reports</Text>
           <Text style={s.headerSub}>Export your financial data</Text>
         </View>
-        <MaterialCommunityIcons name="download-circle-outline" size={28} color={CYAN} />
+        <MaterialCommunityIcons name="download-circle-outline" size={28} color={GOLD} />
       </View>
 
       {!isConnected ? (
@@ -256,7 +253,7 @@ export default function ReportsScreen() {
                   <FontAwesome5
                     name={f.icon}
                     size={18}
-                    color={active ? CYAN : MUTED}
+                    color={active ? GOLD : MUTED}
                   />
                   <Text style={[s.fmtLabel, active && { color: TXT }]}>
                     {REPORT_FORMAT_LABELS[f.key]}
@@ -312,11 +309,11 @@ export default function ReportsScreen() {
                 return (
                   <View key={r.id} style={[s.histCard, expired && s.histCardExpired]}>
                     {/* Left icon */}
-                    <View style={[s.histIcon, r.status === 'ready' && !expired ? { backgroundColor: CYAN_D } : { backgroundColor: 'rgba(100,116,139,0.1)' }]}>
+                    <View style={[s.histIcon, r.status === 'ready' && !expired ? { backgroundColor: GOLD_D } : { backgroundColor: 'rgba(100,116,139,0.1)' }]}>
                       <FontAwesome5
                         name={FORMATS.find(f => f.key === r.format)?.icon ?? 'file-alt'}
                         size={16}
-                        color={r.status === 'ready' && !expired ? CYAN : MUTED}
+                        color={r.status === 'ready' && !expired ? GOLD : MUTED}
                       />
                     </View>
 
@@ -404,7 +401,7 @@ const s = StyleSheet.create({
     flex: 1, backgroundColor: CARD, borderWidth: 1.5, borderColor: BORDER,
     borderRadius: 12, padding: 14, alignItems: 'center', gap: 4,
   },
-  fmtBtnActive: { borderColor: CYAN, backgroundColor: CYAN_D },
+  fmtBtnActive: { borderColor: GOLD, backgroundColor: GOLD_D },
   fmtLabel: { fontSize: 13, fontWeight: '600', color: MUTED },
   fmtExt:   { fontSize: 10, color: MUTED, fontFamily: mono },
 
@@ -425,11 +422,11 @@ const s = StyleSheet.create({
 
   // Generate button
   genBtn: {
-    marginTop: 20, backgroundColor: CYAN, borderRadius: 14,
+    marginTop: 20, backgroundColor: GOLD, borderRadius: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, paddingVertical: 15,
   },
-  genBtnLoading: { backgroundColor: 'rgba(143,245,255,0.5)' },
+  genBtnLoading: { backgroundColor: 'rgba(201,168,76,0.5)' },
   genBtnTxt: { fontSize: 15, fontWeight: '700', color: BG, fontFamily: sans },
 
   // History
@@ -464,7 +461,7 @@ const s = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '700', color: TXT2, textAlign: 'center' },
   emptyBody:  { fontSize: 13, color: MUTED, textAlign: 'center', lineHeight: 20 },
   emptyHint:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  emptyHintTxt: { fontSize: 12, color: CYAN },
+  emptyHintTxt: { fontSize: 12, color: GOLD },
 
   histEmpty:    { alignItems: 'center', gap: 8, paddingVertical: 32 },
   histEmptyTxt: { fontSize: 13, color: MUTED },

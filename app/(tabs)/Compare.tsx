@@ -40,21 +40,20 @@ import {
   type TimeseriesPoint,
 } from '@/src/comparison/types';
 
+import { QL, sans, mono } from '@/constants/Colors';
 // ── Design tokens ──────────────────────────────────────────────────────────────
-const BG     = '#060E1F';
-const CARD   = '#0E1D35';
-const CARD2  = '#122040';
-const CYAN   = '#0EA5E9';
-const GREEN  = '#10B981';
-const RED    = '#FF716C';
-const PURPLE = '#AC89FF';
-const AMBER  = '#F59E0B';
-const BORDER = 'rgba(14,165,233,0.12)';
-const TXT    = '#E8F4FD';
-const MUTED  = '#607A93';
-const SUB    = '#7C9AB5';
-const mono   = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
-const sans   = Platform.OS === 'ios' ? 'SF Pro Text' : 'sans-serif';
+const BG     = QL.BG;
+const CARD   = QL.CARD;
+const CARD2  = QL.CARD2;
+const GOLD   = QL.GOLD;
+const GOLD_D = QL.GOLD_D;
+const GREEN  = QL.GREEN;
+const RED    = QL.RED;
+const AMBER  = QL.AMBER;
+const BORDER = QL.BORDER;
+const TXT    = QL.TXT;
+const MUTED  = QL.MUTED;
+const SUB    = QL.TXT2;
 
 // ── Internal tabs ──────────────────────────────────────────────────────────────
 type InternalTab = 'builder' | 'results' | 'decisions' | 'profile';
@@ -142,8 +141,8 @@ function ComparisonChart({ timeseries, seriesKeys, width, height = 220 }: ChartP
     <Svg width={width} height={height}>
       <Defs>
         <LinearGradient id="grad0" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={CYAN} stopOpacity="0.15" />
-          <Stop offset="1" stopColor={CYAN} stopOpacity="0" />
+          <Stop offset="0" stopColor={GOLD} stopOpacity="0.15" />
+          <Stop offset="1" stopColor={GOLD} stopOpacity="0" />
         </LinearGradient>
       </Defs>
 
@@ -499,7 +498,7 @@ export default function CompareScreen() {
         <View style={sc.rowBetween}>
           <Text style={sc.label}>Compare Against ({selectedAssets.length}/5)</Text>
           <Pressable onPress={showSearch ? () => { setShowSearch(false); setSearchResults([]); setAssetSearch(''); } : openSearch} style={sc.addBtn}>
-            <MaterialCommunityIcons name={showSearch ? 'close' : 'plus'} size={16} color={CYAN} />
+            <MaterialCommunityIcons name={showSearch ? 'close' : 'plus'} size={16} color={GOLD} />
             <Text style={sc.addBtnTxt}>{showSearch ? 'Cancel' : 'Add'}</Text>
           </Pressable>
         </View>
@@ -515,7 +514,7 @@ export default function CompareScreen() {
               placeholderTextColor={MUTED}
               autoFocus
             />
-            {isSearching && <ActivityIndicator size="small" color={CYAN} />}
+            {isSearching && <ActivityIndicator size="small" color={GOLD} />}
           </View>
         )}
 
@@ -594,8 +593,8 @@ export default function CompareScreen() {
             <Switch
               value={val}
               onValueChange={setter}
-              trackColor={{ false: CARD2, true: CYAN + '55' }}
-              thumbColor={val ? CYAN : MUTED}
+              trackColor={{ false: CARD2, true: GOLD + '55' }}
+              thumbColor={val ? GOLD : MUTED}
             />
           </View>
         ))}
@@ -647,7 +646,7 @@ export default function CompareScreen() {
                   await run(s.id, 1000);
                 }}
               >
-                <MaterialCommunityIcons name="play" size={16} color={CYAN} />
+                <MaterialCommunityIcons name="play" size={16} color={GOLD} />
               </Pressable>
               <Pressable onPress={() => remove(s.id)} hitSlop={8} style={{ marginLeft: 8 }}>
                 <MaterialCommunityIcons name="trash-can-outline" size={16} color={MUTED} />
@@ -674,7 +673,7 @@ export default function CompareScreen() {
     if (isRunning && !results) {
       return (
         <View style={sc.empty}>
-          <ActivityIndicator size="large" color={CYAN} />
+          <ActivityIndicator size="large" color={GOLD} />
           <Text style={sc.emptyTxt}>
             {activeRun?.status === 'queued' ? 'Queued…' : 'Simulating…'}
           </Text>
@@ -766,7 +765,7 @@ export default function CompareScreen() {
         {results.temporal_opportunity && (
           <View style={sc.toiCard}>
             <View style={sc.toiHeader}>
-              <MaterialCommunityIcons name="clock-fast" size={18} color={PURPLE} />
+              <MaterialCommunityIcons name="clock-fast" size={18} color={GOLD} />
               <Text style={sc.toiTitle}>Temporal Opportunity Index</Text>
             </View>
             {results.temporal_opportunity.best_alternative && (
@@ -919,7 +918,7 @@ export default function CompareScreen() {
 
   const renderProfile = () => {
     if (profileLoading) {
-      return <View style={sc.empty}><ActivityIndicator color={CYAN} /></View>;
+      return <View style={sc.empty}><ActivityIndicator color={GOLD} /></View>;
     }
 
     if (!profile) {
@@ -937,7 +936,7 @@ export default function CompareScreen() {
 
     const p = profile;
     const confidenceColor: Record<string, string> = {
-      high: GREEN, medium: CYAN, low: AMBER, insufficient: MUTED,
+      high: GREEN, medium: GOLD, low: AMBER, insufficient: MUTED,
     };
 
     return (
@@ -993,7 +992,7 @@ export default function CompareScreen() {
         </View>
 
         <Pressable style={sc.rebuildBtn} onPress={rebuildProfile}>
-          <MaterialCommunityIcons name="refresh" size={16} color={CYAN} />
+          <MaterialCommunityIcons name="refresh" size={16} color={GOLD} />
           <Text style={sc.rebuildBtnTxt}>Rebuild Profile</Text>
         </Pressable>
 
@@ -1038,7 +1037,7 @@ export default function CompareScreen() {
         </View>
         {isRunning && (
           <View style={sc.runningPill}>
-            <ActivityIndicator size="small" color={CYAN} />
+            <ActivityIndicator size="small" color={GOLD} />
             <Text style={sc.runningTxt}>Simulating…</Text>
           </View>
         )}
@@ -1062,7 +1061,7 @@ export default function CompareScreen() {
               <MaterialCommunityIcons
                 name={t.icon as any}
                 size={16}
-                color={active ? CYAN : MUTED}
+                color={active ? GOLD : MUTED}
               />
               <Text style={[sc.tabLabel, active && sc.tabLabelActive]}>{t.label}</Text>
               {hasData && t.key !== 'builder' && !active && (
@@ -1093,15 +1092,15 @@ const sc = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
   },
-  headerTitle: { color: CYAN,  fontSize: 18, fontWeight: '900', fontFamily: mono, letterSpacing: 2 },
+  headerTitle: { color: GOLD,  fontSize: 18, fontWeight: '900', fontFamily: mono, letterSpacing: 2 },
   headerSub:   { color: MUTED, fontSize: 11, fontFamily: mono, marginTop: 2 },
 
   runningPill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: CARD2, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6,
-    borderWidth: 1, borderColor: CYAN + '33',
+    borderWidth: 1, borderColor: GOLD + '33',
   },
-  runningTxt: { color: CYAN, fontSize: 12, fontFamily: mono },
+  runningTxt: { color: GOLD, fontSize: 12, fontFamily: mono },
 
   tabBar: {
     flexDirection: 'row',
@@ -1113,9 +1112,9 @@ const sc = StyleSheet.create({
     flex: 1, alignItems: 'center', justifyContent: 'center',
     paddingVertical: 10, gap: 3, position: 'relative',
   },
-  tabItemActive: { borderBottomWidth: 2, borderBottomColor: CYAN },
+  tabItemActive: { borderBottomWidth: 2, borderBottomColor: GOLD },
   tabLabel:      { fontSize: 10, color: MUTED, fontFamily: mono },
-  tabLabelActive: { color: CYAN },
+  tabLabelActive: { color: GOLD },
   tabDot: {
     position: 'absolute', top: 6, right: '30%',
     width: 5, height: 5, borderRadius: 3, backgroundColor: GREEN,
@@ -1133,8 +1132,8 @@ const sc = StyleSheet.create({
   },
 
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  addBtn:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: CYAN + '15', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  addBtnTxt:  { color: CYAN, fontSize: 13, fontFamily: mono },
+  addBtn:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: GOLD + '15', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  addBtnTxt:  { color: GOLD, fontSize: 13, fontFamily: mono },
 
   searchBox: {
     flexDirection: 'row', alignItems: 'center',
@@ -1164,17 +1163,17 @@ const sc = StyleSheet.create({
     flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10,
     backgroundColor: CARD, borderWidth: 1, borderColor: BORDER,
   },
-  periodBtnActive: { backgroundColor: CYAN + '20', borderColor: CYAN },
+  periodBtnActive: { backgroundColor: GOLD + '20', borderColor: GOLD },
   periodBtnTxt:    { color: MUTED, fontSize: 13, fontFamily: mono },
-  periodBtnTxtActive: { color: CYAN, fontWeight: '700' },
+  periodBtnTxtActive: { color: GOLD, fontWeight: '700' },
 
   rebalBtn: {
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
     backgroundColor: CARD, borderWidth: 1, borderColor: BORDER,
   },
-  rebalBtnActive: { backgroundColor: CYAN + '20', borderColor: CYAN },
+  rebalBtnActive: { backgroundColor: GOLD + '20', borderColor: GOLD },
   rebalBtnTxt: { color: MUTED, fontSize: 11, fontFamily: mono },
-  rebalBtnTxtActive: { color: CYAN },
+  rebalBtnTxtActive: { color: GOLD },
 
   toggleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -1184,7 +1183,7 @@ const sc = StyleSheet.create({
 
   runBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: CYAN, borderRadius: 14, paddingVertical: 16,
+    backgroundColor: GOLD, borderRadius: 14, paddingVertical: 16,
     marginBottom: 24,
   },
   runBtnPressed:  { opacity: 0.8 },
@@ -1199,8 +1198,8 @@ const sc = StyleSheet.create({
   savedName: { color: TXT, fontSize: 14, fontWeight: '600', marginBottom: 2 },
   savedSub:  { color: MUTED, fontSize: 12, fontFamily: mono },
   savedRunBtn: {
-    backgroundColor: CYAN + '20', borderRadius: 8, padding: 8,
-    borderWidth: 1, borderColor: CYAN + '44',
+    backgroundColor: GOLD + '20', borderRadius: 8, padding: 8,
+    borderWidth: 1, borderColor: GOLD + '44',
   },
 
   // Results
@@ -1227,11 +1226,11 @@ const sc = StyleSheet.create({
   },
 
   toiCard: {
-    backgroundColor: PURPLE + '10', borderRadius: 14,
-    borderWidth: 1, borderColor: PURPLE + '30', padding: 16, marginBottom: 16,
+    backgroundColor: GOLD + '10', borderRadius: 14,
+    borderWidth: 1, borderColor: GOLD + '30', padding: 16, marginBottom: 16,
   },
   toiHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  toiTitle:  { color: PURPLE, fontSize: 14, fontWeight: '700', fontFamily: mono },
+  toiTitle:  { color: GOLD, fontSize: 14, fontWeight: '700', fontFamily: mono },
   toiBest:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   toiBestLbl: { color: MUTED, fontSize: 12 },
   toiBestVal: { color: TXT, fontSize: 14, fontWeight: '700', fontFamily: mono },
@@ -1290,18 +1289,18 @@ const sc = StyleSheet.create({
     backgroundColor: CARD, borderRadius: 12, padding: 14, minWidth: '30%', flex: 1,
     borderWidth: 1, borderColor: BORDER, alignItems: 'center',
   },
-  statVal: { color: CYAN, fontSize: 20, fontWeight: '800', fontFamily: mono, marginBottom: 2 },
+  statVal: { color: GOLD, fontSize: 20, fontWeight: '800', fontFamily: mono, marginBottom: 2 },
   statLbl: { color: MUTED, fontSize: 10, fontFamily: mono, textAlign: 'center' },
 
   rebuildBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: CYAN + '15', borderRadius: 12, paddingVertical: 12,
-    borderWidth: 1, borderColor: CYAN + '33', marginBottom: 24,
+    backgroundColor: GOLD + '15', borderRadius: 12, paddingVertical: 12,
+    borderWidth: 1, borderColor: GOLD + '33', marginBottom: 24,
   },
-  rebuildBtnTxt: { color: CYAN, fontSize: 14, fontFamily: mono },
+  rebuildBtnTxt: { color: GOLD, fontSize: 14, fontFamily: mono },
 
   buildBtn: {
-    backgroundColor: CYAN, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 28,
+    backgroundColor: GOLD, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 28,
     marginTop: 20,
   },
   buildBtnTxt: { color: BG, fontSize: 14, fontWeight: '800', fontFamily: mono, textAlign: 'center' },

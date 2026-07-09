@@ -133,8 +133,8 @@ const GRADE_THRESHOLDS: [number, string][] = [
 ];
 
 const LABEL_THRESHOLDS: [number, string, string][] = [
-  [22,  "Conservative",       "#00E09A"],
-  [40,  "Moderate",           "#8FF5FF"],
+  [22,  "Conservative",       "#7FA37A"],
+  [40,  "Moderate",           "#C9A84C"],
   [58,  "Balanced Aggressive","#F59E0B"],
   [72,  "Aggressive",         "#F97316"],
   [100, "Highly Speculative", "#FF716C"],

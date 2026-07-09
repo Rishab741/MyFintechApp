@@ -26,7 +26,7 @@ import {
   BG, BORDER, CARD, CARD2, CARD3,
   GOLD, GOLD_D, GOLD_B,
   GREEN, GREEN_D, RED, RED_D,
-  AMBER, PURPLE,
+  AMBER,
   TXT, TXT2, MUTED,
   mono, sans,
 } from '@/src/market/tokens';
@@ -123,7 +123,7 @@ function getMarketStatus(): { label: string; color: string; isOpen: boolean } {
   if (day === 0 || day === 6)     return { label: 'CLOSED',       color: MUTED,    isOpen: false };
   if (mins >= 240 && mins < 570)  return { label: 'PRE-MARKET',   color: AMBER,    isOpen: false };
   if (mins >= 570 && mins < 960)  return { label: 'MARKET OPEN',  color: GREEN,    isOpen: true  };
-  if (mins >= 960 && mins < 1200) return { label: 'AFTER-HOURS',  color: PURPLE,   isOpen: false };
+  if (mins >= 960 && mins < 1200) return { label: 'AFTER-HOURS',  color: AMBER,    isOpen: false };
   return { label: 'CLOSED', color: MUTED, isOpen: false };
 }
 

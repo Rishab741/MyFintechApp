@@ -67,7 +67,7 @@ const InsightBanner: React.FC<ScoreInsight> = ({ type, title, body }) => {
         <View style={[s.banner, { borderLeftColor: accent, backgroundColor: `${accent}08` }]}>
             <View style={[s.bannerDot, { backgroundColor: accent }]} />
             <View style={{ flex: 1 }}>
-                <Text style={[s.bannerTitle, { color: type === 'positive' ? GREEN : type === 'warning' ? '#b5f9ff' : TXT2 }]}>
+                <Text style={[s.bannerTitle, { color: type === 'positive' ? GREEN : type === 'warning' ? GOLD : TXT2 }]}>
                     {title}
                 </Text>
                 <Text style={s.bannerBody}>{body}</Text>

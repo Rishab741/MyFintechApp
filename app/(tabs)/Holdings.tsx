@@ -457,9 +457,9 @@ const s = StyleSheet.create({
     center:{ alignItems: 'center', justifyContent: 'center' },
 
     glow1: { position: 'absolute', top: -100, left: -80, width: 320, height: 320,
-             borderRadius: 160, backgroundColor: 'rgba(143,245,255,0.04)', pointerEvents: 'none' },
+             borderRadius: 160, backgroundColor: 'rgba(201,168,76,0.04)', pointerEvents: 'none' },
     glow2: { position: 'absolute', top: 200, right: -100, width: 260, height: 260,
-             borderRadius: 130, backgroundColor: 'rgba(172,137,255,0.04)', pointerEvents: 'none' },
+             borderRadius: 130, backgroundColor: 'rgba(184,149,106,0.04)', pointerEvents: 'none' },
 
     // Nav
     nav:       { flexDirection: 'row', alignItems: 'center', paddingTop: Platform.OS === 'ios' ? 56 : 44,

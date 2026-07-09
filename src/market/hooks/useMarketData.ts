@@ -8,7 +8,7 @@ import {
   SECTOR_ETFS,
 } from '../service';
 import type { ChartPoint, MarketIndex, MarketStatus, Mover, Period, Quote, Sector } from '../types';
-import { GREEN } from '@/src/portfolio/tokens';
+import { GREEN, AMBER } from '@/src/portfolio/tokens';
 import { supabase } from '@/src/lib/supabase';
 
 // ─── Market status based on NYSE hours (ET = UTC-5 / UTC-4 DST) ──────────────
@@ -36,7 +36,7 @@ function getMarketStatus(): MarketStatus {
   if (day === 0 || day === 6)      return { label: 'CLOSED',       isOpen: false, color: '#4A5468' };
   if (mins >= 240 && mins < 570)   return { label: 'PRE-MARKET',   isOpen: false, color: '#C9A84C' };
   if (mins >= 570 && mins < 960)   return { label: 'MARKET OPEN',  isOpen: true,  color: GREEN     };
-  if (mins >= 960 && mins < 1200)  return { label: 'AFTER-HOURS',  isOpen: false, color: '#C084FC' };
+  if (mins >= 960 && mins < 1200)  return { label: 'AFTER-HOURS',  isOpen: false, color: AMBER };
   return { label: 'CLOSED', isOpen: false, color: '#4A5468' };
 }
 

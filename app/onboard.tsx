@@ -33,20 +33,21 @@ import { supabase } from '@/src/lib/supabase';
 import { searchAssets } from '@/src/comparison/service';
 import type { ComparisonAsset } from '@/src/comparison/types';
 import { addPosition, markOnboarded } from '@/src/portfolio/positionsService';
+import { QL } from '@/constants/Colors';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const BG     = '#060E1F';
-const CARD   = '#0E1D35';
-const CARD2  = '#122040';
-const CYAN   = '#0EA5E9';
-const GREEN  = '#10B981';
-const AMBER  = '#F59E0B';
-const VIOLET = '#818CF8';
-const MUTED  = '#607A93';
-const SUB    = '#7C9AB5';
-const TXT    = '#E8F4FD';
-const RED    = '#EF4444';
-const BORDER = 'rgba(14,165,233,0.15)';
+const BG     = QL.BG;
+const CARD   = QL.CARD;
+const CARD2  = QL.CARD2;
+const CYAN   = QL.GOLD;
+const GREEN  = QL.GREEN;
+const AMBER  = QL.AMBER;
+const VIOLET = QL.AMBER;
+const MUTED  = QL.MUTED;
+const SUB    = QL.TXT2;
+const TXT    = QL.TXT;
+const RED    = QL.RED;
+const BORDER = QL.BORDER;
 const mono   = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 const { width: W, height: H } = Dimensions.get('window');
 

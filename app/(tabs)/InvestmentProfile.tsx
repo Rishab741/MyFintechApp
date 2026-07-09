@@ -13,29 +13,30 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { QL } from '@/constants/Colors';
 
 const { width } = Dimensions.get('window');
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
-const BG          = '#060E1F';
-const SURFACE     = '#0B1626';
-const SURFACE_2   = '#0E1D35';
-const BORDER      = 'rgba(14,165,233,0.10)';
-const GOLD        = '#0EA5E9';
-const GOLD_LIGHT  = '#38BDF8';
-const GOLD_DIM    = 'rgba(14,165,233,0.10)';
-const GOLD_BDR    = 'rgba(14,165,233,0.28)';
-const PURPLE      = '#818CF8';
-const PURPLE_DIM  = 'rgba(129,140,248,0.12)';
-const PURPLE_BDR  = 'rgba(129,140,248,0.30)';
-const TXT         = '#E8F4FD';
-const TXT_2       = '#7C9AB5';
-const TXT_3       = '#3D5166';
-const GREEN       = '#10B981';
-const RED         = '#EF4444';
-const BLUE        = '#38BDF8';
-const ORANGE      = '#F97316';
-const TEAL        = '#06B6D4';
+const BG          = QL.BG;
+const SURFACE     = QL.CARD;
+const SURFACE_2   = QL.CARD2;
+const BORDER      = QL.BORDER;
+const GOLD        = QL.GOLD;
+const GOLD_LIGHT  = QL.GOLD_L;
+const GOLD_DIM    = QL.GOLD_D;
+const GOLD_BDR    = QL.BORDER_HI;
+const PURPLE      = QL.AMBER;
+const PURPLE_DIM  = `${QL.AMBER}20`;
+const PURPLE_BDR  = `${QL.AMBER}44`;
+const TXT         = QL.TXT;
+const TXT_2       = QL.TXT2;
+const TXT_3       = QL.MUTED;
+const GREEN       = QL.GREEN;
+const RED         = QL.RED;
+const BLUE        = QL.BLUE;
+const ORANGE      = QL.ORANGE;
+const TEAL        = QL.GREEN;
 
 const serif = Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif';
 const sans  = Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif';

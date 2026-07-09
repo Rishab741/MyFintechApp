@@ -33,20 +33,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBrokerageConnect } from "@/src/onboarding/hooks/useBrokerageConnect";
 import type { BrokerageAccount, BrokerageCatalogueItem } from "@/src/onboarding/types";
 
+import { QL, sans, mono } from "@/constants/Colors";
 // ── Tokens ────────────────────────────────────────────────────────────────────
-const BG     = "#04070F";
-const CARD   = "#0C1525";
-const CARD2  = "#111E33";
-const CYAN   = "#8FF5FF";
-const GREEN  = "#00E09A";
-const RED    = "#FF716C";
-const AMBER  = "#F59E0B";
-const PURPLE = "#AC89FF";
-const BORDER = "rgba(143,245,255,0.10)";
-const TXT    = "#F8FAFC";
-const MUTED  = "#64748B";
-const SUB    = "#94A3B8";
-const mono   = Platform.OS === "ios" ? "Menlo" : "monospace";
+const BG     = QL.BG;
+const CARD   = QL.CARD;
+const CARD2  = QL.CARD2;
+const GOLD   = QL.GOLD;
+const GOLD_D = QL.GOLD_D;
+const GREEN  = QL.GREEN;
+const RED    = QL.RED;
+const AMBER  = QL.AMBER;
+const BORDER = QL.BORDER;
+const TXT    = QL.TXT;
+const MUTED  = QL.MUTED;
+const SUB    = QL.TXT2;
 
 // ── Brokerage logo tile ───────────────────────────────────────────────────────
 function BrokerageTile({
@@ -58,12 +58,12 @@ function BrokerageTile({
   onPress:    () => void;
   connected:  boolean;
 }) {
-  const color = brokerage.primary_color ?? (brokerage.is_crypto ? "#F59E0B" : CYAN);
+  const color = brokerage.primary_color ?? (brokerage.is_crypto ? "#F59E0B" : GOLD);
   return (
     <Pressable
       style={[bt.tile, connected && bt.tileConnected]}
       onPress={onPress}
-      android_ripple={{ color: CYAN + "22" }}
+      android_ripple={{ color: GOLD + "22" }}
     >
       {brokerage.logo_url ? (
         <Image source={{ uri: brokerage.logo_url }} style={bt.logo} resizeMode="contain" />
@@ -165,7 +165,7 @@ const ar = StyleSheet.create({
   rowWarn:   { borderColor: AMBER + "44", backgroundColor: AMBER + "06" },
   logo:      { width: 40, height: 40, borderRadius: 10 },
   logoFallback: { width: 40, height: 40, borderRadius: 10, backgroundColor: CARD2, alignItems: "center", justifyContent: "center" },
-  logoLetter:{ color: CYAN, fontSize: 18, fontWeight: "800" },
+  logoLetter:{ color: GOLD, fontSize: 18, fontWeight: "800" },
   name:      { color: TXT, fontSize: 14, fontWeight: "700", marginBottom: 2 },
   sub:       { color: MUTED, fontSize: 12, fontFamily: mono },
   sync:      { fontSize: 11, marginTop: 2 },
@@ -255,7 +255,7 @@ function BinanceFallback() {
           <View style={bf.secretHeader}>
             <Text style={bf.inputLabel}>Secret Key</Text>
             <Pressable onPress={() => setShowSecret(v => !v)}>
-              <Text style={{ color: CYAN, fontSize: 12, fontFamily: mono }}>{showSecret ? "Hide" : "Show"}</Text>
+              <Text style={{ color: GOLD, fontSize: 12, fontFamily: mono }}>{showSecret ? "Hide" : "Show"}</Text>
             </Pressable>
           </View>
           <TextInput
@@ -401,8 +401,8 @@ export default function OnboardingScreen() {
         </View>
         <Pressable onPress={syncHoldings} disabled={isSyncing} style={s.syncBtn}>
           {isSyncing
-            ? <ActivityIndicator size="small" color={CYAN} />
-            : <MaterialCommunityIcons name="refresh" size={20} color={CYAN} />
+            ? <ActivityIndicator size="small" color={GOLD} />
+            : <MaterialCommunityIcons name="refresh" size={20} color={GOLD} />
           }
         </Pressable>
       </View>
@@ -411,7 +411,7 @@ export default function OnboardingScreen() {
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={CYAN} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GOLD} />
         }
       >
 
@@ -539,7 +539,7 @@ export default function OnboardingScreen() {
 
         {isCatalogueLoading ? (
           <View style={s.catalogueLoading}>
-            <ActivityIndicator color={CYAN} />
+            <ActivityIndicator color={GOLD} />
             <Text style={s.loadingTxt}>Loading brokerages…</Text>
           </View>
         ) : (
@@ -580,7 +580,7 @@ export default function OnboardingScreen() {
                     <Text style={s.showMoreTxt}>
                       Show {otherBrokerages.length - 12} more institutions
                     </Text>
-                    <MaterialCommunityIcons name="chevron-down" size={16} color={CYAN} />
+                    <MaterialCommunityIcons name="chevron-down" size={16} color={GOLD} />
                   </Pressable>
                 )}
               </>
@@ -626,9 +626,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
   },
-  headerTitle: { color: CYAN, fontSize: 16, fontWeight: "900", fontFamily: mono, letterSpacing: 2 },
+  headerTitle: { color: GOLD, fontSize: 16, fontWeight: "900", fontFamily: mono, letterSpacing: 2 },
   headerSub:   { color: MUTED, fontSize: 10, fontFamily: mono, marginTop: 1 },
-  syncBtn:     { width: 36, height: 36, borderRadius: 10, backgroundColor: CYAN + "15", alignItems: "center", justifyContent: "center" },
+  syncBtn:     { width: 36, height: 36, borderRadius: 10, backgroundColor: GOLD + "15", alignItems: "center", justifyContent: "center" },
 
   // Result banner
   resultBanner:     { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1 },
@@ -647,7 +647,7 @@ const s = StyleSheet.create({
   sectionTitle: { color: TXT, fontSize: 15, fontWeight: "700", marginBottom: 12 },
 
   // CTA
-  ctaBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: CYAN, borderRadius: 16, paddingVertical: 17, marginBottom: 16 },
+  ctaBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: GOLD, borderRadius: 16, paddingVertical: 17, marginBottom: 16 },
   ctaBtnLoading: { opacity: 0.7 },
   ctaBtnTxt:     { color: BG, fontSize: 16, fontWeight: "800" },
 
@@ -655,8 +655,8 @@ const s = StyleSheet.create({
   howItWorksCard: { backgroundColor: CARD, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: BORDER, marginBottom: 8 },
   howTitle:       { color: TXT, fontSize: 14, fontWeight: "700", marginBottom: 16 },
   howStep:        { flexDirection: "row", gap: 14, marginBottom: 14, alignItems: "flex-start" },
-  howNum:         { width: 26, height: 26, borderRadius: 13, backgroundColor: CYAN + "20", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: CYAN + "44" },
-  howNumTxt:      { color: CYAN, fontSize: 12, fontWeight: "800", fontFamily: mono },
+  howNum:         { width: 26, height: 26, borderRadius: 13, backgroundColor: GOLD + "20", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: GOLD + "44" },
+  howNumTxt:      { color: GOLD, fontSize: 12, fontWeight: "800", fontFamily: mono },
   howStepTitle:   { color: TXT, fontSize: 13, fontWeight: "600", marginBottom: 2 },
   howStepDesc:    { color: MUTED, fontSize: 12, lineHeight: 18 },
 
@@ -672,7 +672,7 @@ const s = StyleSheet.create({
   loadingTxt:       { color: MUTED, fontSize: 13, fontFamily: mono },
 
   showMoreBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14, marginBottom: 8 },
-  showMoreTxt: { color: CYAN, fontSize: 13, fontFamily: mono },
+  showMoreTxt: { color: GOLD, fontSize: 13, fontFamily: mono },
 
   noResults:    { alignItems: "center", paddingVertical: 32, gap: 10 },
   noResultsTxt: { color: MUTED, fontSize: 15 },

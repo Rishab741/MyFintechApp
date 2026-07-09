@@ -35,15 +35,13 @@ import {
 } from '@/src/services/mlPipeline';
 import {
     BG, CARD, CARD2, BORDER, BORDER2,
-    GOLD, GOLD_L, GOLD_D,
+    GOLD, GOLD_L, GOLD_D, AMBER,
     GREEN, GREEN_D, RED, RED_D,
     ORANGE, ORANGE_D, BLUE, BLUE_D,
     TXT, TXT2, MUTED, SUB,
     serif, mono, sans,
 } from '@/src/portfolio/tokens';
 
-// ─── Design constants ──────────────────────────────────────────────────────────
-const PURPLE = '#C084FC';
 
 // ─── Severity → colour mapping ────────────────────────────────────────────────
 const SEV_COLOR: Record<InsightSeverity, string> = {
@@ -75,7 +73,7 @@ const CAT_LABEL: Record<InsightCategory, string> = {
 };
 const CAT_COLOR: Record<InsightCategory, string> = {
     risk:       RED,
-    momentum:   PURPLE,
+    momentum:   AMBER,
     allocation: GOLD,
     benchmark:  BLUE,
     strategy:   GREEN,
@@ -291,8 +289,8 @@ const RecommendationCard: React.FC<{ rec: StockRecommendation }> = ({ rec }) => 
             {/* Name + category */}
             <Text style={rc.name}>{rec.name}</Text>
             <View style={rc.tagRow}>
-                <View style={[rc.catTag, { backgroundColor: `${PURPLE}18` }]}>
-                    <Text style={[rc.catTagText, { color: PURPLE }]}>{rec.category.toUpperCase()}</Text>
+                <View style={[rc.catTag, { backgroundColor: `${AMBER}18` }]}>
+                    <Text style={[rc.catTagText, { color: AMBER }]}>{rec.category.toUpperCase()}</Text>
                 </View>
                 <View style={[rc.catTag, { backgroundColor: `${riskColor}18` }]}>
                     <Text style={[rc.catTagText, { color: riskColor }]}>{rec.risk_level.toUpperCase()} RISK</Text>
