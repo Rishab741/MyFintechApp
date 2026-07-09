@@ -3,6 +3,7 @@
  * Aesthetic: Luxury Terminal — obsidian depth, gold hairlines, monospaced data, serif headlines
  */
 
+import { NavMenuButton } from '@/components/NavMenuButton';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -677,8 +678,13 @@ export default function InsightsScreen() {
                 <View style={s.glow1} />
                 <View style={s.glow2} />
                 <View style={s.nav}>
-                    <Text style={s.navTitle}>PLATSTOCK INSIGHTS</Text>
-                    <Text style={s.navSub}>AI-POWERED ANALYTICS</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <NavMenuButton />
+                        <View>
+                            <Text style={s.navTitle}>PLATSTOCK INSIGHTS</Text>
+                            <Text style={s.navSub}>AI-POWERED ANALYTICS</Text>
+                        </View>
+                    </View>
                 </View>
                 <EmptyState onGenerate={generateAndFetch} loading={false} />
             </View>
@@ -736,9 +742,12 @@ export default function InsightsScreen() {
             >
                 {/* ── Nav ── */}
                 <View style={s.nav}>
-                    <View>
-                        <Text style={s.navTitle}>AI INSIGHTS</Text>
-                        <Text style={s.navSub}>UPDATED {genDate.toUpperCase()}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <NavMenuButton />
+                        <View>
+                            <Text style={s.navTitle}>AI INSIGHTS</Text>
+                            <Text style={s.navSub}>UPDATED {genDate.toUpperCase()}</Text>
+                        </View>
                     </View>
                     <TouchableOpacity style={s.refreshBtn} onPress={onRefresh} disabled={refreshing}>
                         <Text style={s.refreshBtnText}>↺</Text>

@@ -5,6 +5,7 @@ import { usePortfolioData } from '@/src/portfolio/hooks/usePortfolioData';
 import type { Period } from '@/src/portfolio/types';
 import { InsightSeverity } from '@/src/services/mlPipeline';
 import { useAuthStore } from '@/src/store/useAuthStore';
+import { NavMenuButton } from '@/components/NavMenuButton';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
@@ -207,7 +208,10 @@ export default function HomeScreen() {
 
       {/* ── Top bar — kept deliberately quiet so the chart below is the first real focal point ── */}
       <View style={styles.topBar}>
-        <Text style={styles.topBarGreeting}>{greeting}, {firstName}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <NavMenuButton />
+          <Text style={styles.topBarGreeting}>{greeting}, {firstName}</Text>
+        </View>
         <Pressable onPress={() => router.push('/(tabs)/index')} hitSlop={12}>
           <MaterialCommunityIcons name="bell-outline" size={19} color={TXT2} />
         </Pressable>

@@ -1,3 +1,4 @@
+import { NavMenuButton } from '@/components/NavMenuButton';
 import { supabase } from '@/src/lib/supabase';
 import { queryClient } from '@/src/lib/queryClient';
 import { useAuthStore } from '@/src/store/useAuthStore';
@@ -322,7 +323,10 @@ export default function ProfileScreen() {
 
           {/* Top row: label + status */}
           <View style={s.heroTop}>
-            <Text style={s.screenLabel}>My Profile</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <NavMenuButton />
+              <Text style={s.screenLabel}>My Profile</Text>
+            </View>
             <View style={[s.statusBadge,
               verified
                 ? { backgroundColor: GRN_D, borderColor: `${GRN}35` }

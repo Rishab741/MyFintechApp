@@ -1,3 +1,4 @@
+import { NavMenuButton } from '@/components/NavMenuButton';
 import React, { useCallback, useRef, useState } from 'react';
 import {
     Animated,
@@ -213,9 +214,12 @@ export default function PortfolioScreen() {
 
             {/* ── Header ── */}
             <Animated.View style={[s.header, { opacity: headerAnim }]}>
-                <View>
-                    <Text style={s.headerSup}>VAULT</Text>
-                    <Text style={s.headerTitle}>{userName}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <NavMenuButton />
+                    <View>
+                        <Text style={s.headerSup}>VAULT</Text>
+                        <Text style={s.headerTitle}>{userName}</Text>
+                    </View>
                 </View>
                 <View style={s.headerRight}>
                     {lastUpdated && (

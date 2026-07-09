@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QL, sans } from '@/constants/Colors';
+import { DrawerContext } from '@/src/context/DrawerContext';
 
 if (Platform.OS === 'android') {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -160,23 +161,6 @@ function Drawer({
   );
 }
 
-// ── Floating trigger button ───────────────────────────────────────────────────
-// Stays visible at top-left when drawer is closed; fades out as drawer opens.
-function TriggerButton({
-  onPress, triggerAnim, insetTop,
-}: {
-  onPress: () => void; triggerAnim: Animated.Value; insetTop: number;
-}) {
-  return (
-    <Animated.View style={[s.trigger, { top: Math.max(insetTop, 12) + 6, opacity: triggerAnim }]}>
-      <Pressable onPress={onPress} hitSlop={10} accessibilityLabel="Open navigation menu">
-        <View style={s.triggerInner}>
-          <MaterialCommunityIcons name="chart-areaspline" size={16} color={QL.GOLD} />
-        </View>
-      </Pressable>
-    </Animated.View>
-  );
-}
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
@@ -263,77 +247,43 @@ const s = StyleSheet.create({
     zIndex:          1,
   },
   badgeTxt: { fontSize: 8, color: '#fff', fontWeight: '700', fontFamily: sans },
-
-  // Floating trigger
-  trigger: {
-    position: 'absolute',
-    left:     14,
-    zIndex:   100,
-  },
-  triggerInner: {
-    width:           36,
-    height:          36,
-    borderRadius:    10,
-    backgroundColor: 'rgba(8,11,18,0.88)',
-    borderWidth:     StyleSheet.hairlineWidth,
-    borderColor:     'rgba(201,162,75,0.30)',
-    alignItems:      'center',
-    justifyContent:  'center',
-  },
 });
 
 // ── Root layout ───────────────────────────────────────────────────────────────
 export default function TabLayout() {
   const [open, setOpen] = useState(false);
-  // Drawer slides in from left: starts at -DRAWER_W (off screen), goes to 0
   const slideAnim    = useRef(new Animated.Value(-DRAWER_W)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
-  // Trigger fades out as drawer opens
-  const triggerAnim  = useRef(new Animated.Value(1)).current;
-  const insets       = useSafeAreaInsets();
 
   const openDrawer = useCallback(() => {
     setOpen(true);
     Animated.parallel([
       Animated.timing(slideAnim,    { toValue: 0, duration: ANIM_MS, useNativeDriver: true }),
       Animated.timing(backdropAnim, { toValue: 1, duration: ANIM_MS, useNativeDriver: false }),
-      Animated.timing(triggerAnim,  { toValue: 0, duration: ANIM_MS * 0.6, useNativeDriver: false }),
     ]).start();
-  }, [slideAnim, backdropAnim, triggerAnim]);
+  }, [slideAnim, backdropAnim]);
 
   const closeDrawer = useCallback(() => {
     Animated.parallel([
       Animated.timing(slideAnim,    { toValue: -DRAWER_W, duration: ANIM_MS, useNativeDriver: true }),
       Animated.timing(backdropAnim, { toValue: 0,         duration: ANIM_MS, useNativeDriver: false }),
-      Animated.timing(triggerAnim,  { toValue: 1,         duration: ANIM_MS, useNativeDriver: false }),
     ]).start(() => setOpen(false));
-  }, [slideAnim, backdropAnim, triggerAnim]);
+  }, [slideAnim, backdropAnim]);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Tabs
-        screenOptions={{ headerShown: false }}
-        tabBar={(props) => (
-          <>
-            {/* Floating logo trigger — fades out when drawer opens */}
-            <TriggerButton
-              onPress={openDrawer}
-              triggerAnim={triggerAnim}
-              insetTop={insets.top}
+    <DrawerContext.Provider value={openDrawer}>
+      <View style={{ flex: 1 }}>
+        <Tabs
+          screenOptions={{ headerShown: false }}
+          tabBar={(props) => open ? (
+            <Drawer
+              {...props}
+              slideAnim={slideAnim}
+              backdropAnim={backdropAnim}
+              onClose={closeDrawer}
             />
-
-            {/* Drawer + backdrop — only rendered when open (or animating) */}
-            {(open) && (
-              <Drawer
-                {...props}
-                slideAnim={slideAnim}
-                backdropAnim={backdropAnim}
-                onClose={closeDrawer}
-              />
-            )}
-          </>
-        )}
-      >
+          ) : null}
+        >
         <Tabs.Screen name="home"      options={{ title: 'Home' }} />
         <Tabs.Screen name="Market"    options={{ title: 'Markets' }} />
         <Tabs.Screen name="Portfolio" options={{ title: 'Vault' }} />
@@ -348,7 +298,8 @@ export default function TabLayout() {
         <Tabs.Screen name="Reports"           options={{ href: null }} />
         <Tabs.Screen name="InvestmentProfile" options={{ href: null }} />
         <Tabs.Screen name="Connect"           options={{ href: null }} />
-      </Tabs>
-    </View>
+        </Tabs>
+      </View>
+    </DrawerContext.Provider>
   );
 }

@@ -1,3 +1,4 @@
+import { NavMenuButton } from '@/components/NavMenuButton';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -155,9 +156,12 @@ export default function MarketScreen() {
     <View style={styles.root}>
       {/* ── Fixed Header ─────────────────────────────────────────────── */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.screenTitle}>MARKETS</Text>
-          <LiveClock />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <NavMenuButton />
+          <View>
+            <Text style={styles.screenTitle}>MARKETS</Text>
+            <LiveClock />
+          </View>
         </View>
         <View style={[styles.statusBadge, { borderColor: marketStatus.color }]}>
           <View style={[styles.statusDot, { backgroundColor: marketStatus.color }]} />
