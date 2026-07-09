@@ -1,3 +1,9 @@
+import { mono, QL, sans, serif } from '@/constants/Colors';
+import { useInsights } from '@/src/insights/hooks/useInsights';
+import { fmtCurrency, sign } from '@/src/portfolio/helpers';
+import { usePortfolioData } from '@/src/portfolio/hooks/usePortfolioData';
+import { InsightSeverity } from '@/src/services/mlPipeline';
+import { useAuthStore } from '@/src/store/useAuthStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
@@ -14,18 +20,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Defs, LinearGradient, Path, Stop, Svg } from 'react-native-svg';
-import { useInsights } from '@/src/insights/hooks/useInsights';
-import { usePortfolioData } from '@/src/portfolio/hooks/usePortfolioData';
-import { fmtCurrency, sign, getTicker, getUnits } from '@/src/portfolio/helpers';
-import { InsightSeverity } from '@/src/services/mlPipeline';
-import { useAuthStore } from '@/src/store/useAuthStore';
-import { QL, sans } from '@/constants/Colors';
 
-// ─── Tokens (Quantum Ledger) ─────────────────────────────────────────────────
+// ─── Tokens (Quantum Ledger — ink & brass) ───────────────────────────────────
 const BG     = QL.BG;
 const CARD   = QL.CARD;
 const BORDER = QL.BORDER;
-const CYAN   = QL.GOLD;
+const GOLD   = QL.GOLD;
+const GOLD_LT= QL.GOLD_L;
 const INDIGO = QL.BLUE;
 const GREEN  = QL.GREEN;
 const CORAL  = QL.RED;
@@ -62,12 +63,12 @@ function Sparkline({ values }: { values: number[] }) {
     <Svg width={SPARK_W} height={SPARK_H} style={styles.sparkline}>
       <Defs>
         <LinearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={CYAN} stopOpacity={0.28} />
-          <Stop offset="100%" stopColor={CYAN} stopOpacity={0} />
+          <Stop offset="0%" stopColor={GOLD} stopOpacity={0.24} />
+          <Stop offset="100%" stopColor={GOLD} stopOpacity={0} />
         </LinearGradient>
       </Defs>
       <Path d={areaPath} fill="url(#sparkGrad)" />
-      <Path d={linePath} stroke={CYAN} strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d={linePath} stroke={GOLD} strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
@@ -155,11 +156,11 @@ export default function HomeScreen() {
       {/* ── Top bar ── */}
       <View style={styles.topBar}>
         <View>
-          <Text style={styles.greeting}>{greeting},</Text>
+          <Text style={styles.greeting}>{greeting}</Text>
           <Text style={styles.greetingName}>{firstName}</Text>
         </View>
         <Pressable onPress={() => router.push('/(tabs)/index')} hitSlop={12}>
-          <MaterialCommunityIcons name="bell-outline" size={22} color={TXT2} />
+          <MaterialCommunityIcons name="bell-outline" size={20} color={TXT2} />
         </Pressable>
       </View>
 
@@ -171,14 +172,14 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={CYAN}
-            colors={[CYAN]}
+            tintColor={GOLD}
+            colors={[GOLD]}
           />
         }
       >
         {isLoading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator color={CYAN} size="large" />
+            <ActivityIndicator color={GOLD} size="large" />
           </View>
         ) : (
           <>
@@ -192,7 +193,7 @@ export default function HomeScreen() {
                 <View style={[styles.changePill, { backgroundColor: todayUp ? `${GREEN}18` : `${CORAL}18` }]}>
                   <MaterialCommunityIcons
                     name={todayUp ? 'trending-up' : 'trending-down'}
-                    size={13}
+                    size={12}
                     color={todayUp ? GREEN : CORAL}
                   />
                   <Text style={[styles.changePillTxt, { color: todayUp ? GREEN : CORAL }]}>
@@ -240,7 +241,7 @@ export default function HomeScreen() {
             {/* ── AI Signals ── */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>AI Signals</Text>
+                <Text style={styles.sectionTitle}>Signals</Text>
                 {insightsLoading ? (
                   <ActivityIndicator color={INDIGO} size="small" />
                 ) : topSignals.length > 0 ? (
@@ -261,11 +262,11 @@ export default function HomeScreen() {
                 ))
               ) : !insightsLoading ? (
                 <View style={styles.emptySignals}>
-                  <MaterialCommunityIcons name="brain" size={28} color={MUTED} />
+                  <MaterialCommunityIcons name="brain" size={26} color={MUTED} />
                   <Text style={styles.emptyTxt}>
                     {totalVal > 0
                       ? 'Connect more data to generate signals'
-                      : 'Connect a brokerage to get AI signals'}
+                      : 'Connect a brokerage to get signals'}
                   </Text>
                 </View>
               ) : null}
@@ -273,20 +274,20 @@ export default function HomeScreen() {
 
             {/* ── Quick navigation shortcuts ── */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Quick Actions</Text>
+              <Text style={styles.sectionTitle}>Quick actions</Text>
               <View style={styles.quickRow}>
                 {([
-                  { label: 'Markets',   icon: 'chart-line',          route: '/(tabs)/Market'    },
-                  { label: 'Vault',     icon: 'safe-square-outline',  route: '/(tabs)/Portfolio' },
-                  { label: 'Compare',   icon: 'chart-multiple',       route: '/(tabs)/Compare'   },
-                  { label: 'Reports',   icon: 'download-circle-outline', route: '/(tabs)/Reports' },
+                  { label: 'Markets',   icon: 'chart-line',              route: '/(tabs)/Market'    },
+                  { label: 'Vault',     icon: 'safe-square-outline',     route: '/(tabs)/Portfolio' },
+                  { label: 'Compare',   icon: 'chart-multiple',          route: '/(tabs)/Compare'   },
+                  { label: 'Reports',   icon: 'download-circle-outline', route: '/(tabs)/Reports'   },
                 ] as const).map(item => (
                   <Pressable
                     key={item.label}
                     style={({ pressed }) => [styles.quickBtn, pressed && { opacity: 0.7 }]}
                     onPress={() => router.push(item.route as any)}
                   >
-                    <MaterialCommunityIcons name={item.icon as any} size={20} color={CYAN} />
+                    <MaterialCommunityIcons name={item.icon as any} size={18} color={GOLD} />
                     <Text style={styles.quickBtnTxt}>{item.label}</Text>
                   </Pressable>
                 ))}
@@ -310,38 +311,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
-  greeting:     { fontSize: 12, color: TXT2, fontFamily: sans },
-  greetingName: { fontSize: 18, color: TXT,  fontFamily: sans, fontWeight: '700' },
+  // "Good afternoon," — quiet, mono, tracked — the name is the payoff
+  greeting:     { fontSize: 11, color: MUTED, fontFamily: mono, letterSpacing: 0.6, textTransform: 'uppercase' },
+  greetingName: { fontSize: 21, color: TXT,  fontFamily: serif, fontWeight: '500', marginTop: 2 },
 
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
 
   // Hero card
   heroCard: {
-    backgroundColor: QL.CARD,
+    backgroundColor: CARD,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: QL.BORDER,
-    borderRadius: 16,
+    borderColor: BORDER,
+    borderRadius: 14,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 20,
     overflow: 'hidden',
   },
   heroLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: MUTED,
-    fontFamily: sans,
-    letterSpacing: 1.2,
+    fontFamily: mono,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: 6,
   },
+  // Serif for the one number that matters on this screen
   heroValue: {
-    fontSize: 36,
+    fontSize: 38,
     color: TXT,
-    fontFamily: sans,
-    fontWeight: '700',
+    fontFamily: serif,
+    fontWeight: '500',
     letterSpacing: -0.5,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   changePill: {
     flexDirection: 'row',
@@ -349,32 +353,32 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 20,
-    marginBottom: 14,
+    borderRadius: 6,
+    marginBottom: 16,
     alignSelf: 'flex-start',
   },
-  changePillTxt: { fontSize: 12, fontFamily: sans, fontWeight: '600' },
-  sparkWrap:    { marginBottom: 14 },
+  changePillTxt: { fontSize: 11.5, fontFamily: mono, fontWeight: '500' },
+  sparkWrap:    { marginBottom: 16 },
   sparkline:    {},
 
-  // Stat chips (horizontal scroll)
+  // Stat chips (horizontal scroll) — ledger-style, mono figures
   chipScroll:  { marginHorizontal: -4 },
   chipRow:     { gap: 8, paddingHorizontal: 4 },
   statChip: {
     backgroundColor: QL.CARD2,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: QL.BORDER,
-    borderRadius: 10,
+    borderColor: BORDER,
+    borderRadius: 9,
     paddingHorizontal: 14,
     paddingVertical: 10,
     minWidth: 88,
   },
   chipValue: {
     fontSize: 13,
-    fontFamily: sans,
-    fontWeight: '700',
+    fontFamily: mono,
+    fontWeight: '500',
     color: TXT,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   chipLabel: {
     fontSize: 9,
@@ -385,23 +389,23 @@ const styles = StyleSheet.create({
   },
 
   // Section
-  section:       { marginBottom: 24 },
+  section:       { marginBottom: 26 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  sectionTitle:  { fontSize: 13, color: TXT, fontFamily: sans, fontWeight: '700', letterSpacing: 0.3 },
+  sectionTitle:  { fontSize: 12.5, color: TXT, fontFamily: mono, fontWeight: '500', letterSpacing: 1, textTransform: 'uppercase' },
   signalChip: {
     backgroundColor: `${INDIGO}18`,
-    borderRadius: 20,
+    borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  signalChipTxt: { fontSize: 11, color: INDIGO, fontFamily: sans, fontWeight: '600' },
+  signalChipTxt: { fontSize: 11, color: INDIGO, fontFamily: mono, fontWeight: '500' },
 
   // Signal card
   signalCard: {
     backgroundColor: CARD,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER,
-    borderLeftWidth: 3,
+    borderLeftWidth: 2,
     borderRadius: 10,
     padding: 14,
     marginBottom: 8,
@@ -409,8 +413,8 @@ const styles = StyleSheet.create({
   signalHeader: { marginBottom: 6 },
   signalBadge: {
     fontSize: 9,
-    fontWeight: '700',
-    fontFamily: sans,
+    fontWeight: '500',
+    fontFamily: mono,
     letterSpacing: 1,
     textTransform: 'uppercase',
     paddingHorizontal: 7,
@@ -434,7 +438,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     paddingVertical: 14,
-    gap: 6,
+    gap: 7,
   },
-  quickBtnTxt: { fontSize: 10, color: TXT2, fontFamily: sans, fontWeight: '500' },
+  quickBtnTxt: { fontSize: 10, color: TXT2, fontFamily: mono, fontWeight: '500', letterSpacing: 0.3 },
 });
