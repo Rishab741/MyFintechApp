@@ -442,11 +442,13 @@ serve(async (req: Request) => {
       console.log("Holdings status:", holdingsStatus, JSON.stringify(holdings))
 
       if (holdingsStatus === 401 || holdingsStatus === 403) {
-        await supabaseAdmin
-          .from('snaptrade_connections')
-          .delete()
-          .eq('user_id', userId)
-        console.log("Stale brokerage auth cleared from DB — user must reconnect")
+        // Mark as expired in DB so the app UI shows the correct state immediately.
+        // Do NOT delete the connection row — preserves account_id for reconnect flow.
+        await supabaseAdmin.rpc('mark_connection_expired', {
+          p_user_id: userId,
+          p_error: `Brokerage returned ${holdingsStatus} — reauthorization required`,
+        }).catch(() => { /* non-fatal */ })
+        console.log("Brokerage auth expired — marked in DB, user must reconnect")
         return json({
           error: "brokerage_auth_expired",
           message: "Your brokerage authorization has expired. Please reconnect your account.",
@@ -462,6 +464,10 @@ serve(async (req: Request) => {
         snapshot: holdings,
         captured_at: new Date().toISOString(),
       })
+
+      // Mark connection healthy so the UI shows the correct status
+      await supabaseAdmin.rpc('mark_connection_healthy', { p_user_id: userId })
+        .catch(() => { /* non-fatal */ })
 
       return json({ holdings, captured_at: new Date().toISOString() })
     }

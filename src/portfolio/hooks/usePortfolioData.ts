@@ -147,15 +147,23 @@ async function fetchManualHoldings(): Promise<HoldingsData | null> {
 }
 
 // ── Sync trigger (mutation) ───────────────────────────────────────────────────
-async function triggerSync(sources: ConnectionSources): Promise<void> {
-  if (sources.hasSnaptrade) {
-    await supabase.functions.invoke('exchange-plaid-token', {
-      body: { action: 'snaptrade_get_holdings' },
-    });
-  } else if (sources.hasExchange) {
-    await supabase.functions.invoke('sync-exchange', {});
+// Returns 'ok' | 'brokerage_auth_expired' | 'error' so callers can update
+// connection health state accordingly.
+async function triggerSync(sources: ConnectionSources): Promise<'ok' | 'brokerage_auth_expired' | 'error'> {
+  try {
+    if (sources.hasSnaptrade) {
+      const { data, error } = await supabase.functions.invoke('exchange-plaid-token', {
+        body: { action: 'snaptrade_get_holdings' },
+      });
+      if (data?.error === 'brokerage_auth_expired') return 'brokerage_auth_expired';
+      if (error) return 'error';
+    } else if (sources.hasExchange) {
+      await supabase.functions.invoke('sync-exchange', {});
+    }
+    return 'ok';
+  } catch {
+    return 'error';
   }
-  // Manual-only needs no network call — _buildManualHoldings reads the DB directly
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -280,13 +288,18 @@ export function usePortfolioData(): PortfolioDataResult {
   // ── Pull-to-refresh ───────────────────────────────────────────────────────
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    // Trigger a fresh holdings fetch from the brokerage before re-reading Supabase.
+    // Without this, invalidating the cache just re-reads the same stale rows.
+    if (sources) {
+      try { await triggerSync(sources); } catch { /* non-fatal */ }
+    }
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: portfolioKeys.connections(userId ?? '') }),
       queryClient.invalidateQueries({ queryKey: portfolioKeys.snapshots(userId ?? '') }),
       queryClient.invalidateQueries({ queryKey: portfolioKeys.manual(userId ?? '') }),
     ]);
     setRefreshing(false);
-  }, [userId, queryClient]);
+  }, [userId, queryClient, sources]);
 
   // ── Resolve final data ────────────────────────────────────────────────────
   // Priority: snapshot history > manual holdings > null
