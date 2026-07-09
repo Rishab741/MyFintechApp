@@ -9,7 +9,7 @@ export interface HoldingsData {
     positions?: Position[]; balances?: Balance[];
 }
 export interface Snapshot { snapshot: HoldingsData; captured_at: string; }
-export type Period = '1W' | '1M' | '3M' | 'ALL';
+export type Period = '1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL';
 export interface AllocSeg { label: string; value: number; color: string; pct: number; }
 export interface PerformerItem { ticker: string; pct: number; value: number; currency: any; }
 export interface RiskMetrics {

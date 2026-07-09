@@ -59,8 +59,8 @@ export const normalize100 = (vals: number[]) => {
 };
 export const filterByPeriod = (snaps: Snapshot[], p: Period) => {
     if (p === 'ALL' || snaps.length < 2) return snaps;
-    const days = ({ '1W': 7, '1M': 30, '3M': 90 } as any)[p];
-    const cutoff = Date.now() - days * 864e5;
+    const days: Record<string, number> = { '1D': 1, '1W': 7, '1M': 30, '3M': 90, '1Y': 365 };
+    const cutoff = Date.now() - days[p] * 864e5;
     const f = snaps.filter(s => new Date(s.captured_at).getTime() >= cutoff);
     return f.length >= 2 ? f : snaps;
 };

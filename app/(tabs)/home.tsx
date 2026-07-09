@@ -2,11 +2,12 @@ import { mono, QL, RADIUS, sans, serif, SP } from '@/constants/Colors';
 import { useInsights } from '@/src/insights/hooks/useInsights';
 import { fmtCurrency, sign } from '@/src/portfolio/helpers';
 import { usePortfolioData } from '@/src/portfolio/hooks/usePortfolioData';
+import type { Period } from '@/src/portfolio/types';
 import { InsightSeverity } from '@/src/services/mlPipeline';
 import { useAuthStore } from '@/src/store/useAuthStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -39,14 +40,9 @@ const SCREEN_W = Dimensions.get('window').width;
 const CHART_W  = SCREEN_W - SP.LG * 2;
 const CHART_H  = 190;
 
-const RANGES = ['1D', '1W', '1M', '3M', '1Y', 'ALL'] as const;
-type Range = (typeof RANGES)[number];
+const RANGES: Period[] = ['1D', '1W', '1M', '3M', '1Y', 'ALL'];
 
 // ─── Chart ──────────────────────────────────────────────────────────────────
-// NOTE: usePortfolioData currently returns a single `snapValues` series.
-// This renders that series regardless of the selected range — wire
-// range-specific series into the hook when available; the tab UI is
-// ready for it.
 function PerformanceChart({ values }: { values: number[] }) {
   const { linePath, areaPath, guideYs } = useMemo(() => {
     if (values.length < 2) return { linePath: '', areaPath: '', guideYs: [] as number[] };
@@ -86,7 +82,7 @@ function PerformanceChart({ values }: { values: number[] }) {
   );
 }
 
-function RangeTabs({ value, onChange }: { value: Range; onChange: (r: Range) => void }) {
+function RangeTabs({ value, onChange }: { value: Period; onChange: (r: Period) => void }) {
   return (
     <View style={styles.rangeRow}>
       {RANGES.map((r) => (
@@ -172,7 +168,6 @@ function ActionButton({ icon, label, onPress }: { icon: string; label: string; o
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { session } = useAuthStore();
-  const [range, setRange] = useState<Range>('1M');
 
   const firstName = (() => {
     const meta = session?.user?.user_metadata;
@@ -183,7 +178,7 @@ export default function HomeScreen() {
   const {
     totalVal, todayChange, todayChangePct, cash, positions,
     performers, currency, loading: portfolioLoading, onRefresh,
-    refreshing, snapValues,
+    refreshing, snapValues, period, setPeriod,
   } = usePortfolioData();
 
   const { data: insightsData, loading: insightsLoading } = useInsights();
@@ -249,7 +244,7 @@ export default function HomeScreen() {
             <View style={styles.chartWrap}>
               <PerformanceChart values={snapValues} />
             </View>
-            <RangeTabs value={range} onChange={setRange} />
+            <RangeTabs value={period} onChange={setPeriod} />
 
             <StatRail
               items={[
