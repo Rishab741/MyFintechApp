@@ -12,7 +12,7 @@ import {
   ScrollView as HScrollView,
 } from 'react-native';
 import {
-  BG, BORDER, BORDER_HI, CARD, GOLD, GOLD_D, MUTED, mono, sans, TXT, TXT2,
+  BG, BORDER, BORDER_HI, CARD, GOLD, GOLD_D, GREEN, MUTED, mono, RED, sans, TXT, TXT2,
 } from '@/src/market/tokens';
 import { useMarketData } from '@/src/market/hooks/useMarketData';
 import {
@@ -203,7 +203,7 @@ export default function MarketScreen() {
             <StatBadge
               label="S&P 500"
               value={`${spxUp ? '+' : ''}${spx.quote.changePct.toFixed(2)}%`}
-              color={spxUp ? '#34D399' : '#F87171'}
+              color={spxUp ? GREEN : RED}
             />
           )}
           {btc?.quote && (

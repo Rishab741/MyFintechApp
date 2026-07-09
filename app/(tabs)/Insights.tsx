@@ -6,6 +6,7 @@
 import { NavMenuButton } from '@/components/NavMenuButton';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     ActivityIndicator,
     Animated,
@@ -658,6 +659,8 @@ export default function InsightsScreen() {
     const [subTab] = useState<'signals' | 'compare'>('signals');
     const { data, loading, refreshing, error, noDataset, onRefresh, generateAndFetch } = useInsights();
     const recs = useRecommendations();
+    const insets = useSafeAreaInsets();
+    const navPadTop = Math.max(insets.top, 16) + 8;
 
     // ── Loading ──
     if (loading) {
@@ -677,7 +680,7 @@ export default function InsightsScreen() {
                 <StatusBar barStyle="light-content" />
                 <View style={s.glow1} />
                 <View style={s.glow2} />
-                <View style={s.nav}>
+                <View style={[s.nav, { paddingTop: navPadTop }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         <NavMenuButton />
                         <View>
@@ -741,7 +744,7 @@ export default function InsightsScreen() {
                 }
             >
                 {/* ── Nav ── */}
-                <View style={s.nav}>
+                <View style={[s.nav, { paddingTop: navPadTop }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         <NavMenuButton />
                         <View>
@@ -1017,7 +1020,6 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'ios' ? 58 : 20,
         paddingBottom: 12,
     },
     navTitle: {
