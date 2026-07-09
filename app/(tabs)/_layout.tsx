@@ -41,7 +41,7 @@ const PARENT_TAB: Record<string, string> = {
   InvestmentProfile: 'index', Connect: 'index',
 };
 
-const RAIL_W     = 52;   // collapsed — icon-only rail
+const RAIL_W     = 42;   // collapsed — icon-only rail
 const EXPANDED_W = 188;  // expanded — icons + labels
 const ANIM_MS    = 220;
 
@@ -106,6 +106,8 @@ function NavItem({
 
 // ── Sidebar overlay ───────────────────────────────────────────────────────────
 // position: 'absolute' — does NOT take any layout space; floats over screens.
+// The "ear" tab protrudes past the right edge of the sidebar so users always
+// have a visible, tappable target to expand/collapse — even in the rail state.
 function LeftSidebar({
   state, navigation, collapsed, widthAnim, backdropAnim, onToggle, insightBadge = 0,
 }: {
@@ -117,10 +119,11 @@ function LeftSidebar({
   const current = state.routes[state.index]?.name ?? '';
   const active  = PARENT_TAB[current] ?? current;
   const visible = (state.routes as any[]).filter(r => TABS.some(t => t.name === r.name));
+  const earTop  = Math.max(insets.top, 12) + 44; // sits below the brand mark
 
   return (
     <>
-      {/* Dim backdrop — tap to collapse */}
+      {/* Dim backdrop — tap anywhere to collapse */}
       <Animated.View
         pointerEvents={collapsed ? 'none' : 'box-only'}
         style={[StyleSheet.absoluteFill, { backgroundColor: BACKDROP_CLR, opacity: backdropAnim, zIndex: 99 }]}
@@ -128,64 +131,65 @@ function LeftSidebar({
         <Pressable style={StyleSheet.absoluteFill} onPress={onToggle} />
       </Animated.View>
 
-      {/* Sidebar panel */}
-      <Animated.View style={[
-        s.sidebar,
-        {
-          width:         widthAnim,
-          paddingTop:    Math.max(insets.top, 12),
-          paddingBottom: Math.max(insets.bottom, 16),
-        },
-      ]}>
-        {/* Brand row */}
-        <View style={s.brand}>
-          <View style={s.brandMark}>
-            <MaterialCommunityIcons name="chart-areaspline" size={15} color={QL.GOLD} />
-          </View>
-          {!collapsed && (
-            <Text style={s.brandTxt} numberOfLines={1}>Platstock</Text>
-          )}
-        </View>
+      {/* Sidebar panel — overflow visible so the ear can protrude right */}
+      <Animated.View style={[s.sidebar, {
+        width:      widthAnim,
+        paddingTop: Math.max(insets.top, 12),
+        paddingBottom: Math.max(insets.bottom, 16),
+      }]}>
 
-        <View style={s.divider} />
-
-        {/* Nav items */}
-        <View style={s.list}>
-          {visible.map((route: any) => {
-            const tab      = TABS.find(t => t.name === route.name)!;
-            const isActive = active === route.name;
-            return (
-              <NavItem
-                key={route.key}
-                tab={tab}
-                active={isActive}
-                collapsed={collapsed}
-                badge={route.name === 'Insights' ? insightBadge : undefined}
-                onPress={() => {
-                  if (!isActive && collapsed) onToggle(); // keep rail tap fast — don't expand
-                  const ev = navigation.emit({
-                    type: 'tabPress', target: route.key, canPreventDefault: true,
-                  });
-                  if (!isActive && !ev.defaultPrevented) navigation.navigate(route.name);
-                }}
-              />
-            );
-          })}
-        </View>
-
-        {/* Toggle button at bottom */}
+        {/* Ear toggle — sticks out past the right border, always tappable */}
         <Pressable
           onPress={onToggle}
-          hitSlop={10}
-          style={[s.toggleBtn, collapsed && s.toggleBtnCenter]}
+          hitSlop={8}
           accessibilityLabel={collapsed ? 'Expand menu' : 'Collapse menu'}
+          style={[s.ear, { top: earTop }]}
         >
           <MaterialCommunityIcons
-            name={collapsed ? 'menu' : 'chevron-left'}
-            size={18}
+            name={collapsed ? 'chevron-right' : 'chevron-left'}
+            size={13}
             color={QL.MUTED}
           />
         </Pressable>
+
+        {/* Content — inner wrapper clips text overflow during animation */}
+        <View style={s.sidebarContent}>
+          {/* Brand */}
+          <View style={s.brand}>
+            <View style={s.brandMark}>
+              <MaterialCommunityIcons name="chart-areaspline" size={15} color={QL.GOLD} />
+            </View>
+            {!collapsed && (
+              <Text style={s.brandTxt} numberOfLines={1}>Platstock</Text>
+            )}
+          </View>
+
+          <View style={s.divider} />
+
+          {/* Nav items */}
+          <View style={s.list}>
+            {visible.map((route: any) => {
+              const tab      = TABS.find(t => t.name === route.name)!;
+              const isActive = active === route.name;
+              return (
+                <NavItem
+                  key={route.key}
+                  tab={tab}
+                  active={isActive}
+                  collapsed={collapsed}
+                  badge={route.name === 'Insights' ? insightBadge : undefined}
+                  onPress={() => {
+                    const ev = navigation.emit({
+                      type: 'tabPress', target: route.key, canPreventDefault: true,
+                    });
+                    if (!isActive && !ev.defaultPrevented) navigation.navigate(route.name);
+                    if (!collapsed) onToggle(); // auto-collapse after picking a tab
+                  }}
+                />
+              );
+            })}
+          </View>
+        </View>
       </Animated.View>
     </>
   );
@@ -202,7 +206,27 @@ const s = StyleSheet.create({
     backgroundColor:  SIDEBAR_BG,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: 'rgba(201,162,75,0.18)',
-    overflow:         'hidden',
+    // overflow visible so the ear tab can protrude past the right border
+  },
+  sidebarContent: {
+    flex:     1,
+    overflow: 'hidden', // clips text/icons during collapse animation
+  },
+  ear: {
+    position:              'absolute',
+    right:                 -18,   // protrudes 18 px past the right border
+    width:                 18,
+    height:                38,
+    backgroundColor:       SIDEBAR_BG,
+    borderTopRightRadius:  10,
+    borderBottomRightRadius: 10,
+    borderTopWidth:        StyleSheet.hairlineWidth,
+    borderRightWidth:      StyleSheet.hairlineWidth,
+    borderBottomWidth:     StyleSheet.hairlineWidth,
+    borderColor:           'rgba(201,162,75,0.18)',
+    alignItems:            'center',
+    justifyContent:        'center',
+    zIndex:                101,
   },
   brand: {
     flexDirection:    'row',
@@ -279,20 +303,6 @@ const s = StyleSheet.create({
     zIndex:          1,
   },
   badgeTxt: { fontSize: 8, color: '#fff', fontWeight: '700', fontFamily: sans },
-  toggleBtn: {
-    alignSelf:        'flex-end',
-    marginRight:      9,
-    marginTop:        6,
-    width:            30,
-    height:           30,
-    borderRadius:     8,
-    backgroundColor:  'rgba(255,255,255,0.05)',
-    borderWidth:      StyleSheet.hairlineWidth,
-    borderColor:      'rgba(255,255,255,0.08)',
-    alignItems:       'center',
-    justifyContent:   'center',
-  },
-  toggleBtnCenter: { alignSelf: 'center', marginRight: 0 },
 });
 
 // ── Root layout ───────────────────────────────────────────────────────────────
