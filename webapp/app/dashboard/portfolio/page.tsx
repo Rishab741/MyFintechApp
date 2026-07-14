@@ -79,9 +79,9 @@ export default function PortfolioPage() {
     return engine.portfolio.history(jwt, histPeriod);
   }, SWR_OPTS);
 
-  const twr   = data?.twr   != null ? (data.twr   >= 0 ? "positive" : "negative") as const : "neutral" as const;
-  const cagr  = data?.cagr  != null ? (data.cagr  >= 0 ? "positive" : "negative") as const : "neutral" as const;
-  const alpha = data?.alpha != null ? (data.alpha >= 0 ? "positive" : "negative") as const : "neutral" as const;
+  const twr:   "positive" | "negative" | "neutral" = data?.twr   != null ? (data.twr   >= 0 ? "positive" : "negative") : "neutral";
+  const cagr:  "positive" | "negative" | "neutral" = data?.cagr  != null ? (data.cagr  >= 0 ? "positive" : "negative") : "neutral";
+  const alpha: "positive" | "negative" | "neutral" = data?.alpha != null ? (data.alpha >= 0 ? "positive" : "negative") : "neutral";
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
