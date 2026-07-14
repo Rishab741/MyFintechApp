@@ -91,23 +91,24 @@ const FH_SYMBOLS: Record<string, string> = {
   SPY: "SPY", QQQ: "QQQ", GLD: "GLD", BTC: "BINANCE:BTCUSDT",
 };
 
-const REGIONS = [
-  { id:"US",  label:"S&P 500",   region:"Americas",     change: 0.62 },
-  { id:"NDQ", label:"NASDAQ",    region:"Americas",     change: 0.44 },
-  { id:"TSX", label:"TSX",       region:"Americas",     change: 0.18 },
-  { id:"MEX", label:"IPC",       region:"Americas",     change:-0.31 },
-  { id:"UK",  label:"FTSE 100",  region:"Europe",       change:-0.12 },
-  { id:"GER", label:"DAX",       region:"Europe",       change: 0.35 },
-  { id:"FRA", label:"CAC 40",    region:"Europe",       change: 0.21 },
-  { id:"ITA", label:"FTSE MIB",  region:"Europe",       change: 0.09 },
-  { id:"JP",  label:"Nikkei",    region:"Asia/Pacific", change:-0.54 },
-  { id:"CN",  label:"Shanghai",  region:"Asia/Pacific", change:-1.12 },
-  { id:"HK",  label:"Hang Seng", region:"Asia/Pacific", change:-0.88 },
-  { id:"AU",  label:"ASX 200",   region:"Asia/Pacific", change: 0.14 },
-  { id:"IN",  label:"Nifty 50",  region:"Asia/Pacific", change: 0.73 },
-  { id:"KR",  label:"KOSPI",     region:"Asia/Pacific", change:-0.22 },
-  { id:"BR",  label:"Bovespa",   region:"EM",           change: 0.55 },
-  { id:"ZA",  label:"JSE",       region:"EM",           change:-0.19 },
+// ETF proxies for global indices — fetched live from Yahoo Finance
+const REGIONS: { id: string; label: string; region: string; etf: string }[] = [
+  { id:"US",  label:"S&P 500",   region:"Americas",     etf:"SPY"  },
+  { id:"NDQ", label:"NASDAQ",    region:"Americas",     etf:"QQQ"  },
+  { id:"TSX", label:"TSX",       region:"Americas",     etf:"EWC"  },
+  { id:"MEX", label:"IPC",       region:"Americas",     etf:"EWW"  },
+  { id:"UK",  label:"FTSE 100",  region:"Europe",       etf:"EWU"  },
+  { id:"GER", label:"DAX",       region:"Europe",       etf:"EWG"  },
+  { id:"FRA", label:"CAC 40",    region:"Europe",       etf:"EWQ"  },
+  { id:"ITA", label:"FTSE MIB",  region:"Europe",       etf:"EWI"  },
+  { id:"JP",  label:"Nikkei",    region:"Asia/Pacific", etf:"EWJ"  },
+  { id:"CN",  label:"Shanghai",  region:"Asia/Pacific", etf:"FXI"  },
+  { id:"HK",  label:"Hang Seng", region:"Asia/Pacific", etf:"EWH"  },
+  { id:"AU",  label:"ASX 200",   region:"Asia/Pacific", etf:"EWA"  },
+  { id:"IN",  label:"Nifty 50",  region:"Asia/Pacific", etf:"INDA" },
+  { id:"KR",  label:"KOSPI",     region:"Asia/Pacific", etf:"EWY"  },
+  { id:"BR",  label:"Bovespa",   region:"EM",           etf:"EWZ"  },
+  { id:"ZA",  label:"JSE",       region:"EM",           etf:"EZA"  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -125,9 +126,12 @@ const bgCls   = (v: number) => v >= 0 ? "bg-emerald-500/10 text-emerald-300" : "
 
 function sparkPoints(price: number, change: number, n = 24): { v: number }[] {
   const prev = price - change;
-  return Array.from({ length: n }, (_, i) => ({
-    v: prev + change * (i / (n - 1)) + (Math.random() - 0.5) * Math.abs(change) * 0.45,
-  }));
+  return Array.from({ length: n }, (_, i) => {
+    const t = i / (n - 1);
+    // Deterministic sine overlay — no random noise, renders consistently
+    const wave = Math.sin(t * Math.PI * 3.2) * Math.abs(change) * 0.06;
+    return { v: prev + change * t + wave };
+  });
 }
 
 function fearGreedScore(sectors: Record<string, number>): number {
@@ -346,7 +350,9 @@ function SectorBarChart({ sectors }: { sectors: Record<string, number> }) {
 }
 
 // ─── Region heatmap tile ─────────────────────────────────────────────────────
-function RegionTile({ item, active, onClick }: { item: typeof REGIONS[0]; active: boolean; onClick: () => void }) {
+type LiveRegion = typeof REGIONS[0] & { change: number };
+
+function RegionTile({ item, active, onClick }: { item: LiveRegion; active: boolean; onClick: () => void }) {
   const intensity = Math.min(Math.abs(item.change) / 1.5, 1);
   const up = item.change >= 0;
   const bg = up ? `rgba(16,185,129,${0.08+intensity*0.35})` : `rgba(239,68,68,${0.08+intensity*0.35})`;
@@ -666,6 +672,22 @@ export default function MarketsPage() {
     return Object.fromEntries(yfData.map(q => [q.symbol, q]));
   }, [yfData]);
 
+  // Global heatmap — fetch ETF proxies for real daily change data
+  const regionEtfKey = REGIONS.map(r => r.etf).join(",");
+  const { data: regionEtfData } = useSWR<YfQuote[]>(
+    `/api/quotes?symbols=${regionEtfKey}`,
+    fetcher,
+    { refreshInterval: 5 * 60_000 }
+  );
+  const regionMap = useMemo<Record<string, YfQuote>>(() => {
+    if (!regionEtfData) return {};
+    return Object.fromEntries(regionEtfData.map(q => [q.symbol, q]));
+  }, [regionEtfData]);
+  const liveRegions: LiveRegion[] = useMemo(
+    () => REGIONS.map(r => ({ ...r, change: regionMap[r.etf]?.changePct ?? 0 })),
+    [regionMap]
+  );
+
   // For selected stock detail — also lookup in yfMap
   const selectedQuote = selectedItem ? yfMap[selectedItem.symbol] : undefined;
 
@@ -807,7 +829,7 @@ export default function MarketsPage() {
                   <div key={grp}>
                     <p className="text-[9px] font-mono text-slate-600 mb-2 tracking-widest uppercase">{grp}</p>
                     <div className="grid grid-cols-2 gap-1.5">
-                      {REGIONS.filter(r => r.region === grp).map(r => (
+                      {liveRegions.filter(r => r.region === grp).map(r => (
                         <RegionTile key={r.id} item={r} active={activeRegion === r.id} onClick={() => setActiveRegion(v => v === r.id ? null : r.id)} />
                       ))}
                     </div>

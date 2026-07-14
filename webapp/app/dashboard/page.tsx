@@ -152,48 +152,86 @@ export default function DashboardOverview() {
         )}
       </div>
 
-      {/* ── Metric row 1 ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Time-Weighted Return"
-          value={twrPct}
-          icon={TrendingUp}
-          trend={twrTrend}
-          sub="1-year period"
-          loading={mLoading}
-        />
-        <MetricCard
-          label="Sharpe Ratio"
-          value={num(metrics?.sharpe)}
-          icon={Activity}
-          trend={metrics?.sharpe != null && metrics.sharpe >= 1 ? "positive" : "neutral"}
-          sub="Risk-adjusted return"
-          loading={mLoading}
-        />
-        <MetricCard
-          label="Max Drawdown"
-          value={ddPct}
-          icon={TrendingDown}
-          trend="negative"
-          sub="Peak to trough"
-          loading={mLoading}
-        />
-        <MetricCard
-          label="API Calls Today"
-          value={usage?.api_calls ?? null}
-          icon={Zap}
-          sub={usage?.daily_limit ? `of ${usage.daily_limit.toLocaleString()} limit` : "Unlimited"}
-          loading={!usage}
-        />
-      </div>
+      {/* ── Metric grids — only when data exists; otherwise show onboarding CTA ── */}
+      {!mLoading && !metrics ? (
+        <div
+          className="rounded-2xl p-8 flex flex-col items-center text-center gap-5"
+          style={{ background: "#111118", border: "1px dashed rgba(139,92,246,0.2)" }}
+        >
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+            style={{ background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)" }}>
+            <Activity size={22} className="text-accent" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-semibold text-white">Connect your portfolio to get started</h2>
+            <p className="text-sm text-[#6B7280] max-w-sm">
+              Import a brokerage CSV or link an account to see your TWR, Sharpe ratio,
+              drawdown analysis, and AI-generated insights.
+            </p>
+          </div>
+          <div className="flex gap-3 flex-wrap justify-center">
+            <Link
+              href="/dashboard/pipeline"
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              style={{ background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.2)", color: "#8B5CF6" }}
+            >
+              Import CSV
+            </Link>
+            <Link
+              href="/dashboard/ingest"
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#9CA3AF" }}
+            >
+              Connect brokerage
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ── Metric row 1 ─────────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard
+              label="Time-Weighted Return"
+              value={twrPct}
+              icon={TrendingUp}
+              trend={twrTrend}
+              sub="1-year period"
+              loading={mLoading}
+            />
+            <MetricCard
+              label="Sharpe Ratio"
+              value={num(metrics?.sharpe)}
+              icon={Activity}
+              trend={metrics?.sharpe != null && metrics.sharpe >= 1 ? "positive" : "neutral"}
+              sub="Risk-adjusted return"
+              loading={mLoading}
+            />
+            <MetricCard
+              label="Max Drawdown"
+              value={ddPct}
+              icon={TrendingDown}
+              trend="negative"
+              sub="Peak to trough"
+              loading={mLoading}
+            />
+            <MetricCard
+              label="API Calls Today"
+              value={usage?.api_calls ?? null}
+              icon={Zap}
+              sub={usage?.daily_limit ? `of ${usage.daily_limit.toLocaleString()} limit` : "Unlimited"}
+              loading={!usage}
+            />
+          </div>
 
-      {/* ── Metric row 2 ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard label="CAGR"       value={cagrPct}                        trend={cagrTrend} loading={mLoading} />
-        <MetricCard label="Sortino"    value={num(metrics?.sortino)}           loading={mLoading} />
-        <MetricCard label="Beta"       value={num(metrics?.beta)}              loading={mLoading} />
-        <MetricCard label="Volatility" value={pct(metrics?.volatility)}        loading={mLoading} />
-      </div>
+          {/* ── Metric row 2 ─────────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard label="CAGR"       value={cagrPct}               trend={cagrTrend} loading={mLoading} />
+            <MetricCard label="Sortino"    value={num(metrics?.sortino)}  loading={mLoading} />
+            <MetricCard label="Beta"       value={num(metrics?.beta)}     loading={mLoading} />
+            <MetricCard label="Volatility" value={pct(metrics?.volatility)} loading={mLoading} />
+          </div>
+        </>
+      )}
 
       {/* ── Health + NAV row ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { engine } from "@/lib/engine";
 import { getJwt } from "@/lib/jwt";
 import { Zap, Activity, RefreshCw, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`bg-white/5 rounded animate-pulse ${className}`} />;
@@ -114,11 +115,12 @@ export default function UsagePage() {
               portfolio webhooks, and priority support.
             </p>
           </div>
-          <button
-            className="shrink-0 flex items-center gap-1.5 text-accent text-sm font-medium whitespace-nowrap"
+          <Link
+            href="mailto:rishash851@gmail.com?subject=Platstock%20Upgrade%20Request"
+            className="shrink-0 flex items-center gap-1.5 text-accent text-sm font-medium whitespace-nowrap hover:opacity-80 transition-opacity"
           >
             Upgrade <ArrowUpRight size={13} />
-          </button>
+          </Link>
         </div>
       )}
     </div>
