@@ -61,11 +61,19 @@ export async function GET(request: NextRequest) {
     return redirectTo(origin, "/advisor/dashboard");
   }
 
-  // ── 4. Validate firm_name from user_metadata ──────────────────────────────
-  // The user set this during signup. It's not a security claim — just used to
-  // populate the advisor_firms row. Sanitised here before DB write.
-  const rawFirmName = (user.user_metadata?.firm_name as string | undefined) ?? "";
-  const firmName    = rawFirmName.trim().slice(0, 200);
+  // ── 4. Read onboarding data from user_metadata ───────────────────────────
+  // None of these are security claims — they're just display/profile data.
+  // The only security claim is app_metadata.role, set exclusively below.
+  // All values are sanitised before DB write.
+  const meta = user.user_metadata ?? {};
+  const firmName  = String(meta.firm_name  ?? "").trim().slice(0, 200);
+  const firmType  = String(meta.firm_type  ?? "").trim().slice(0, 100);
+  const aumRange  = String(meta.aum_range  ?? "").trim().slice(0, 50);
+  const teamSize  = String(meta.team_size  ?? "").trim().slice(0, 50);
+  const firstName = String(meta.contact_first_name ?? "").trim().slice(0, 100);
+  const lastName  = String(meta.contact_last_name  ?? "").trim().slice(0, 100);
+  const jobTitle  = String(meta.job_title  ?? "").trim().slice(0, 200);
+  const useCase   = String(meta.primary_use_case   ?? "").trim().slice(0, 100);
 
   if (firmName.length < 2) {
     console.error("[advisor-callback] missing firm_name for user:", user.id);
@@ -100,10 +108,22 @@ export async function GET(request: NextRequest) {
     return redirectTo(origin, "/advisor/signup?error=provision_failed");
   }
 
-  // 5b. Create the advisor_firms row.
+  // 5b. Create the advisor_firms row with full onboarding profile.
   const { data: firm, error: firmErr } = await admin
     .from("advisor_firms")
-    .insert({ user_id: user.id, email: user.email!, firm_name: firmName })
+    .insert({
+      user_id:               user.id,
+      email:                 user.email!,
+      firm_name:             firmName,
+      firm_type:             firmType  || null,
+      aum_range:             aumRange  || null,
+      team_size:             teamSize  || null,
+      contact_first_name:    firstName || null,
+      contact_last_name:     lastName  || null,
+      job_title:             jobTitle  || null,
+      primary_use_case:      useCase   || null,
+      onboarding_completed_at: new Date().toISOString(),
+    })
     .select("id")
     .single();
 
@@ -125,7 +145,14 @@ export async function GET(request: NextRequest) {
     event:      "ADVISOR_SIGNED_UP",
     ip_address: ip,
     user_agent: ua,
-    metadata:   { email: user.email, firm_name: firmName },
+    metadata:   {
+      email:     user.email,
+      firm_name: firmName,
+      firm_type: firmType,
+      aum_range: aumRange,
+      team_size: teamSize,
+      use_case:  useCase,
+    },
   });
 
   return redirectTo(origin, "/advisor/dashboard");
