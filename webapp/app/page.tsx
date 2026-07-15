@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Eye, EyeOff, Loader2, Shield, BarChart2, Zap, Mail } from "lucide-react";
+import { Eye, EyeOff, Loader2, Shield, BarChart2, Zap, Mail, Building2 } from "lucide-react";
 
 const FEATURES = [
   {
@@ -310,6 +311,29 @@ export default function LoginPage() {
               </p>
             )}
           </div>
+
+          {/* Advisor portal cross-link */}
+          <Link
+            href="/advisor/login"
+            className="mt-4 flex items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm transition-all hover:opacity-90"
+            style={{
+              background: "rgba(201,168,76,0.06)",
+              border:     "1px solid rgba(201,168,76,0.16)",
+            }}
+          >
+            <div
+              className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+              style={{ background: "rgba(201,168,76,0.1)" }}
+            >
+              <Building2 size={12} style={{ color: "#C9A84C" }} />
+            </div>
+            <span className="text-[#9CA3AF]">
+              Financial advisor or RIA firm?{" "}
+              <span className="font-medium" style={{ color: "#C9A84C" }}>
+                Advisor portal →
+              </span>
+            </span>
+          </Link>
         </div>
       </div>
     </div>
