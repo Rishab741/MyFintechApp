@@ -13,6 +13,22 @@ const STEP_ROUTES: Record<string, string> = {
 
 const OB_COOKIE = "platstock_ob";
 
+// ── Advisor public routes (no auth required) ──────────────────────────────────
+// Everything else under /advisor/* is protected and requires a valid advisor
+// session with app_metadata.role === "advisor" AND a confirmed email.
+const ADVISOR_PUBLIC = new Set([
+  "/advisor/login",
+  "/advisor/signup",
+  "/advisor/verify",
+]);
+
+function isAdvisorPublic(pathname: string) {
+  return ADVISOR_PUBLIC.has(pathname) ||
+    pathname.startsWith("/advisor/login/") ||
+    pathname.startsWith("/advisor/signup/") ||
+    pathname.startsWith("/advisor/verify/");
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -33,50 +49,100 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // getSession() reads the JWT from the cookie — no network call on valid token.
+  // getSession() decodes the JWT from the cookie — no network call on valid token.
   const { data: { session }, error } = await supabase.auth.getSession();
 
-  // Stale refresh token — delete all sb-* cookies and send to login.
-  if (error && (error.status === 400 || (error as any).code === "refresh_token_not_found")) {
-    const redirect = NextResponse.redirect(new URL("/", request.url));
+  // Stale refresh token — purge all sb-* cookies and redirect to login.
+  if (error && (error.status === 400 || (error as { code?: string }).code === "refresh_token_not_found")) {
+    const isAdvisor = pathname.startsWith("/advisor");
+    const redirect  = NextResponse.redirect(new URL(isAdvisor ? "/advisor/login" : "/", request.url));
     for (const cookie of request.cookies.getAll()) {
       if (cookie.name.startsWith("sb-")) redirect.cookies.delete(cookie.name);
     }
     return redirect;
   }
 
-  const isOnboarding = pathname.startsWith("/onboarding");
-  const isDashboard  = pathname.startsWith("/dashboard");
-  const isRoot       = pathname === "/";
+  const isOnboarding       = pathname.startsWith("/onboarding");
+  const isDashboard        = pathname.startsWith("/dashboard");
+  const isRoot             = pathname === "/";
+  const isAdvisorRoute     = pathname.startsWith("/advisor");
+  const isAdvisorPublicPg  = isAdvisorPublic(pathname);
+  const isAdvisorProtected = isAdvisorRoute && !isAdvisorPublicPg;
 
   // ── Unauthenticated ───────────────────────────────────────────────────────
   if (!session) {
     if (isDashboard || isOnboarding) {
       return NextResponse.redirect(new URL("/", request.url));
     }
+    if (isAdvisorProtected) {
+      // Preserve the intended destination so login can redirect back after auth.
+      const loginUrl = new URL("/advisor/login", request.url);
+      loginUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
     return response;
   }
 
-  // ── Authenticated ─────────────────────────────────────────────────────────
-  // Read onboarding step from cookie (no network call).
-  const obStep = request.cookies.get(OB_COOKIE)?.value;
-  const isIncomplete = obStep && obStep !== "COMPLETED";
-  const stepRoute = obStep ? STEP_ROUTES[obStep] : null;
+  // ── Authenticated — common values ─────────────────────────────────────────
+  const advisorRole    = session.user.app_metadata?.role;
+  const emailConfirmed = !!session.user.email_confirmed_at;
+  const isAdvisorUser  = advisorRole === "advisor";
 
-  // 1. Root → redirect based on onboarding state
+  // ── Advisor route handling ────────────────────────────────────────────────
+
+  // Advisor public pages (login/signup/verify) while already authenticated:
+  //   - Confirmed advisor  → go to advisor dashboard (no re-auth needed)
+  //   - Unconfirmed advisor → let them stay on verify; block login/signup
+  //   - End-user           → let them see the advisor public pages (different product)
+  if (isAdvisorPublicPg) {
+    if (isAdvisorUser && emailConfirmed) {
+      return NextResponse.redirect(new URL("/advisor/dashboard", request.url));
+    }
+    if (isAdvisorUser && !emailConfirmed && !pathname.startsWith("/advisor/verify")) {
+      return NextResponse.redirect(new URL("/advisor/verify", request.url));
+    }
+    return response;
+  }
+
+  // Protected advisor pages:
+  if (isAdvisorProtected) {
+    // End-user (not an advisor) trying to access advisor routes.
+    if (!isAdvisorUser) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
+    // Advisor with unverified email — only allow /advisor/verify.
+    if (!emailConfirmed) {
+      return NextResponse.redirect(new URL("/advisor/verify", request.url));
+    }
+
+    // All good — let the advisor through.
+    return response;
+  }
+
+  // ── End-user route handling ───────────────────────────────────────────────
+  // Advisor users should not be landing on the retail dashboard, but it's not
+  // a hard block — some advisors may also be retail users.
+
+  const obStep    = request.cookies.get(OB_COOKIE)?.value;
+  const isIncomplete = obStep && obStep !== "COMPLETED";
+  const stepRoute    = obStep ? STEP_ROUTES[obStep] : null;
+
   if (isRoot) {
     if (isIncomplete && stepRoute) {
       return NextResponse.redirect(new URL(stepRoute, request.url));
     }
+    // Advisors landing at root: send to advisor dashboard.
+    if (isAdvisorUser && emailConfirmed) {
+      return NextResponse.redirect(new URL("/advisor/dashboard", request.url));
+    }
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // 2. Dashboard access while onboarding is incomplete → push to current step
   if (isDashboard && isIncomplete && stepRoute) {
     return NextResponse.redirect(new URL(stepRoute, request.url));
   }
 
-  // 3. Onboarding pages while already completed → go to dashboard
   if (isOnboarding && (!obStep || obStep === "COMPLETED")) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
