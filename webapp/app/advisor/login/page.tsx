@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { Suspense, useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -122,7 +122,10 @@ function ForgotPassword({ onBack }: { onBack: () => void }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-export default function AdvisorLogin() {
+// useSearchParams() requires a Suspense boundary in the parent — Next.js will
+// fail to prerender the route at build time without it. The inner component
+// holds all state; the default export is a thin Suspense shell.
+function AdvisorLoginInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const supabase     = createClient();
@@ -452,5 +455,20 @@ export default function AdvisorLogin() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdvisorLogin() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[#0A0A0F]">
+        <div
+          className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
+          style={{ borderColor: "rgba(201,168,76,0.4)", borderTopColor: "transparent" }}
+        />
+      </div>
+    }>
+      <AdvisorLoginInner />
+    </Suspense>
   );
 }
