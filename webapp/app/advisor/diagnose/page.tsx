@@ -53,8 +53,17 @@ const GREEN   = "#7FA37A";
 const MUTED   = "#6B7280";
 
 const BROKERS = [
+  // Australia
+  { slug: "commsec",     label: "CommSec" },
+  { slug: "selfwealth",  label: "SelfWealth" },
+  { slug: "stake",       label: "Stake" },
+  { slug: "nabtrade",    label: "nabtrade" },
+  { slug: "cmc_markets", label: "CMC Markets Invest" },
+  { slug: "westpac",     label: "Westpac Online Investing" },
+  // US
   { slug: "schwab",      label: "Charles Schwab" },
-  { slug: "fidelity",   label: "Fidelity" },
+  { slug: "fidelity",    label: "Fidelity" },
+  // Fallback
   { slug: "csv_generic", label: "Generic CSV / Robinhood / IBKR" },
 ];
 

@@ -6,14 +6,31 @@ Add new adapters here as they're built.
 
 from __future__ import annotations
 
+from normalizer.adapters.au_brokers import (
+    CmcMarketsAdapter,
+    CommSecAdapter,
+    NabTradeAdapter,
+    SelfWealthAdapter,
+    StakeAdapter,
+    WestpacAdapter,
+)
 from normalizer.adapters.csv_generic import GenericCsvAdapter
 from normalizer.adapters.fidelity import FidelityAdapter
 from normalizer.adapters.schwab import SchwabAdapter
 from normalizer.protocol import CustodianAdapter
 
 _REGISTRY: dict[str, type[CustodianAdapter]] = {
+    # US
     "schwab":      SchwabAdapter,
     "fidelity":    FidelityAdapter,
+    # Australia
+    "commsec":     CommSecAdapter,
+    "westpac":     WestpacAdapter,
+    "nabtrade":    NabTradeAdapter,
+    "selfwealth":  SelfWealthAdapter,
+    "stake":       StakeAdapter,
+    "cmc_markets": CmcMarketsAdapter,
+    # Fallback
     "csv_generic": GenericCsvAdapter,
 }
 
