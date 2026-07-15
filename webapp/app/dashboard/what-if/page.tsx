@@ -12,6 +12,7 @@ import {
   AlertCircle, ArrowRight, Clock, Loader2,
   TrendingDown, TrendingUp, Zap,
 } from "lucide-react";
+import { DataGate } from "@/components/data-gate";
 
 
 
@@ -161,6 +162,7 @@ export default function WhatIfPage() {
   ] : [];
 
   return (
+    <DataGate description="Compare what would have happened if you had made a different investment decision at any point in your portfolio history.">
     <div className="max-w-5xl mx-auto space-y-6">
 
       {/* ── Page header ────────────────────────────────────────────────────── */}
@@ -429,5 +431,6 @@ export default function WhatIfPage() {
         </div>
       )}
     </div>
+    </DataGate>
   );
 }

@@ -14,6 +14,7 @@ import {
   Activity, BarChart2, Briefcase, Minus, Percent,
   TrendingUp, Target,
 } from "lucide-react";
+import { DataGate } from "@/components/data-gate";
 
 
 
@@ -84,6 +85,7 @@ export default function PortfolioPage() {
   const alpha: "positive" | "negative" | "neutral" = data?.alpha != null ? (data.alpha >= 0 ? "positive" : "negative") : "neutral";
 
   return (
+    <DataGate description="Your portfolio returns, risk metrics, NAV history, and sector/asset class breakdown will appear here.">
     <div className="max-w-6xl mx-auto space-y-6">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -317,5 +319,6 @@ export default function PortfolioPage() {
         <p className="text-xs text-muted text-right">Computed {new Date(data.computed_at).toLocaleString()}</p>
       )}
     </div>
+    </DataGate>
   );
 }

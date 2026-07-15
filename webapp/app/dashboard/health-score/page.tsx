@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { engine, HealthScoreBreakdown } from "@/lib/engine";
 import { getJwt } from "@/lib/jwt";
 import { Lightbulb, RefreshCw } from "lucide-react";
+import { DataGate } from "@/components/data-gate";
 
 function useHealthScore() {
   return useSWR("health-score-detail", async () => engine.portfolio.healthScore(await getJwt()));
@@ -79,6 +80,7 @@ export default function HealthScorePage() {
   const { data, isLoading, mutate } = useHealthScore();
 
   return (
+    <DataGate description="Your portfolio health score and dimension breakdown across diversification, risk-return, drawdown resilience, consistency, and cash efficiency will appear here.">
     <div className="max-w-3xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -191,5 +193,6 @@ export default function HealthScorePage() {
         </div>
       )}
     </div>
+    </DataGate>
   );
 }

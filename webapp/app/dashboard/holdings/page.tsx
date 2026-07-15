@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { engine } from "@/lib/engine";
 import { getJwt } from "@/lib/jwt";
 import { TrendingUp, TrendingDown, Minus, Briefcase, DollarSign, PieChart, Hash } from "lucide-react";
+import { DataGate } from "@/components/data-gate";
 
 function useExposure() {
   return useSWR("exposure", async () => engine.portfolio.exposure(await getJwt()));
@@ -68,6 +69,7 @@ export default function HoldingsPage() {
   ];
 
   return (
+    <DataGate description="Your current positions, asset class breakdown, sector allocation, and concentration risk will appear here.">
     <div className="max-w-5xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -224,5 +226,6 @@ export default function HoldingsPage() {
         </div>
       )}
     </div>
+    </DataGate>
   );
 }

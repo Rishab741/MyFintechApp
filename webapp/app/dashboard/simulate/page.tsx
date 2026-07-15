@@ -10,6 +10,7 @@ import { engine, SimJobResult, SimAssetMetrics } from "@/lib/engine";
 import { getJwt } from "@/lib/jwt";
 import ComparisonChart  from "@/components/charts/comparison-chart";
 import MonteCarloChart  from "@/components/charts/monte-carlo-chart";
+import { DataGate } from "@/components/data-gate";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const PALETTE = ["#8FF5FF", "#AC89FF", "#F59E0B", "#10B981", "#F97316", "#6366F1"];
@@ -248,6 +249,7 @@ export default function SimulatePage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
+    <DataGate description="Run counterfactual simulations against your portfolio to see how different strategies would have performed.">
     <div className="max-w-7xl mx-auto space-y-6">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -756,5 +758,6 @@ export default function SimulatePage() {
         </div>
       </div>
     </div>
+    </DataGate>
   );
 }
