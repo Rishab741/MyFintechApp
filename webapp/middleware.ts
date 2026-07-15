@@ -65,13 +65,14 @@ export async function middleware(request: NextRequest) {
   const isOnboarding       = pathname.startsWith("/onboarding");
   const isDashboard        = pathname.startsWith("/dashboard");
   const isRoot             = pathname === "/";
+  const isAdminRoute       = pathname.startsWith("/admin");
   const isAdvisorRoute     = pathname.startsWith("/advisor");
   const isAdvisorPublicPg  = isAdvisorPublic(pathname);
   const isAdvisorProtected = isAdvisorRoute && !isAdvisorPublicPg;
 
   // ── Unauthenticated ───────────────────────────────────────────────────────
   if (!session) {
-    if (isDashboard || isOnboarding) {
+    if (isDashboard || isOnboarding || isAdminRoute) {
       return NextResponse.redirect(new URL("/", request.url));
     }
     if (isAdvisorProtected) {
@@ -84,9 +85,28 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Authenticated — common values ─────────────────────────────────────────
-  const advisorRole    = session.user.app_metadata?.role;
+  const role           = session.user.app_metadata?.role;
   const emailConfirmed = !!session.user.email_confirmed_at;
-  const isAdvisorUser  = advisorRole === "advisor";
+  const isAdvisorUser  = role === "advisor";
+  const isAdminUser    = role === "admin";
+
+  // ── Admin observer ─────────────────────────────────────────────────────────
+  // Full route access, no onboarding or advisor gates. Read-only enforcement
+  // happens at the database layer (SELECT-only RLS policies) — the middleware
+  // only handles navigation.
+  if (isAdminUser) {
+    if (isRoot) {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+    return response;
+  }
+
+  // /admin is admin-only — bounce everyone else to their home surface.
+  if (isAdminRoute) {
+    return NextResponse.redirect(
+      new URL(isAdvisorUser ? "/advisor/dashboard" : "/dashboard", request.url)
+    );
+  }
 
   // ── Advisor route handling ────────────────────────────────────────────────
 
