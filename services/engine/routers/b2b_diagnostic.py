@@ -13,6 +13,7 @@ POST /v1/b2b/diagnose
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import defaultdict, deque
 from datetime import date
@@ -201,7 +202,9 @@ async def b2b_diagnose_csv(
         client_label=client_label,
         currency=currency,
     )
-    return await _run_diagnostic(req)
+    # Heavy sync work (Yahoo fetch, Monte Carlo, bootstrap) runs in a worker
+    # thread so concurrent diagnostics don't starve the event loop.
+    return await asyncio.to_thread(_run_diagnostic_sync, req)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -212,14 +215,14 @@ async def b2b_diagnose_csv(
 async def b2b_diagnose(req: DiagnoseRequest) -> B2BDiagnosticOutput:
     if not req.transactions:
         raise HTTPException(status_code=400, detail="No transactions provided.")
-    return await _run_diagnostic(req)
+    return await asyncio.to_thread(_run_diagnostic_sync, req)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Core diagnostic engine
 # ══════════════════════════════════════════════════════════════════════════════
 
-async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
+def _run_diagnostic_sync(req: DiagnoseRequest) -> B2BDiagnosticOutput:
     txs = req.transactions
 
     # ── Normalise to internal dict format ─────────────────────────────────────
