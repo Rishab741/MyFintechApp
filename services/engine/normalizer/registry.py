@@ -50,6 +50,44 @@ def get_adapter(custodian: str, account_ref: str = "") -> CustodianAdapter:
     return cls(account_ref=account_ref) if account_ref else cls()
 
 
+def detect_and_parse(data: bytes) -> tuple[str, list]:
+    """
+    Auto-detect the best adapter for a transaction CSV by scoring every
+    registered adapter against the file.
+
+    Score = number of buy/sell rows with a positive price and quantity —
+    the rows the diagnostic can actually use. The adapter that extracts the
+    most usable trades wins; registry order breaks ties (AU brokers before
+    the generic fallback, so a specific parser beats a lucky generic one).
+
+    Returns (slug, transactions). Raises ValueError if no adapter can
+    extract a single usable trade.
+    """
+    best_slug: str | None = None
+    best_txs:  list = []
+    best_score = 0
+
+    for slug in _REGISTRY:
+        try:
+            txs = get_adapter(slug).parse_transactions(data)
+        except Exception:
+            continue
+        score = sum(
+            1 for t in txs
+            if t.transaction_type in ("buy", "sell") and t.price > 0 and t.quantity > 0
+        )
+        if score > best_score:
+            best_slug, best_txs, best_score = slug, txs, score
+
+    if not best_slug:
+        raise ValueError(
+            "No adapter could extract trades from this file. "
+            "Check that it is a transaction export (not a holdings/positions export) "
+            "containing dates, tickers, and buy/sell rows."
+        )
+    return best_slug, best_txs
+
+
 def list_custodians() -> list[dict]:
     """Return metadata for all registered adapters."""
     return [

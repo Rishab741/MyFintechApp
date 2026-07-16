@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 from calculations.behavioral import build_profile
 from calculations.returns import compute_mwr
-from normalizer.registry import get_adapter
+from normalizer.registry import detect_and_parse, get_adapter
 
 log = logging.getLogger("engine.b2b")
 router = APIRouter(tags=["b2b"])
@@ -112,16 +112,29 @@ async def b2b_diagnose_csv(
     if len(raw) > _MAX_CSV_BYTES:
         raise HTTPException(status_code=413, detail="File exceeds 10 MB limit.")
 
-    try:
-        adapter = get_adapter(broker)
-    except KeyError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    if broker == "auto":
+        # Score every registered adapter and use the best match.
+        try:
+            detected, norm_txs = detect_and_parse(raw)
+            log.info("B2B auto-detect chose adapter=%s", detected)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+    else:
+        try:
+            adapter = get_adapter(broker)
+        except KeyError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
-    try:
-        norm_txs = adapter.parse_transactions(raw)
-    except Exception as exc:
-        log.warning("B2B CSV parse failed for broker=%s: %s", broker, exc)
-        raise HTTPException(status_code=422, detail=f"Could not parse CSV: {exc}")
+        try:
+            norm_txs = adapter.parse_transactions(raw)
+        except Exception as exc:
+            # Wrong broker selected? Fall back to auto-detection before failing.
+            log.warning("B2B parse failed for broker=%s (%s); trying auto-detect", broker, exc)
+            try:
+                detected, norm_txs = detect_and_parse(raw)
+                log.info("B2B auto-detect rescued upload: adapter=%s", detected)
+            except ValueError:
+                raise HTTPException(status_code=422, detail=f"Could not parse CSV: {exc}")
 
     b2b_txs = [
         B2BTransaction(

@@ -53,6 +53,7 @@ const GREEN   = "#7FA37A";
 const MUTED   = "#6B7280";
 
 const BROKERS = [
+  { slug: "auto",        label: "Auto-detect (recommended)" },
   // Australia
   { slug: "commsec",     label: "CommSec" },
   { slug: "selfwealth",  label: "SelfWealth" },
@@ -509,7 +510,7 @@ function DiagnosticReport({ d }: { d: Diagnostic }) {
 
 export default function AdvisorDiagnosePage() {
   const [file, setFile]         = useState<File | null>(null);
-  const [broker, setBroker]     = useState("csv_generic");
+  const [broker, setBroker]     = useState("auto");
   const [firmName, setFirmName] = useState("");
   const [clientLabel, setClientLabel] = useState("");
   const [dragging, setDragging] = useState(false);

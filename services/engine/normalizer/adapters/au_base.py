@@ -82,9 +82,13 @@ _TX_ALIASES: dict[str, tuple[str, ...]] = {
         "brokerage (inc gst)", "brokerage+gst", "brokerage ($)", "brokerage",
         "fees", "commission",
     ),
+    # Some exports split GST out of brokerage into its own column — summed into fees.
+    "fees_gst": (
+        "gst ($)", "gst",
+    ),
     "amount": (
-        "total value", "consideration", "net value", "net proceeds",
-        "net amount", "total ($)", "value", "amount", "total",
+        "total amount", "total value", "consideration", "net value",
+        "net proceeds", "net amount", "total ($)", "value", "amount", "total",
     ),
     "details": (
         "details", "description", "narrative", "particulars",
@@ -267,7 +271,8 @@ def parse_trade_table_rows(
 
         qty   = abs(clean_number(row.get(cols.get("quantity", ""), "")))
         price = abs(clean_number(row.get(cols.get("price", ""), "")))
-        fees  = abs(clean_number(row.get(cols.get("fees", ""), "")))
+        fees  = abs(clean_number(row.get(cols.get("fees", ""), ""))) \
+              + abs(clean_number(row.get(cols.get("fees_gst", ""), "")))
         amt   = abs(clean_number(row.get(cols.get("amount", ""), "")))
 
         if qty == 0 and amt == 0:
