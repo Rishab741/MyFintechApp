@@ -272,6 +272,10 @@ export default function AdvisorSignup() {
       if (data.user && !data.session) {
         setSent(true);
       } else if (data.session) {
+        // Auto-confirm flow (no verification email): the advisor-callback
+        // route never runs, so provision the role server-side before entering.
+        await fetch("/api/advisor/provision", { method: "POST" });
+        await supabase.auth.refreshSession();
         window.location.href = "/advisor/dashboard";
       }
     } catch (err: unknown) {

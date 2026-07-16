@@ -188,9 +188,24 @@ function AdvisorLoginInner() {
       }
 
       if (role !== "advisor") {
+        // No role yet — this happens when the verification email's redirect
+        // never reached /auth/advisor-callback (e.g. URL not allow-listed).
+        // Try server-side provisioning; it succeeds only for accounts created
+        // through the advisor signup wizard with a confirmed email.
+        const resp = await fetch("/api/advisor/provision", { method: "POST" });
+
+        if (resp.ok) {
+          // New role lives in the JWT — refresh the session so middleware sees it.
+          await supabase.auth.refreshSession();
+          router.push("/advisor/dashboard");
+          router.refresh();
+          return;
+        }
+
+        const body: { error?: string } = await resp.json().catch(() => ({}));
         await supabase.auth.signOut();
         setError(
-          role === undefined
+          body.error === "email_unverified"
             ? "Your email address has not been verified yet. Please check your inbox for the confirmation link."
             : "This account is not registered as an advisor account. Use the Platstock login instead."
         );

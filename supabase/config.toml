@@ -22,3 +22,10 @@ verify_jwt = false
 import_map = "./functions/refresh-benchmark-cache/deno.json"
 entrypoint = "./functions/refresh-benchmark-cache/index.ts"
 
+# Public advisor diagnostic — no user JWT (the browser preflight must pass).
+# The function protects the engine with ENGINE_SERVICE_KEY server-side.
+[functions.b2b-diagnose]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/b2b-diagnose/index.ts"
+
