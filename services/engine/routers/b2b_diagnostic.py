@@ -23,7 +23,9 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from calculations.behavioral import build_profile
+from calculations.benchmark_replay import estimate_live_portfolio_value, replay
 from calculations.returns import compute_mwr
+from marketdata.prices import build_price_book
 from normalizer.registry import detect_and_parse, get_adapter
 
 log = logging.getLogger("engine.b2b")
@@ -49,6 +51,7 @@ class DiagnoseRequest(BaseModel):
     transactions: list[B2BTransaction]
     firm_name:    str = "Advisor"
     client_label: str = "Client Portfolio"
+    currency:     str = "USD"    # drives ASX symbol resolution + benchmark choice
 
 
 class WealthPoint(BaseModel):
@@ -93,6 +96,17 @@ class B2BDiagnosticOutput(BaseModel):
     grades:       DiagnosticGrades
     insights:     list[str]
     wealth_path:  list[WealthPoint]
+
+    # ── Market-data enrichment (Phases 1–2) — None when prices unavailable ────
+    currency:                   str = "USD"
+    estimated_portfolio_value:  Optional[float] = None   # open positions, live-priced
+    live_price_coverage:        Optional[float] = None   # fraction valued at live prices
+    benchmark_symbol:           Optional[str]   = None
+    benchmark_end_value:        Optional[float] = None   # same flows into the index
+    benchmark_mwr_annualized:   Optional[float] = None
+    alpha_vs_benchmark_pp:      Optional[float] = None   # client − benchmark, pp
+    opportunity_cost_dollars:   Optional[float] = None   # index value − client value
+    benchmark_path:             Optional[list[dict]] = None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -149,10 +163,15 @@ async def b2b_diagnose_csv(
         if t.symbol and t.transaction_type in ("buy", "sell") and t.price > 0 and t.quantity > 0
     ]
 
+    # Majority-vote currency from the normalized rows (AU adapters emit AUD).
+    currencies = [t.currency for t in norm_txs if getattr(t, "currency", None)]
+    currency = max(set(currencies), key=currencies.count) if currencies else "USD"
+
     req = DiagnoseRequest(
         transactions=b2b_txs,
         firm_name=firm_name,
         client_label=client_label,
+        currency=currency,
     )
     return await _run_diagnostic(req)
 
@@ -214,6 +233,34 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
     remaining_value = _estimate_remaining_value(trades)
     mwr_raw         = compute_mwr(cf_amounts, cf_dates, final_value=remaining_value)
 
+    # ── Market-data enrichment (Phases 1–2) ───────────────────────────────────
+    # Live prices upgrade the valuation and MWR; the benchmark replay computes
+    # the true opportunity cost. Any failure here degrades to the base report —
+    # a diagnostic must never 500 because Yahoo Finance is unreachable.
+    est_value  = remaining_value
+    live_cov:  Optional[float] = None
+    benchmark  = None
+    try:
+        symbols = sorted({t["symbol"] for t in trades})
+        book, bench_sym = build_price_book(symbols, req.currency, start=min(cf_dates))
+
+        live_value, coverage = estimate_live_portfolio_value(trades, book)
+        if live_value > 0:
+            est_value = live_value
+            live_cov  = round(coverage, 4)
+            mwr_raw   = compute_mwr(cf_amounts, cf_dates, final_value=est_value)
+
+        if bench_sym:
+            benchmark = replay(
+                list(zip(cf_dates, cf_amounts)),
+                client_end_value=est_value,
+                client_mwr=mwr_raw,
+                book=book,
+                benchmark_symbol=bench_sym,
+            )
+    except Exception as exc:
+        log.warning("B2B enrichment unavailable, serving base report: %s", exc)
+
     # ── FIFO trade pairs (realized returns + buy-hold comparison) ─────────────
     pairs              = _fifo_match(trades)
     realized_returns   = [p["return_pct"]    for p in pairs]
@@ -269,6 +316,15 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
         grades=grades,
         insights=insights,
         wealth_path=wealth_path,
+        currency=req.currency,
+        estimated_portfolio_value=round(est_value, 2) if est_value else None,
+        live_price_coverage=live_cov,
+        benchmark_symbol=benchmark["benchmark_symbol"] if benchmark else None,
+        benchmark_end_value=benchmark["benchmark_end_value"] if benchmark else None,
+        benchmark_mwr_annualized=benchmark["benchmark_mwr_annualized"] if benchmark else None,
+        alpha_vs_benchmark_pp=benchmark["alpha_pp"] if benchmark else None,
+        opportunity_cost_dollars=benchmark["opportunity_cost_dollars"] if benchmark else None,
+        benchmark_path=list(benchmark["path"]) if benchmark else None,
     )
 
 
