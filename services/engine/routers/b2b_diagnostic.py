@@ -23,8 +23,10 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from calculations.behavioral import build_profile
+from calculations.behavioral_v2 import compute_behavioral_v2
 from calculations.benchmark_replay import estimate_live_portfolio_value, replay
 from calculations.returns import compute_mwr
+from calculations.risk_suite import compute_risk_suite
 from marketdata.prices import build_price_book
 from normalizer.registry import detect_and_parse, get_adapter
 
@@ -107,6 +109,12 @@ class B2BDiagnosticOutput(BaseModel):
     alpha_vs_benchmark_pp:      Optional[float] = None   # client − benchmark, pp
     opportunity_cost_dollars:   Optional[float] = None   # index value − client value
     benchmark_path:             Optional[list[dict]] = None
+
+    # ── Phase 3: institutional risk suite ─────────────────────────────────────
+    risk_suite:                 Optional[dict] = None
+
+    # ── Phase 4: behavioral finance v2 (disposition, FOMO, panic, turnover) ───
+    behavioral_v2:              Optional[dict] = None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -240,6 +248,8 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
     est_value  = remaining_value
     live_cov:  Optional[float] = None
     benchmark  = None
+    risk       = None
+    bv2        = None
     try:
         symbols = sorted({t["symbol"] for t in trades})
         book, bench_sym = build_price_book(symbols, req.currency, start=min(cf_dates))
@@ -258,6 +268,15 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
                 book=book,
                 benchmark_symbol=bench_sym,
             )
+
+        # Phase 3: daily-series risk metrics (None if price coverage too thin)
+        risk = compute_risk_suite(trades, book, bench_sym)
+
+        # Phase 4: disposition effect, FOMO, market-panic sells, turnover
+        bv2 = compute_behavioral_v2(
+            trades, book, bench_sym,
+            mean_portfolio_value=risk["mean_portfolio_value"] if risk else None,
+        )
     except Exception as exc:
         log.warning("B2B enrichment unavailable, serving base report: %s", exc)
 
@@ -292,6 +311,20 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
     grades   = _compute_grades(profile, mwr_raw, behavioral_tax_pct, trade_win_rate)
     insights = _generate_insights(profile, behavioral_tax_pct, mwr_raw, trade_win_rate)
 
+    # The opportunity-cost line leads when the benchmark replay succeeded —
+    # it is the single most persuasive number in the report.
+    if benchmark and est_value > 0:
+        gap = benchmark["opportunity_cost_dollars"]
+        if abs(gap) >= 100:
+            direction = "behind" if gap > 0 else "ahead of"
+            insights.insert(0, (
+                f"Index replay: the same deposits into {benchmark['benchmark_symbol']} "
+                f"on the same days would be worth {abs(benchmark['benchmark_end_value']):,.0f} "
+                f"today vs {est_value:,.0f} actual — the portfolio is "
+                f"{abs(gap):,.0f} {direction} the index."
+            ))
+        insights = insights[:5]
+
     return B2BDiagnosticOutput(
         firm_name=req.firm_name,
         client_label=req.client_label,
@@ -325,6 +358,8 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
         alpha_vs_benchmark_pp=benchmark["alpha_pp"] if benchmark else None,
         opportunity_cost_dollars=benchmark["opportunity_cost_dollars"] if benchmark else None,
         benchmark_path=list(benchmark["path"]) if benchmark else None,
+        risk_suite=dict(risk) if risk else None,
+        behavioral_v2=dict(bv2) if bv2 else None,
     )
 
 

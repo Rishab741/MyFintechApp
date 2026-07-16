@@ -42,6 +42,46 @@ interface Diagnostic {
   grades: DiagnosticGrades;
   insights: string[];
   wealth_path: WealthPoint[];
+
+  // Market-data enrichment (null when prices were unavailable)
+  currency?: string;
+  estimated_portfolio_value?: number | null;
+  live_price_coverage?: number | null;
+  benchmark_symbol?: string | null;
+  benchmark_end_value?: number | null;
+  benchmark_mwr_annualized?: number | null;
+  alpha_vs_benchmark_pp?: number | null;
+  opportunity_cost_dollars?: number | null;
+  risk_suite?: {
+    twr_annualized_pct: number;
+    volatility_pct: number;
+    sharpe: number | null;
+    sortino: number | null;
+    max_drawdown_pct: number;
+    max_drawdown_peak: string;
+    max_drawdown_trough: string;
+    cvar_95_daily_pct: number;
+    beta: number | null;
+    observation_days: number;
+  } | null;
+  behavioral_v2?: {
+    disposition_pgr: number | null;
+    disposition_plr: number | null;
+    disposition_ratio: number | null;
+    fomo_index_pct: number | null;
+    buys_after_rally_pct: number | null;
+    market_panic_sell_pct: number | null;
+    annual_turnover_x: number | null;
+    trades_per_year: number;
+  } | null;
+}
+
+function fmtMoney(v: number, ccy = "USD") {
+  const sym = ccy === "AUD" ? "A$" : "$";
+  const a = Math.abs(v);
+  if (a >= 1_000_000) return `${sym}${(v / 1_000_000).toFixed(2)}M`;
+  if (a >= 1_000)     return `${sym}${(v / 1_000).toFixed(1)}K`;
+  return `${sym}${v.toFixed(0)}`;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -327,6 +367,59 @@ function DiagnosticReport({ d }: { d: Diagnostic }) {
         </div>
       </Card>
 
+      {/* ── Opportunity cost hero (benchmark replay) ── */}
+      {d.benchmark_symbol && d.opportunity_cost_dollars != null && d.estimated_portfolio_value != null && (
+        <Card
+          title={`Index Replay — same deposits, same days, into ${d.benchmark_symbol}`}
+          glow={d.opportunity_cost_dollars > 0 ? RED : GREEN}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-mono tracking-widest uppercase" style={{ color: MUTED }}>
+                Actual portfolio
+              </span>
+              <span className="text-2xl font-black tabular-nums" style={{ color: "rgba(255,255,255,0.9)" }}>
+                {fmtMoney(d.estimated_portfolio_value, d.currency)}
+              </span>
+              {d.live_price_coverage != null && (
+                <span className="text-[10px] font-mono" style={{ color: MUTED }}>
+                  {(d.live_price_coverage * 100).toFixed(0)}% live-priced
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-mono tracking-widest uppercase" style={{ color: MUTED }}>
+                Index counterfactual
+              </span>
+              <span className="text-2xl font-black tabular-nums" style={{ color: GOLD }}>
+                {d.benchmark_end_value != null ? fmtMoney(d.benchmark_end_value, d.currency) : "—"}
+              </span>
+              {d.benchmark_mwr_annualized != null && (
+                <span className="text-[10px] font-mono" style={{ color: MUTED }}>
+                  {d.benchmark_mwr_annualized >= 0 ? "+" : ""}{d.benchmark_mwr_annualized.toFixed(1)}% MWR
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-mono tracking-widest uppercase" style={{ color: MUTED }}>
+                {d.opportunity_cost_dollars > 0 ? "Left on the table" : "Ahead of the index"}
+              </span>
+              <span
+                className="text-2xl font-black tabular-nums"
+                style={{ color: d.opportunity_cost_dollars > 0 ? RED : GREEN }}
+              >
+                {fmtMoney(Math.abs(d.opportunity_cost_dollars), d.currency)}
+              </span>
+              {d.alpha_vs_benchmark_pp != null && (
+                <span className="text-[10px] font-mono" style={{ color: MUTED }}>
+                  alpha {d.alpha_vs_benchmark_pp >= 0 ? "+" : ""}{d.alpha_vs_benchmark_pp.toFixed(1)} pp/yr
+                </span>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* ── Key metrics row ── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
@@ -438,6 +531,111 @@ function DiagnosticReport({ d }: { d: Diagnostic }) {
           />
         </Card>
       </div>
+
+      {/* ── Institutional risk + behavioral deep-dive (price-enriched) ── */}
+      {(d.risk_suite || d.behavioral_v2) && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {d.risk_suite && (
+            <Card title="Institutional Risk Suite">
+              <MetricRow
+                label="TWR (annualized)"
+                value={`${d.risk_suite.twr_annualized_pct >= 0 ? "+" : ""}${d.risk_suite.twr_annualized_pct.toFixed(1)}%`}
+                color={d.risk_suite.twr_annualized_pct >= 0 ? GREEN : RED}
+                sub={`${d.risk_suite.observation_days} trading days observed`}
+              />
+              <MetricRow
+                label="Volatility (ann.)"
+                value={`${d.risk_suite.volatility_pct.toFixed(1)}%`}
+                color={d.risk_suite.volatility_pct > 25 ? RED : d.risk_suite.volatility_pct > 15 ? GOLD : GREEN}
+              />
+              {d.risk_suite.sharpe != null && (
+                <MetricRow
+                  label="Sharpe Ratio"
+                  value={d.risk_suite.sharpe.toFixed(2)}
+                  color={d.risk_suite.sharpe >= 1 ? GREEN : d.risk_suite.sharpe >= 0.5 ? GOLD : RED}
+                  sub="excess return / total risk"
+                />
+              )}
+              {d.risk_suite.sortino != null && (
+                <MetricRow
+                  label="Sortino Ratio"
+                  value={d.risk_suite.sortino.toFixed(2)}
+                  color={d.risk_suite.sortino >= 1.5 ? GREEN : d.risk_suite.sortino >= 0.75 ? GOLD : RED}
+                  sub="excess return / downside risk"
+                />
+              )}
+              <MetricRow
+                label="Max Drawdown"
+                value={`${d.risk_suite.max_drawdown_pct.toFixed(1)}%`}
+                color={d.risk_suite.max_drawdown_pct < -25 ? RED : d.risk_suite.max_drawdown_pct < -12 ? GOLD : GREEN}
+                sub={`${d.risk_suite.max_drawdown_peak} → ${d.risk_suite.max_drawdown_trough}`}
+              />
+              <MetricRow
+                label="CVaR 95% (daily)"
+                value={`−${d.risk_suite.cvar_95_daily_pct.toFixed(2)}%`}
+                color={d.risk_suite.cvar_95_daily_pct > 3 ? RED : GOLD}
+                sub="avg loss on the worst 5% of days"
+              />
+              {d.risk_suite.beta != null && (
+                <MetricRow
+                  label="Beta vs Index"
+                  value={d.risk_suite.beta.toFixed(2)}
+                  color={Math.abs(d.risk_suite.beta - 1) < 0.3 ? GREEN : GOLD}
+                />
+              )}
+            </Card>
+          )}
+
+          {d.behavioral_v2 && (
+            <Card title="Behavioral Deep-Dive">
+              {d.behavioral_v2.disposition_ratio != null && (
+                <MetricRow
+                  label="Disposition Ratio"
+                  value={`${d.behavioral_v2.disposition_ratio.toFixed(2)}×`}
+                  color={d.behavioral_v2.disposition_ratio > 1.5 ? RED : d.behavioral_v2.disposition_ratio > 1.1 ? GOLD : GREEN}
+                  sub="sells winners vs holds losers (Odean PGR/PLR)"
+                />
+              )}
+              {d.behavioral_v2.fomo_index_pct != null && (
+                <MetricRow
+                  label="FOMO Index"
+                  value={`${d.behavioral_v2.fomo_index_pct >= 0 ? "+" : ""}${d.behavioral_v2.fomo_index_pct.toFixed(1)}%`}
+                  color={d.behavioral_v2.fomo_index_pct > 8 ? RED : d.behavioral_v2.fomo_index_pct > 3 ? GOLD : GREEN}
+                  sub="avg 20-day run-up at moment of purchase"
+                />
+              )}
+              {d.behavioral_v2.buys_after_rally_pct != null && (
+                <MetricRow
+                  label="Buys After >10% Rally"
+                  value={`${d.behavioral_v2.buys_after_rally_pct.toFixed(0)}%`}
+                  color={d.behavioral_v2.buys_after_rally_pct > 40 ? RED : GOLD}
+                />
+              )}
+              {d.behavioral_v2.market_panic_sell_pct != null && (
+                <MetricRow
+                  label="Market-Panic Sells"
+                  value={`${d.behavioral_v2.market_panic_sell_pct.toFixed(0)}%`}
+                  color={d.behavioral_v2.market_panic_sell_pct > 40 ? RED : d.behavioral_v2.market_panic_sell_pct > 15 ? GOLD : GREEN}
+                  sub="sells while index was ≥10% off its peak"
+                />
+              )}
+              {d.behavioral_v2.annual_turnover_x != null && (
+                <MetricRow
+                  label="Annual Turnover"
+                  value={`${d.behavioral_v2.annual_turnover_x.toFixed(1)}×`}
+                  color={d.behavioral_v2.annual_turnover_x > 3 ? RED : d.behavioral_v2.annual_turnover_x > 1.5 ? GOLD : GREEN}
+                  sub="portfolio traded per year"
+                />
+              )}
+              <MetricRow
+                label="Trades / Year"
+                value={d.behavioral_v2.trades_per_year.toFixed(0)}
+                color={d.behavioral_v2.trades_per_year > 100 ? RED : "rgba(255,255,255,0.85)"}
+              />
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* ── Wealth path chart ── */}
       {d.wealth_path.length >= 2 && (
