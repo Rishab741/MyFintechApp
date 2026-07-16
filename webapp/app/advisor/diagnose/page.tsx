@@ -97,6 +97,90 @@ interface Diagnostic {
     avg_hold_winners_days: number | null;
     avg_hold_losers_days: number | null;
   } | null;
+  projection?: {
+    horizon_years: number;
+    start_value: number;
+    mu_current: number;
+    sigma_current: number;
+    mu_disciplined: number;
+    sigma_disciplined: number;
+    yearly: {
+      year: number;
+      cur_p10: number; cur_p50: number; cur_p90: number;
+      dis_p10: number; dis_p50: number; dis_p90: number;
+    }[];
+    terminal_gap_p50: number;
+  } | null;
+  score_v2?: {
+    composite: number;
+    grade: string;
+    subscores: Record<string, number>;
+    weights_used: Record<string, number>;
+  } | null;
+  narrative?: string[] | null;
+}
+
+const SUBSCORE_LABEL: Record<string, string> = {
+  alpha:           "Returns vs Index",
+  discipline:      "Sell Discipline",
+  timing:          "Entry Timing",
+  tax_efficiency:  "Tax Efficiency",
+  turnover:        "Trading Costs",
+  diversification: "Diversification",
+};
+
+// ── Projection fan chart ──────────────────────────────────────────────────────
+
+function ProjectionChart({ p, ccy }: { p: NonNullable<Diagnostic["projection"]>; ccy?: string }) {
+  const W = 760, H = 220;
+  const PAD = { t: 14, r: 96, b: 24, l: 8 };
+  const IW = W - PAD.l - PAD.r;
+  const IH = H - PAD.t - PAD.b;
+
+  const rows = p.yearly;
+  const maxY = Math.max(...rows.map(r => r.dis_p90), ...rows.map(r => r.cur_p90)) * 1.04;
+  const px = (yr: number) => PAD.l + (yr / p.horizon_years) * IW;
+  const py = (v: number) => PAD.t + IH - (v / maxY) * IH;
+
+  const band = (lo: keyof typeof rows[0], hi: keyof typeof rows[0]) =>
+    `M ${px(0)} ${py(p.start_value)} ` +
+    rows.map(r => `L ${px(r.year)} ${py(r[hi] as number)}`).join(" ") +
+    ` L ${px(rows[rows.length - 1].year)} ${py(rows[rows.length - 1][lo] as number)} ` +
+    rows.slice().reverse().map(r => `L ${px(r.year)} ${py(r[lo] as number)}`).join(" ") +
+    ` Z`;
+
+  const median = (k: keyof typeof rows[0]) =>
+    `M ${px(0)} ${py(p.start_value)} ` +
+    rows.map(r => `L ${px(r.year)} ${py(r[k] as number)}`).join(" ");
+
+  const last = rows[rows.length - 1];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+      {/* Bands */}
+      <path d={band("dis_p10", "dis_p90")} fill={GREEN} opacity={0.10} />
+      <path d={band("cur_p10", "cur_p90")} fill={RED}   opacity={0.10} />
+      {/* Medians */}
+      <path d={median("dis_p50")} fill="none" stroke={GREEN} strokeWidth={2} />
+      <path d={median("cur_p50")} fill="none" stroke={RED}   strokeWidth={2} strokeDasharray="5 3" />
+      {/* Terminal labels */}
+      <text x={px(last.year) + 6} y={py(last.dis_p50) + 4} fill={GREEN} fontSize={11}
+        fontFamily="ui-monospace, monospace" fontWeight="bold">
+        {fmtMoney(last.dis_p50, ccy)}
+      </text>
+      <text x={px(last.year) + 6} y={py(last.cur_p50) + 4} fill={RED} fontSize={11}
+        fontFamily="ui-monospace, monospace" fontWeight="bold">
+        {fmtMoney(last.cur_p50, ccy)}
+      </text>
+      {/* Year labels */}
+      {[Math.round(p.horizon_years / 2), p.horizon_years].map(yr => (
+        <text key={yr} x={px(yr)} y={H - 6} fill={MUTED} fontSize={9}
+          textAnchor="middle" fontFamily="ui-monospace, monospace">
+          {yr}y
+        </text>
+      ))}
+    </svg>
+  );
 }
 
 function fmtMoney(v: number, ccy = "USD") {
@@ -380,15 +464,78 @@ function DiagnosticReport({ d }: { d: Diagnostic }) {
         </div>
       </div>
 
-      {/* ── Grades row ── */}
-      <Card>
-        <div className="flex items-center justify-around">
-          <GradeBadge grade={d.grades.overall}    label="Overall"    />
-          <GradeBadge grade={d.grades.timing}     label="Timing"     />
-          <GradeBadge grade={d.grades.discipline} label="Discipline" />
-          <GradeBadge grade={d.grades.returns}    label="Returns"    />
-        </div>
-      </Card>
+      {/* ── Executive summary ── */}
+      {d.narrative && d.narrative.length > 0 && (
+        <Card title="Executive Summary" glow={GOLD}>
+          <div className="space-y-3">
+            {d.narrative.map((para, i) => (
+              <p key={i} className="text-sm leading-relaxed"
+                style={{ color: "rgba(255,255,255,0.78)" }}>
+                {para}
+              </p>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* ── Composite score + grades ── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {d.score_v2 ? (
+          <Card title="Composite Score">
+            <div className="flex items-center gap-5 mb-4">
+              <div
+                className="w-20 h-20 rounded-xl flex flex-col items-center justify-center shrink-0"
+                style={{
+                  background: `${GRADE_COLOR[d.score_v2.grade] ?? MUTED}14`,
+                  border: `1.5px solid ${GRADE_COLOR[d.score_v2.grade] ?? MUTED}40`,
+                }}
+              >
+                <span className="text-3xl font-black tabular-nums"
+                  style={{ color: GRADE_COLOR[d.score_v2.grade] ?? MUTED }}>
+                  {Math.round(d.score_v2.composite)}
+                </span>
+                <span className="text-[9px] font-mono tracking-widest" style={{ color: MUTED }}>
+                  / 100 · {d.score_v2.grade}
+                </span>
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: MUTED }}>
+                Weighted across {Object.keys(d.score_v2.subscores).length} measured dimensions.
+                Components without sufficient data are excluded, not defaulted.
+              </p>
+            </div>
+            <div className="space-y-2.5">
+              {Object.entries(d.score_v2.subscores).map(([key, val]) => (
+                <div key={key} className="flex items-center gap-3">
+                  <span className="text-[10px] font-mono w-28 shrink-0" style={{ color: MUTED }}>
+                    {SUBSCORE_LABEL[key] ?? key}
+                  </span>
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden"
+                    style={{ background: "rgba(255,255,255,0.06)" }}>
+                    <div className="h-full rounded-full"
+                      style={{
+                        width: `${val}%`,
+                        background: val >= 70 ? GREEN : val >= 45 ? GOLD : RED,
+                      }} />
+                  </div>
+                  <span className="text-[11px] font-mono tabular-nums w-8 text-right"
+                    style={{ color: val >= 70 ? GREEN : val >= 45 ? GOLD : RED }}>
+                    {Math.round(val)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+
+        <Card title="Dimension Grades">
+          <div className="flex items-center justify-around h-full">
+            <GradeBadge grade={d.grades.overall}    label="Overall"    />
+            <GradeBadge grade={d.grades.timing}     label="Timing"     />
+            <GradeBadge grade={d.grades.discipline} label="Discipline" />
+            <GradeBadge grade={d.grades.returns}    label="Returns"    />
+          </div>
+        </Card>
+      </div>
 
       {/* ── Opportunity cost hero (benchmark replay) ── */}
       {d.benchmark_symbol && d.opportunity_cost_dollars != null && d.estimated_portfolio_value != null && (
@@ -809,6 +956,54 @@ function DiagnosticReport({ d }: { d: Diagnostic }) {
           </div>
         </Card>
       )}
+
+      {/* ── 20-year projection ── */}
+      {d.projection && (
+        <Card
+          title={`${d.projection.horizon_years}-Year Projection — Current Behavior vs Disciplined Strategy`}
+          glow={d.projection.terminal_gap_p50 > 0 ? GREEN : undefined}
+        >
+          <div className="flex flex-wrap gap-4 mb-3 text-[10px] font-mono" style={{ color: MUTED }}>
+            <span className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 inline-block" style={{ background: GREEN }} />
+              Disciplined ({(d.projection.mu_disciplined * 100).toFixed(1)}% / {(d.projection.sigma_disciplined * 100).toFixed(0)}% vol)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 inline-block border-b border-dashed" style={{ borderColor: RED }} />
+              Current behavior ({(d.projection.mu_current * 100).toFixed(1)}% / {(d.projection.sigma_current * 100).toFixed(0)}% vol)
+            </span>
+            <span>Shaded: 10th–90th percentile · 1,000 paths each</span>
+          </div>
+          <ProjectionChart p={d.projection} ccy={d.currency} />
+          {d.projection.terminal_gap_p50 > 0 && (
+            <p className="text-sm mt-3 leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
+              Median {d.projection.horizon_years}-year difference:{" "}
+              <span className="font-bold" style={{ color: GREEN }}>
+                {fmtMoney(d.projection.terminal_gap_p50, d.currency)}
+              </span>{" "}
+              — the compounded cost of the behaviors identified in this report.
+            </p>
+          )}
+        </Card>
+      )}
+
+      {/* ── Methodology appendix ── */}
+      <Card title="Methodology Notes">
+        <div className="space-y-1.5 text-[11px] leading-relaxed font-mono" style={{ color: MUTED }}>
+          <p>· Returns: money-weighted (IRR via Brent root-finding on the cash-flow schedule); open positions valued at latest market close where available.</p>
+          <p>· Index replay: identical cash-flow dates and amounts applied to the benchmark; withdrawals capped at accumulated units.</p>
+          <p>· Risk metrics: flow-adjusted daily returns on reconstructed positions; Sharpe/Sortino vs a 4% cash-rate assumption; CVaR is the mean of the worst 5% of daily returns.</p>
+          <p>· Behavioral: disposition effect per Odean (1998) day-level PGR/PLR counting; FOMO measured as trailing 20-day return at purchase.</p>
+          <p>· Confidence intervals: percentile bootstrap, 2,000 resamples, fixed seed. Win-rate significance: one-sided exact binomial vs p = 0.5.</p>
+          {d.tax_analysis && (
+            <p>· Tax: FIFO lot matching; {d.tax_analysis.currency === "AUD" ? "Australian CGT 50% discount at the 12-month boundary" : "long-term holding boundary at 12 months"}; assumed marginal rate {(d.tax_analysis.marginal_rate_assumed * 100).toFixed(0)}% — not personal tax advice.</p>
+          )}
+          {d.projection && (
+            <p>· Projection: geometric Brownian motion, monthly steps, 1,000 paths per regime, drift/volatility clamped to [−15%, +25%] / [5%, 60%]. GBM understates tail risk; the bias applies to both regimes equally.</p>
+          )}
+          <p>· All computation is ephemeral — no client data is stored. Deterministic: identical inputs always reproduce this report.</p>
+        </div>
+      </Card>
 
       {/* ── Print footer ── */}
       <div

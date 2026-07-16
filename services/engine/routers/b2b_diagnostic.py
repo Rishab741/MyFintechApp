@@ -25,8 +25,11 @@ from pydantic import BaseModel
 from calculations.behavioral import build_profile
 from calculations.behavioral_v2 import compute_behavioral_v2
 from calculations.benchmark_replay import estimate_live_portfolio_value, replay
+from calculations.narrative import build_narrative
+from calculations.projection import project
 from calculations.returns import compute_mwr
 from calculations.risk_suite import compute_risk_suite
+from calculations.scoring_v2 import compute_score_v2
 from calculations.stat_rigor import summarize as stat_summarize
 from calculations.tax_drag import compute_tax_drag
 from marketdata.prices import build_price_book
@@ -123,6 +126,15 @@ class B2BDiagnosticOutput(BaseModel):
 
     # ── Phase 6: tax drag (AU CGT 50% discount / holding-period efficiency) ───
     tax_analysis:               Optional[dict] = None
+
+    # ── Phase 7: Monte Carlo wealth projection (current vs disciplined) ───────
+    projection:                 Optional[dict] = None
+
+    # ── Phase 8: composite score v2 (weighted 0–100 with sub-scores) ──────────
+    score_v2:                   Optional[dict] = None
+
+    # ── Phase 9: executive-summary narrative (three paragraphs) ───────────────
+    narrative:                  Optional[list[str]] = None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -258,6 +270,7 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
     benchmark  = None
     risk       = None
     bv2        = None
+    projection_result = None
     try:
         symbols = sorted({t["symbol"] for t in trades})
         book, bench_sym = build_price_book(symbols, req.currency, start=min(cf_dates))
@@ -285,6 +298,28 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
             trades, book, bench_sym,
             mean_portfolio_value=risk["mean_portfolio_value"] if risk else None,
         )
+
+        # Phase 7: Monte Carlo projection — needs benchmark stats for the
+        # "disciplined" regime; benchmark vol computed from its own closes.
+        if benchmark and est_value > 0:
+            bench_closes = [p for _, p in book.series_between(
+                bench_sym, min(cf_dates), date.today()
+            )]
+            if len(bench_closes) >= 40:
+                b_rets  = [bench_closes[i] / bench_closes[i-1] - 1.0
+                           for i in range(1, len(bench_closes))]
+                b_mean  = sum(b_rets) / len(b_rets)
+                b_var   = sum((r - b_mean) ** 2 for r in b_rets) / (len(b_rets) - 1)
+                b_sigma = (b_var ** 0.5) * (252 ** 0.5)
+                c_sigma = (risk["volatility_pct"] / 100.0) if risk else 0.20
+                projection_result = project(
+                    start_value=est_value,
+                    mu_current=mwr_raw,
+                    sigma_current=c_sigma,
+                    mu_disciplined=benchmark["benchmark_mwr_annualized"] / 100.0,
+                    sigma_disciplined=b_sigma,
+                    horizon_years=20,
+                )
     except Exception as exc:
         log.warning("B2B enrichment unavailable, serving base report: %s", exc)
 
@@ -320,6 +355,34 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
     all_dates    = [t["_date"] for t in trades]
     period_start = str(min(all_dates))
     period_end   = str(max(all_dates))
+
+    # ── Phase 8: composite score v2 ────────────────────────────────────────────
+    score = compute_score_v2(
+        alpha_pp=benchmark["alpha_pp"] if benchmark else None,
+        panic_rate_pct=profile["panic_sell_probability_10"] * 100,
+        market_panic_pct=bv2["market_panic_sell_pct"] if bv2 else None,
+        timing_quality=profile["timing_quality_score"],
+        fomo_index_pct=bv2["fomo_index_pct"] if bv2 else None,
+        pct_gains_taken_early=tax["pct_gains_taken_early"] if tax else None,
+        annual_turnover_x=bv2["annual_turnover_x"] if bv2 else None,
+        trades=trades,
+    )
+
+    # ── Phase 9: executive-summary narrative ──────────────────────────────────
+    narrative = build_narrative(
+        currency=req.currency,
+        period_start=period_start,
+        period_end=period_end,
+        transaction_count=len(trades),
+        mwr_pct=mwr_raw * 100,
+        est_value=est_value if est_value > 0 else None,
+        benchmark=dict(benchmark) if benchmark else None,
+        risk=dict(risk) if risk else None,
+        bv2=dict(bv2) if bv2 else None,
+        tax=dict(tax) if tax else None,
+        stats=dict(stats) if stats else None,
+        projection=dict(projection_result) if projection_result else None,
+    )
 
     # ── Grades + insights ─────────────────────────────────────────────────────
     grades   = _compute_grades(profile, mwr_raw, behavioral_tax_pct, trade_win_rate)
@@ -387,6 +450,9 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
         behavioral_v2=dict(bv2) if bv2 else None,
         statistics=dict(stats) if stats else None,
         tax_analysis=dict(tax) if tax else None,
+        projection=dict(projection_result) if projection_result else None,
+        score_v2=dict(score) if score else None,
+        narrative=narrative or None,
     )
 
 
