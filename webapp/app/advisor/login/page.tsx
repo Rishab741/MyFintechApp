@@ -178,6 +178,15 @@ function AdvisorLoginInner() {
       // If the user signed in but isn't an advisor, sign them out immediately
       // and show an informative error rather than silently redirecting.
       const role = data.user?.app_metadata?.role;
+
+      // Admin observer: allowed through every panel. Route to the admin home;
+      // the middleware permits /advisor/* browsing from there.
+      if (role === "admin") {
+        router.push("/admin");
+        router.refresh();
+        return;
+      }
+
       if (role !== "advisor") {
         await supabase.auth.signOut();
         setError(
