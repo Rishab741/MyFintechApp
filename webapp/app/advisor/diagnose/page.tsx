@@ -74,6 +74,29 @@ interface Diagnostic {
     annual_turnover_x: number | null;
     trades_per_year: number;
   } | null;
+  statistics?: {
+    sample_pairs: number;
+    confidence: string;
+    behavioral_tax_ci_low_pp: number | null;
+    behavioral_tax_ci_high_pp: number | null;
+    realized_return_ci_low: number | null;
+    realized_return_ci_high: number | null;
+    win_rate_p_value: number | null;
+    win_rate_verdict: string | null;
+  } | null;
+  tax_analysis?: {
+    currency: string;
+    marginal_rate_assumed: number;
+    short_term_gain: number;
+    long_term_gain: number;
+    short_term_loss: number;
+    pct_gains_taken_early: number | null;
+    est_discount_forgone: number;
+    near_miss_sales: number;
+    near_miss_gain: number;
+    avg_hold_winners_days: number | null;
+    avg_hold_losers_days: number | null;
+  } | null;
 }
 
 function fmtMoney(v: number, ccy = "USD") {
@@ -632,6 +655,105 @@ function DiagnosticReport({ d }: { d: Diagnostic }) {
                 value={d.behavioral_v2.trades_per_year.toFixed(0)}
                 color={d.behavioral_v2.trades_per_year > 100 ? RED : "rgba(255,255,255,0.85)"}
               />
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ── Tax efficiency + statistical confidence ── */}
+      {(d.tax_analysis || d.statistics) && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {d.tax_analysis && (
+            <Card title={d.tax_analysis.currency === "AUD" ? "Tax Efficiency — CGT Discount" : "Tax Efficiency — Holding Periods"}>
+              <MetricRow
+                label="Gains Taken < 12 Months"
+                value={d.tax_analysis.pct_gains_taken_early != null
+                  ? `${d.tax_analysis.pct_gains_taken_early.toFixed(0)}%`
+                  : "—"}
+                color={
+                  (d.tax_analysis.pct_gains_taken_early ?? 0) > 60 ? RED :
+                  (d.tax_analysis.pct_gains_taken_early ?? 0) > 30 ? GOLD : GREEN
+                }
+                sub={d.tax_analysis.currency === "AUD"
+                  ? "forfeits the 50% CGT discount"
+                  : "taxed at short-term rates"}
+              />
+              <MetricRow
+                label="Est. Avoidable Tax"
+                value={fmtMoney(d.tax_analysis.est_discount_forgone, d.tax_analysis.currency)}
+                color={d.tax_analysis.est_discount_forgone > 1000 ? RED : GOLD}
+                sub={`at assumed ${(d.tax_analysis.marginal_rate_assumed * 100).toFixed(0)}% marginal rate`}
+              />
+              {d.tax_analysis.near_miss_sales > 0 && (
+                <MetricRow
+                  label="Near-Miss Sales"
+                  value={`${d.tax_analysis.near_miss_sales}`}
+                  color={RED}
+                  sub={`winners sold at 9–12 months — ${fmtMoney(d.tax_analysis.near_miss_gain, d.tax_analysis.currency)} in gains`}
+                />
+              )}
+              {d.tax_analysis.avg_hold_winners_days != null && (
+                <MetricRow
+                  label="Avg Hold — Winners"
+                  value={`${Math.round(d.tax_analysis.avg_hold_winners_days)} days`}
+                  color={d.tax_analysis.avg_hold_winners_days < 365 ? GOLD : GREEN}
+                />
+              )}
+              {d.tax_analysis.avg_hold_losers_days != null && (
+                <MetricRow
+                  label="Avg Hold — Losers"
+                  value={`${Math.round(d.tax_analysis.avg_hold_losers_days)} days`}
+                  color={
+                    d.tax_analysis.avg_hold_winners_days != null &&
+                    d.tax_analysis.avg_hold_losers_days > d.tax_analysis.avg_hold_winners_days
+                      ? RED : "rgba(255,255,255,0.85)"
+                  }
+                  sub="longer than winners = disposition effect"
+                />
+              )}
+            </Card>
+          )}
+
+          {d.statistics && (
+            <Card title="Statistical Confidence">
+              <MetricRow
+                label="Sample Size"
+                value={`${d.statistics.sample_pairs} closed trades`}
+                color={
+                  d.statistics.confidence === "high" ? GREEN :
+                  d.statistics.confidence === "moderate" ? GOLD : RED
+                }
+                sub={`${d.statistics.confidence} confidence`}
+              />
+              {d.statistics.behavioral_tax_ci_low_pp != null && d.statistics.behavioral_tax_ci_high_pp != null && (
+                <MetricRow
+                  label="Behavioral Tax 95% CI"
+                  value={`${d.statistics.behavioral_tax_ci_low_pp.toFixed(1)} to ${d.statistics.behavioral_tax_ci_high_pp.toFixed(1)} pp`}
+                  color={d.statistics.behavioral_tax_ci_low_pp > 0 ? RED
+                    : d.statistics.behavioral_tax_ci_high_pp < 0 ? GREEN : GOLD}
+                  sub="bootstrap, 2000 resamples"
+                />
+              )}
+              {d.statistics.realized_return_ci_low != null && d.statistics.realized_return_ci_high != null && (
+                <MetricRow
+                  label="Avg Return 95% CI"
+                  value={`${d.statistics.realized_return_ci_low.toFixed(1)}% to ${d.statistics.realized_return_ci_high.toFixed(1)}%`}
+                  color={"rgba(255,255,255,0.85)"}
+                />
+              )}
+              {d.statistics.win_rate_p_value != null && (
+                <MetricRow
+                  label="Win Rate p-value"
+                  value={d.statistics.win_rate_p_value < 0.001 ? "<0.001" : d.statistics.win_rate_p_value.toFixed(3)}
+                  color={d.statistics.win_rate_p_value < 0.05 ? GREEN : GOLD}
+                  sub="vs coin-flip trading"
+                />
+              )}
+              {d.statistics.win_rate_verdict && (
+                <p className="text-xs leading-relaxed mt-3 font-mono" style={{ color: MUTED }}>
+                  Verdict: {d.statistics.win_rate_verdict}
+                </p>
+              )}
             </Card>
           )}
         </div>

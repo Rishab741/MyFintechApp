@@ -27,6 +27,8 @@ from calculations.behavioral_v2 import compute_behavioral_v2
 from calculations.benchmark_replay import estimate_live_portfolio_value, replay
 from calculations.returns import compute_mwr
 from calculations.risk_suite import compute_risk_suite
+from calculations.stat_rigor import summarize as stat_summarize
+from calculations.tax_drag import compute_tax_drag
 from marketdata.prices import build_price_book
 from normalizer.registry import detect_and_parse, get_adapter
 
@@ -115,6 +117,12 @@ class B2BDiagnosticOutput(BaseModel):
 
     # ── Phase 4: behavioral finance v2 (disposition, FOMO, panic, turnover) ───
     behavioral_v2:              Optional[dict] = None
+
+    # ── Phase 5: statistical rigor (bootstrap CIs, skill-vs-luck test) ────────
+    statistics:                 Optional[dict] = None
+
+    # ── Phase 6: tax drag (AU CGT 50% discount / holding-period efficiency) ───
+    tax_analysis:               Optional[dict] = None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -299,6 +307,12 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
     total_losses        = abs(sum(losers)) if losers else 0.0
     profit_factor       = total_gains / total_losses if total_losses > 0 else 999.0
 
+    # ── Phase 5: statistical rigor (price-independent — always computed) ──────
+    stats = stat_summarize(realized_returns, bh_returns) if realized_returns else None
+
+    # ── Phase 6: tax drag (price-independent — always computed) ───────────────
+    tax = compute_tax_drag(trades, currency=req.currency)
+
     # ── Wealth path ───────────────────────────────────────────────────────────
     wealth_path = _build_wealth_path(trades)
 
@@ -310,6 +324,17 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
     # ── Grades + insights ─────────────────────────────────────────────────────
     grades   = _compute_grades(profile, mwr_raw, behavioral_tax_pct, trade_win_rate)
     insights = _generate_insights(profile, behavioral_tax_pct, mwr_raw, trade_win_rate)
+
+    # Tax-efficiency insight: the CGT discount forgone is concrete, fixable money.
+    if tax and tax["est_discount_forgone"] >= 500:
+        label = "CGT 50% discount" if req.currency == "AUD" else "long-term rate"
+        insights.insert(0, (
+            f"Tax drag: {tax['pct_gains_taken_early']:.0f}% of realized gains were taken "
+            f"inside 12 months, forfeiting the {label} — an estimated "
+            f"{tax['est_discount_forgone']:,.0f} in avoidable tax"
+            + (f", including {tax['near_miss_sales']} sale(s) just 1–3 months short of the line."
+               if tax["near_miss_sales"] else ".")
+        ))
 
     # The opportunity-cost line leads when the benchmark replay succeeded —
     # it is the single most persuasive number in the report.
@@ -323,7 +348,7 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
                 f"today vs {est_value:,.0f} actual — the portfolio is "
                 f"{abs(gap):,.0f} {direction} the index."
             ))
-        insights = insights[:5]
+    insights = insights[:6]
 
     return B2BDiagnosticOutput(
         firm_name=req.firm_name,
@@ -360,6 +385,8 @@ async def _run_diagnostic(req: DiagnoseRequest) -> B2BDiagnosticOutput:
         benchmark_path=list(benchmark["path"]) if benchmark else None,
         risk_suite=dict(risk) if risk else None,
         behavioral_v2=dict(bv2) if bv2 else None,
+        statistics=dict(stats) if stats else None,
+        tax_analysis=dict(tax) if tax else None,
     )
 
 
