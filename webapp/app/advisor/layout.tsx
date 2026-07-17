@@ -91,7 +91,7 @@ function AdvisorNav() {
   const NAV_ITEMS = [
     { href: "/advisor/dashboard", icon: LayoutDashboard, label: "Dashboard",  disabled: false },
     { href: "/advisor/diagnose",  icon: Upload,          label: "Diagnostic", disabled: false },
-    { href: "/advisor/reports",   icon: FileText,        label: "Reports",    disabled: true  },
+    { href: "/advisor/reports",   icon: FileText,        label: "Reports",    disabled: false },
     { href: "/advisor/settings",  icon: Settings,        label: "Settings",   disabled: true  },
   ];
 

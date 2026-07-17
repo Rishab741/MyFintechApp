@@ -180,7 +180,6 @@ export default function AdvisorDashboard() {
               title: "Report history",
               desc:  "View and re-open previous client diagnostics",
               accent: false,
-              badge: "Coming soon",
             },
             {
               href:  "/advisor/settings",
