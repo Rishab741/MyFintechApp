@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { FileText, Search, Trash2, Upload } from "lucide-react";
+import { Eye, FileText, Search, Trash2, Upload } from "lucide-react";
 import { GOLD, GOLD_DIM, GRADE_COLOR, GREEN, MUTED, RED, fmtMoney } from "@/components/advisor/diagnostic-report";
 
 interface ReportRow {
@@ -121,55 +121,62 @@ export default function AdvisorReportsPage() {
             return (
               <div
                 key={r.id}
-                className="rounded-2xl p-5 flex items-center gap-5 transition-all hover:border-white/20"
+                className="group rounded-2xl p-5 flex items-center gap-5 transition-all hover:border-white/20"
                 style={{ background: "#111118", border: "1px solid rgba(255,255,255,0.07)" }}
               >
-                {/* Grade */}
-                <div
-                  className="w-12 h-12 rounded-lg flex items-center justify-center text-xl font-black shrink-0"
-                  style={{
-                    color: gradeColor,
-                    backgroundColor: `${gradeColor}14`,
-                    border: `1.5px solid ${gradeColor}40`,
-                  }}
+                {/* Clickable body — the whole row previews the report */}
+                <Link
+                  href={`/advisor/reports/${r.id}`}
+                  className="flex items-center gap-5 flex-1 min-w-0"
                 >
-                  {r.overall_grade ?? "—"}
-                </div>
+                  {/* Grade */}
+                  <div
+                    className="w-12 h-12 rounded-lg flex items-center justify-center text-xl font-black shrink-0"
+                    style={{
+                      color: gradeColor,
+                      backgroundColor: `${gradeColor}14`,
+                      border: `1.5px solid ${gradeColor}40`,
+                    }}
+                  >
+                    {r.overall_grade ?? "—"}
+                  </div>
 
-                {/* Main */}
-                <div className="flex-1 min-w-0">
-                  <Link href={`/advisor/reports/${r.id}`}
-                    className="text-sm font-bold text-white hover:underline underline-offset-2 truncate block">
-                    {r.client_label}
-                  </Link>
-                  <p className="text-[11px] font-mono mt-0.5" style={{ color: MUTED }}>
-                    {r.period_start} → {r.period_end}
-                    {r.transaction_count != null && <> · {r.transaction_count} txs</>}
-                    {r.composite_score != null && <> · score {Math.round(Number(r.composite_score))}</>}
-                    {" · "}{new Date(r.created_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
-                  </p>
-                </div>
-
-                {/* Opportunity cost */}
-                {r.opportunity_cost != null && (
-                  <div className="text-right shrink-0 hidden sm:block">
-                    <p className="text-[9px] font-mono tracking-widest uppercase" style={{ color: MUTED }}>
-                      {behind ? "Behind index" : "Ahead of index"}
-                    </p>
-                    <p className="text-sm font-black tabular-nums" style={{ color: behind ? RED : GREEN }}>
-                      {fmtMoney(Math.abs(Number(r.opportunity_cost)), r.currency)}
+                  {/* Main */}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-bold text-white group-hover:underline underline-offset-2 truncate block">
+                      {r.client_label}
+                    </span>
+                    <p className="text-[11px] font-mono mt-0.5" style={{ color: MUTED }}>
+                      {r.period_start} → {r.period_end}
+                      {r.transaction_count != null && <> · {r.transaction_count} txs</>}
+                      {r.composite_score != null && <> · score {Math.round(Number(r.composite_score))}</>}
+                      {r.broker && <> · {r.broker}</>}
+                      {" · "}{new Date(r.created_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
                     </p>
                   </div>
-                )}
+
+                  {/* Opportunity cost */}
+                  {r.opportunity_cost != null && (
+                    <div className="text-right shrink-0 hidden sm:block">
+                      <p className="text-[9px] font-mono tracking-widest uppercase" style={{ color: MUTED }}>
+                        {behind ? "Behind index" : "Ahead of index"}
+                      </p>
+                      <p className="text-sm font-black tabular-nums" style={{ color: behind ? RED : GREEN }}>
+                        {fmtMoney(Math.abs(Number(r.opportunity_cost)), r.currency)}
+                      </p>
+                    </div>
+                  )}
+                </Link>
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 shrink-0">
                   <Link
                     href={`/advisor/reports/${r.id}`}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-mono transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono transition-all"
                     style={{ background: GOLD_DIM, border: `1px solid ${GOLD}35`, color: GOLD }}
                   >
-                    OPEN
+                    <Eye size={12} />
+                    PREVIEW
                   </Link>
                   <button
                     onClick={() => handleDelete(r.id, r.client_label)}

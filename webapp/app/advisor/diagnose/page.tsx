@@ -29,7 +29,8 @@ type SaveState =
   | { kind: "idle" }
   | { kind: "saved"; id: string; used: number; limit: number }
   | { kind: "quota"; limit: number }
-  | { kind: "anonymous" };   // not signed in as advisor — report not persisted
+  | { kind: "anonymous" }    // not signed in as advisor — report not persisted
+  | { kind: "failed"; detail: string };
 
 // ── Upload form ───────────────────────────────────────────────────────────────
 
@@ -89,10 +90,12 @@ export default function AdvisorDiagnosePage() {
         setSave({ kind: "quota", limit: json.limit ?? 0 });
       } else if (res.status === 403) {
         setSave({ kind: "anonymous" });
+      } else {
+        // Surface the failure — a silently missing report is worse than a warning.
+        setSave({ kind: "failed", detail: json.error ?? `HTTP ${res.status}` });
       }
-      // Other failures stay silent — the live report is still on screen.
     } catch {
-      /* network hiccup: live report unaffected */
+      setSave({ kind: "failed", detail: "network error" });
     }
   }, []);
 
@@ -291,6 +294,8 @@ export default function AdvisorDiagnosePage() {
           style={
             save.kind === "saved"
               ? { background: `${GREEN}10`, border: `1px solid ${GREEN}30`, color: GREEN }
+              : save.kind === "failed"
+              ? { background: `${RED}10`,   border: `1px solid ${RED}30`,   color: RED }
               : { background: `${GOLD}0D`,  border: `1px solid ${GOLD}30`,  color: GOLD }
           }
         >
@@ -314,6 +319,12 @@ export default function AdvisorDiagnosePage() {
             <span>
               Running anonymously — <Link href="/advisor/signup" className="underline font-bold">create an advisor account</Link> to
               save reports to a library.
+            </span>
+          )}
+          {save.kind === "failed" && (
+            <span>
+              The report rendered but could not be saved to your library ({save.detail}).
+              Print/export it now, then contact support if this recurs.
             </span>
           )}
         </div>

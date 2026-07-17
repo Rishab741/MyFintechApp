@@ -21,9 +21,12 @@ module.exports = withSentryConfig(nextConfig, {
   project: process.env.SENTRY_PROJECT,
   silent:  true,
   disableLogger: true,
-  hideSourceMaps: true,
-  // Skip source-map upload and the heavy Sentry webpack plugin in dev —
-  // this is the single biggest compile-time win for local development.
-  disableClientWebpackPlugin: !isProd,
-  disableServerWebpackPlugin: !isProd,
+  // Source-map upload + release creation are DISABLED: the current
+  // SENTRY_AUTH_TOKEN belongs to org "no-g60", which has no project matching
+  // SENTRY_PROJECT — sentry-cli hard-fails the whole build on this mismatch.
+  // Runtime error reporting via the DSN is unaffected. To re-enable: issue a
+  // token from the org that owns the project (Sentry → Settings → Auth
+  // Tokens), align SENTRY_ORG/PROJECT, then remove these two blocks.
+  sourcemaps: { disable: true },
+  release:    { create: false, finalize: false },
 });
