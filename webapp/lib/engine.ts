@@ -3,7 +3,9 @@
  * All calls attach the caller's Supabase JWT as Bearer token.
  */
 
-const BASE = process.env.NEXT_PUBLIC_ENGINE_URL ?? "http://localhost:8000";
+import { PUBLIC_ENV } from "@/lib/env";
+
+const BASE = PUBLIC_ENV.ENGINE_URL;
 
 export interface PortfolioMetrics {
   user_id:            string;

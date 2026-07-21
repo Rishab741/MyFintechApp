@@ -1,5 +1,6 @@
 import { createServerClient, type SetAllCookies } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { PUBLIC_ENV } from "@/lib/env";
 
 // ── Onboarding step → route map ───────────────────────────────────────────────
 // The middleware reads the `platstock_ob` cookie (set by /api/onboarding) to
@@ -33,8 +34,8 @@ export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    PUBLIC_ENV.SUPABASE_URL,
+    PUBLIC_ENV.SUPABASE_ANON_KEY,
     {
       cookies: {
         getAll: () => request.cookies.getAll(),

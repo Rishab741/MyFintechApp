@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { PUBLIC_ENV, getServiceRoleKey } from "@/lib/env";
 
 /**
  * Service-role Supabase client.
@@ -7,11 +8,16 @@ import { createClient } from "@supabase/supabase-js";
  * inside API route handlers and server actions — never imported by client components.
  * The SUPABASE_SERVICE_ROLE_KEY must never be sent to the browser.
  *
+ * Both values are read through lib/env.ts, which strips a leading BOM and
+ * whitespace — see that file for why this matters (a BOM in this key throws
+ * a hard-to-diagnose "Cannot convert argument to a ByteString" error the
+ * moment it's used to construct an HTTP header).
+ *
  * Uses: provisioning advisor accounts, writing audit logs, updating app_metadata.
  */
 export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = PUBLIC_ENV.SUPABASE_URL;
+  const key = getServiceRoleKey();
 
   if (!url || !key) {
     throw new Error(

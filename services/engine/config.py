@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -9,6 +10,24 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",   # silently ignore ENGINE_URL and other non-engine vars
     )
+
+    # Defensive: strip a leading UTF-8 BOM (U+FEFF) and surrounding whitespace
+    # from every string setting. Copy-pasting a secret from a dashboard, or
+    # piping it through certain shells (confirmed on this project: Windows
+    # PowerShell -> Vercel CLI silently prepends a BOM), produces a value that
+    # looks completely normal in every log and env-var listing, but throws
+    # the moment it's used to construct an HTTP header or a Redis URL. Railway
+    # env vars are equally exposed to this via dashboard paste or CLI import,
+    # so every string field here is sanitised uniformly rather than trusting
+    # any one entry point to be byte-perfect.
+    @field_validator("*", mode="before")
+    @classmethod
+    def _strip_bom_and_whitespace(cls, v):
+        if isinstance(v, str):
+            # Backslash-u-escape (never a literal character) so this fix
+            # can't itself fall victim to the encoding bug it guards against.
+            return v.replace(chr(0xFEFF), "").strip()
+        return v
 
     # ── Supabase ──────────────────────────────────────────────────────────────
     supabase_url: str

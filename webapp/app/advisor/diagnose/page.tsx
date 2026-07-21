@@ -6,6 +6,7 @@ import {
   Diagnostic, DiagnosticReport,
   GOLD, GOLD_DIM, GREEN, MUTED, RED,
 } from "@/components/advisor/diagnostic-report";
+import { PUBLIC_ENV } from "@/lib/env";
 
 // ── Broker options ────────────────────────────────────────────────────────────
 
@@ -116,8 +117,8 @@ export default function AdvisorDiagnosePage() {
         fd.append("firm_name",    firmName  || "Advisor");
         fd.append("client_label", clientLabel || "Client Portfolio");
 
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const anonKey     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+        const supabaseUrl = PUBLIC_ENV.SUPABASE_URL;
+        const anonKey     = PUBLIC_ENV.SUPABASE_ANON_KEY;
 
         const res = await fetch(
           `${supabaseUrl}/functions/v1/b2b-diagnose`,
