@@ -2,7 +2,9 @@
  * /auth/advisor-callback
  *
  * Handles the email-verification link for advisor sign-ups.
- * This is the ONLY place where app_metadata.role = "advisor" is set.
+ * This is where app_metadata.role = "advisor" is set (also reachable via
+ * the self-heal path in /api/advisor/provision, for accounts whose email
+ * link never reached this route).
  *
  * Security guarantees:
  *   1. Code exchange happens server-side — the raw token never touches the browser.
@@ -10,13 +12,18 @@
  *      Users cannot forge this field via the client SDK.
  *   3. firm_name is read from user_metadata (set at signup) — it is not a trust
  *      boundary; only the role in app_metadata is the security claim.
- *   4. Operation is idempotent: if called twice (double-click email link), the
- *      second call detects an existing advisor record and skips provisioning.
+ *   4. The firm row is created FIRST, then the role is granted — so "has
+ *      advisor role" always implies "has a firm row." Setting the role first
+ *      (the previous ordering) let the two drift apart if the firm insert
+ *      failed after the role write succeeded, leaving the account stuck with
+ *      a role but no firm. ensureAdvisorFirm makes both this route and the
+ *      self-heal path share one code path for "does this account have a firm."
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient }      from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureAdvisorFirm } from "@/lib/advisor/ensure-firm";
 
 function redirectTo(origin: string, path: string) {
   return NextResponse.redirect(`${origin}${path}`);
@@ -55,33 +62,33 @@ export async function GET(request: NextRequest) {
     return redirectTo(origin, "/advisor/login?error=no_user");
   }
 
-  // ── 3. Idempotency check ─────────────────────────────────────────────────
-  // If the user already has advisor role, they just re-clicked the link.
+  // ── 3. Idempotency: already fully provisioned (role + firm)? ──────────────
+  const admin = createAdminClient();
+
   if (user.app_metadata?.role === "advisor") {
+    // Re-click of the email link — still verify the firm row exists.
+    const result = await ensureAdvisorFirm(admin, user);
+    if ("error" in result) {
+      return redirectTo(origin, "/advisor/login?error=provision_failed");
+    }
     return redirectTo(origin, "/advisor/dashboard");
   }
 
-  // ── 4. Read onboarding data from user_metadata ───────────────────────────
-  // None of these are security claims — they're just display/profile data.
-  // The only security claim is app_metadata.role, set exclusively below.
-  // All values are sanitised before DB write.
-  const meta = user.user_metadata ?? {};
-  const firmName  = String(meta.firm_name  ?? "").trim().slice(0, 200);
-  const firmType  = String(meta.firm_type  ?? "").trim().slice(0, 100);
-  const aumRange  = String(meta.aum_range  ?? "").trim().slice(0, 50);
-  const teamSize  = String(meta.team_size  ?? "").trim().slice(0, 50);
-  const firstName = String(meta.contact_first_name ?? "").trim().slice(0, 100);
-  const lastName  = String(meta.contact_last_name  ?? "").trim().slice(0, 100);
-  const jobTitle  = String(meta.job_title  ?? "").trim().slice(0, 200);
-  const useCase   = String(meta.primary_use_case   ?? "").trim().slice(0, 100);
-
+  // ── 4. Fresh sign-up: firm_name must be present (came from the wizard) ────
+  const firmName = String(user.user_metadata?.firm_name ?? "").trim();
   if (firmName.length < 2) {
     console.error("[advisor-callback] missing firm_name for user:", user.id);
     return redirectTo(origin, "/advisor/signup?error=missing_firm_name");
   }
 
-  // ── 5. Provision (service-role only from here down) ───────────────────────
-  const admin = createAdminClient();
+  // ── 5. Create the firm FIRST ───────────────────────────────────────────────
+  const firmResult = await ensureAdvisorFirm(admin, user);
+  if ("error" in firmResult) {
+    console.error("[advisor-callback] firm provisioning failed:", firmResult.error);
+    return redirectTo(origin, "/advisor/signup?error=firm_creation_failed");
+  }
+
+  // ── 6. Grant the role LAST — the invariant this ordering protects ─────────
   const ip = (
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     request.headers.get("x-real-ip") ??
@@ -89,70 +96,31 @@ export async function GET(request: NextRequest) {
   );
   const ua = request.headers.get("user-agent") ?? null;
 
-  // 5a. Set app_metadata.role — the authoritative security claim.
-  //     Only the service-role key can write app_metadata; the client SDK cannot.
   const { error: roleErr } = await admin.auth.admin.updateUserById(user.id, {
-    app_metadata: { role: "advisor" },
+    app_metadata: { ...user.app_metadata, role: "advisor" },
   });
 
   if (roleErr) {
     console.error("[advisor-callback] app_metadata update failed:", roleErr.message);
-    // Log the failure with a null firm_id (no firm record yet).
     await admin.from("advisor_audit_log").insert({
-      firm_id:    null,
+      firm_id:    firmResult.firmId,
       event:      "PROVISION_FAILED",
       ip_address: ip,
       user_agent: ua,
       metadata:   { reason: "app_metadata_update_failed", error: roleErr.message, user_id: user.id },
     });
-    return redirectTo(origin, "/advisor/signup?error=provision_failed");
+    // The firm row exists even though the role write failed — the next
+    // sign-in attempt (or a manual retry) will grant the role without
+    // re-creating the firm, because ensureAdvisorFirm is idempotent.
+    return redirectTo(origin, "/advisor/login?error=provision_failed");
   }
 
-  // 5b. Create the advisor_firms row with full onboarding profile.
-  const { data: firm, error: firmErr } = await admin
-    .from("advisor_firms")
-    .insert({
-      user_id:               user.id,
-      email:                 user.email!,
-      firm_name:             firmName,
-      firm_type:             firmType  || null,
-      aum_range:             aumRange  || null,
-      team_size:             teamSize  || null,
-      contact_first_name:    firstName || null,
-      contact_last_name:     lastName  || null,
-      job_title:             jobTitle  || null,
-      primary_use_case:      useCase   || null,
-      onboarding_completed_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-
-  if (firmErr || !firm) {
-    console.error("[advisor-callback] advisor_firms insert failed:", firmErr?.message);
-    await admin.from("advisor_audit_log").insert({
-      firm_id:    null,
-      event:      "PROVISION_FAILED",
-      ip_address: ip,
-      user_agent: ua,
-      metadata:   { reason: "firm_insert_failed", error: firmErr?.message, user_id: user.id },
-    });
-    return redirectTo(origin, "/advisor/signup?error=firm_creation_failed");
-  }
-
-  // 5c. Audit: successful sign-up.
   await admin.from("advisor_audit_log").insert({
-    firm_id:    firm.id,
+    firm_id:    firmResult.firmId,
     event:      "ADVISOR_SIGNED_UP",
     ip_address: ip,
     user_agent: ua,
-    metadata:   {
-      email:     user.email,
-      firm_name: firmName,
-      firm_type: firmType,
-      aum_range: aumRange,
-      team_size: teamSize,
-      use_case:  useCase,
-    },
+    metadata:   { email: user.email, firm_name: firmName },
   });
 
   return redirectTo(origin, "/advisor/dashboard");
