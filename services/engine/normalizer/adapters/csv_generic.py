@@ -27,9 +27,24 @@ from normalizer.protocol import (
 
 # ── Column name fuzzy matching ────────────────────────────────────────────────
 
+# Whole-word noise: currency codes and GST/tax inclusion qualifiers that vary
+# across exports without changing what a column means ("price_aud" is just
+# "price"). Stripped as WHOLE WORDS before fusing — not via substring removal,
+# so a symbol like "AUSTRALIA" is never partially eaten. See au_base.py's
+# _norm_header for the same guard applied to the AU-specific adapters.
+_NOISE_TOKENS = {
+    "aud", "usd", "nzd", "gbp", "eur", "cad",
+    "inc", "incl", "including", "ex", "excl", "excluding", "gst", "tax",
+}
+_WORD_RE = re.compile(r"[^a-z0-9]+")
+
+
 def _key(s: str) -> str:
-    """Normalise header: lowercase, strip punctuation and spaces."""
-    return re.sub(r"[^a-z0-9]", "", s.lower())
+    """Normalise header: lowercase, drop known noise words, fuse the rest."""
+    s = _WORD_RE.sub(" ", s.lower())
+    tokens = [t for t in s.split() if t]
+    filtered = [t for t in tokens if t not in _NOISE_TOKENS]
+    return "".join(filtered if filtered else tokens)
 
 
 HOLDING_COL_MAP: dict[str, list[str]] = {
@@ -48,8 +63,8 @@ TX_COL_MAP: dict[str, list[str]] = {
     "transaction_type": ["action", "transactiontype", "type", "description"],
     "quantity":         ["quantity", "qty", "shares", "units"],
     "price":            ["price", "unitprice", "pricepershare"],
-    "net_amount":       ["amount", "netamount", "total", "value"],
-    "fees":             ["fees", "commission", "feescomm", "feesandcomm"],
+    "net_amount":       ["amount", "netamount", "total", "value", "totalvalue", "totalamount"],
+    "fees":             ["fees", "commission", "feescomm", "feesandcomm", "brokerage", "brokeragefee"],
     "currency":         ["currency", "curr"],
     "account_ref":      ["accountnumber", "account", "accountid"],
     "provider_tx_id":   ["transactionid", "txid", "referencenumber", "confirmationid"],

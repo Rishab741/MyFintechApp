@@ -80,7 +80,7 @@ _TX_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "fees": (
         "brokerage (inc gst)", "brokerage+gst", "brokerage ($)", "brokerage",
-        "fees", "commission",
+        "brokerage fee", "fees", "commission",
     ),
     # Some exports split GST out of brokerage into its own column — summed into fees.
     "fees_gst": (
@@ -110,23 +110,61 @@ _HOLDING_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 
+_SEP_RE = re.compile(r"[_\-/+]+")
+_WS_RE  = re.compile(r"\s+")
+
+# Tokens that vary across exports without changing what a column actually
+# means: currency codes, and GST/tax inclusion qualifiers. Stripping these
+# turns "price_aud", "Price (AUD)", "Brokerage (Inc GST)" and "brokerage_fee_aud"
+# all into the same comparable form as "price" / "brokerage" — without doing
+# fuzzy/similarity matching, which risks silently mismatching a column that
+# shouldn't be mapped at all. This only strips a fixed, known-safe set of
+# whole words; it never guesses.
+_NOISE_TOKENS = {
+    "aud", "usd", "nzd", "gbp", "eur", "cad",
+    "inc", "incl", "including", "ex", "excl", "excluding", "gst", "tax",
+}
+
+
 def _norm_header(h: str) -> str:
-    return h.strip().strip('"').lower()
+    """
+    Normalise a header to a comparable token form: lowercase, strip quotes/
+    $/parens, collapse separators (_, -, /, +) to spaces, then drop known
+    currency/tax noise words. "total_value_aud" and "Total Value (AUD)" and
+    "TOTAL VALUE" all normalise to the same "total value".
+
+    If stripping noise words would leave nothing (a header that's just "AUD"
+    or "GST" on its own), the unfiltered tokens are kept instead — noise
+    stripping only applies when there's a real field name left over.
+    """
+    h = h.strip().strip('"').lower()
+    h = h.replace("$", " ").replace("(", " ").replace(")", " ")
+    h = _SEP_RE.sub(" ", h)
+    tokens = [t for t in _WS_RE.split(h) if t]
+    filtered = [t for t in tokens if t not in _NOISE_TOKENS]
+    return " ".join(filtered) if filtered else " ".join(tokens)
 
 
 def resolve_columns(
     fieldnames: list[str] | None,
     aliases: dict[str, tuple[str, ...]],
 ) -> dict[str, str]:
-    """Map logical field → actual CSV header for this file."""
+    """
+    Map logical field → actual CSV header for this file.
+
+    Both the real headers AND the alias candidates are run through the same
+    normaliser before comparing, so a header only needs to match an alias's
+    *meaning* (post noise-stripping), not its exact original spelling.
+    """
     if not fieldnames:
         return {}
     normed = {_norm_header(f): f for f in fieldnames if f}
     out: dict[str, str] = {}
     for field, names in aliases.items():
         for candidate in names:
-            if candidate in normed:
-                out[field] = normed[candidate]
+            key = _norm_header(candidate)
+            if key in normed:
+                out[field] = normed[key]
                 break
     return out
 
