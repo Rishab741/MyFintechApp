@@ -15,6 +15,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient }      from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureAdvisorFirm } from "@/lib/advisor/ensure-firm";
+import { buildProspectSnapshot, REPORT_TEMPLATE_VERSION } from "@/lib/advisor/prospect-snapshot";
+import type { Diagnostic } from "@/components/advisor/diagnostic-report";
 
 interface WealthPoint {
   date: string;
@@ -89,21 +91,28 @@ export async function POST(request: NextRequest) {
   const grades  = d.grades as { overall?: string };
   const scoreV2 = d.score_v2 as { composite?: number } | null | undefined;
 
+  // Frozen once, here, at save time — never recomputed on later views. This
+  // is what /api/share/[token] serves; the raw `diagnostic` below stays the
+  // advisor's full internal record and is never exposed publicly.
+  const prospectSnapshot = buildProspectSnapshot(d as unknown as Diagnostic);
+
   const { data: report, error: insErr } = await admin
     .from("advisor_reports")
     .insert({
-      firm_id:           firm.id,
-      client_label:      String(d.client_label).slice(0, 200),
-      broker:            body.broker ? String(body.broker).slice(0, 50) : null,
-      currency:          String(d.currency ?? "USD").slice(0, 10),
-      overall_grade:     grades?.overall ?? null,
-      composite_score:   scoreV2?.composite ?? null,
-      opportunity_cost:  (d.opportunity_cost_dollars as number | null) ?? null,
-      transaction_count: (d.transaction_count as number | null) ?? null,
-      period_start:      (d.period_start as string | null) ?? null,
-      period_end:        (d.period_end as string | null) ?? null,
-      sparkline:         buildSparkline(d.wealth_path),
-      diagnostic:        d,
+      firm_id:                 firm.id,
+      client_label:            String(d.client_label).slice(0, 200),
+      broker:                  body.broker ? String(body.broker).slice(0, 50) : null,
+      currency:                String(d.currency ?? "USD").slice(0, 10),
+      overall_grade:           grades?.overall ?? null,
+      composite_score:         scoreV2?.composite ?? null,
+      opportunity_cost:        (d.opportunity_cost_dollars as number | null) ?? null,
+      transaction_count:       (d.transaction_count as number | null) ?? null,
+      period_start:            (d.period_start as string | null) ?? null,
+      period_end:              (d.period_end as string | null) ?? null,
+      sparkline:               buildSparkline(d.wealth_path),
+      diagnostic:              d,
+      prospect_snapshot:       prospectSnapshot,
+      report_template_version: REPORT_TEMPLATE_VERSION,
     })
     .select("id")
     .single();

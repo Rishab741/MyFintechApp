@@ -25,23 +25,29 @@ export interface Diagnostic {
   transaction_count: number;
   period_start: string;
   period_end: string;
-  profile_confidence: string;
   mwr_annualized: number;
-  realized_return_avg: number;
-  buy_hold_return_avg: number;
   behavioral_tax_pct: number;
   panic_liquidation_rate: number;
-  timing_quality: number;
-  avg_holding_days: number | null;
-  loss_aversion_score: number;
-  buy_dip_probability: number;
   trade_win_rate: number;
-  avg_gain_on_winners: number;
-  avg_loss_on_losers: number;
-  profit_factor: number;
   grades: DiagnosticGrades;
   insights: string[];
   wealth_path: WealthPoint[];
+
+  // Compliance-only scalars — rendered exclusively inside `isCompliance`
+  // blocks (Behavioral Profile / Trade Analytics). Optional because the
+  // frozen prospect_snapshot (see lib/advisor/prospect-snapshot.ts) never
+  // includes them at all — not hidden by the UI, absent from the payload
+  // a client-facing share link can ever receive.
+  profile_confidence?: string;
+  realized_return_avg?: number;
+  buy_hold_return_avg?: number;
+  timing_quality?: number;
+  avg_holding_days?: number | null;
+  loss_aversion_score?: number;
+  buy_dip_probability?: number;
+  avg_gain_on_winners?: number;
+  avg_loss_on_losers?: number;
+  profit_factor?: number;
 
   // Market-data enrichment (null when prices were unavailable)
   currency?: string;
@@ -697,22 +703,22 @@ export function DiagnosticReport({ d, mode = "prospect" }: { d: Diagnostic; mode
         <Card title="Behavioral Profile">
           <MetricRow
             label="Timing Quality"
-            value={d.timing_quality >= 0
-              ? `+${(d.timing_quality * 100).toFixed(0)} / 100`
-              : `${(d.timing_quality * 100).toFixed(0)} / 100`}
-            color={d.timing_quality > 0.2 ? GREEN : d.timing_quality < -0.2 ? RED : GOLD}
+            value={(d.timing_quality ?? 0) >= 0
+              ? `+${((d.timing_quality ?? 0) * 100).toFixed(0)} / 100`
+              : `${((d.timing_quality ?? 0) * 100).toFixed(0)} / 100`}
+            color={(d.timing_quality ?? 0) > 0.2 ? GREEN : (d.timing_quality ?? 0) < -0.2 ? RED : GOLD}
             sub="buy-low sell-high score"
           />
           <MetricRow
             label="Loss Aversion"
-            value={`${(d.loss_aversion_score * 100).toFixed(0)} / 100`}
-            color={d.loss_aversion_score > 0.7 ? RED : GREEN}
+            value={`${((d.loss_aversion_score ?? 0) * 100).toFixed(0)} / 100`}
+            color={(d.loss_aversion_score ?? 0) > 0.7 ? RED : GREEN}
             sub="higher = holds losers too long"
           />
           <MetricRow
             label="Dip-Buy Probability"
-            value={`${d.buy_dip_probability.toFixed(0)}%`}
-            color={d.buy_dip_probability > 50 ? GREEN : GOLD}
+            value={`${(d.buy_dip_probability ?? 0).toFixed(0)}%`}
+            color={(d.buy_dip_probability ?? 0) > 50 ? GREEN : GOLD}
           />
           {d.avg_holding_days != null && (
             <MetricRow
@@ -727,29 +733,29 @@ export function DiagnosticReport({ d, mode = "prospect" }: { d: Diagnostic; mode
         <Card title="Trade Analytics">
           <MetricRow
             label="Realized Return (avg)"
-            value={`${d.realized_return_avg >= 0 ? "+" : ""}${d.realized_return_avg.toFixed(1)}%`}
-            color={d.realized_return_avg >= 0 ? GREEN : RED}
+            value={`${(d.realized_return_avg ?? 0) >= 0 ? "+" : ""}${(d.realized_return_avg ?? 0).toFixed(1)}%`}
+            color={(d.realized_return_avg ?? 0) >= 0 ? GREEN : RED}
             sub="per completed trade"
           />
           <MetricRow
             label="Buy-and-Hold Equivalent"
-            value={`${d.buy_hold_return_avg >= 0 ? "+" : ""}${d.buy_hold_return_avg.toFixed(1)}%`}
+            value={`${(d.buy_hold_return_avg ?? 0) >= 0 ? "+" : ""}${(d.buy_hold_return_avg ?? 0).toFixed(1)}%`}
             color={MUTED}
           />
           <MetricRow
             label="Avg Gain (winners)"
-            value={`+${d.avg_gain_on_winners.toFixed(1)}%`}
+            value={`+${(d.avg_gain_on_winners ?? 0).toFixed(1)}%`}
             color={GREEN}
           />
           <MetricRow
             label="Avg Loss (losers)"
-            value={`${d.avg_loss_on_losers.toFixed(1)}%`}
+            value={`${(d.avg_loss_on_losers ?? 0).toFixed(1)}%`}
             color={RED}
           />
           <MetricRow
             label="Profit Factor"
-            value={d.profit_factor >= 999 ? "∞" : d.profit_factor.toFixed(2)}
-            color={d.profit_factor >= 2 ? GREEN : d.profit_factor >= 1 ? GOLD : RED}
+            value={(d.profit_factor ?? 0) >= 999 ? "∞" : (d.profit_factor ?? 0).toFixed(2)}
+            color={(d.profit_factor ?? 0) >= 2 ? GREEN : (d.profit_factor ?? 0) >= 1 ? GOLD : RED}
             sub="total gains / total losses"
           />
         </Card>
