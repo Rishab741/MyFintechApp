@@ -199,9 +199,69 @@ export const RED     = "#C1613F";
 export const GREEN   = "#7FA37A";
 export const MUTED   = "#6B7280";
 
+export const STEEL   = "#6FA8C9";   // compliance/internal accent — matches the
+                                     // engine/infra semantic used elsewhere in the app
+
 export const GRADE_COLOR: Record<string, string> = {
   A: GREEN, B: "#7BA3C9", C: GOLD, D: "#B87A3F", F: RED,
 };
+
+// ── Report mode ───────────────────────────────────────────────────────────────
+// "prospect"   — the sales copy: punchy, single-number, no hedging, safe to
+//                hand a prospect across the table.
+// "compliance" — the advisor's own file: every confidence interval, every
+//                assumption, every methodology note. Never meant to leave
+//                the firm.
+export type ReportMode = "prospect" | "compliance";
+
+function ModeBadge({ mode }: { mode: ReportMode }) {
+  const color = mode === "prospect" ? GOLD : STEEL;
+  const label = mode === "prospect"
+    ? "Client Presentation Copy"
+    : "Advisor Compliance File — Internal Use Only";
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-mono font-bold tracking-wider uppercase whitespace-nowrap"
+      style={{ background: `${color}20`, color, border: `1px solid ${color}45` }}
+    >
+      {label}
+    </span>
+  );
+}
+
+export function ReportModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: ReportMode;
+  onChange: (m: ReportMode) => void;
+}) {
+  return (
+    <div
+      className="inline-flex rounded-xl p-1 print:hidden shrink-0"
+      style={{ background: "#111118", border: "1px solid rgba(255,255,255,0.08)" }}
+    >
+      {(["prospect", "compliance"] as const).map(m => {
+        const active = mode === m;
+        const color  = m === "prospect" ? GOLD : STEEL;
+        return (
+          <button
+            key={m}
+            type="button"
+            onClick={() => onChange(m)}
+            className="px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold tracking-wide transition-all"
+            style={{
+              background: active ? `${color}1F` : "transparent",
+              color:      active ? color : MUTED,
+            }}
+          >
+            {m === "prospect" ? "Client Presentation" : "Compliance Detail"}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // ── Wealth path SVG chart ─────────────────────────────────────────────────────
 
@@ -412,17 +472,19 @@ function Card({
 
 // ── Diagnostic results ────────────────────────────────────────────────────────
 
-export function DiagnosticReport({ d }: { d: Diagnostic }) {
+export function DiagnosticReport({ d, mode = "prospect" }: { d: Diagnostic; mode?: ReportMode }) {
   const taxColor  = d.behavioral_tax_pct < -2 ? RED : d.behavioral_tax_pct > 2 ? GREEN : GOLD;
   const mwrColor  = d.mwr_annualized >= 10 ? GREEN : d.mwr_annualized >= 0 ? GOLD : RED;
   const panicColor = d.panic_liquidation_rate > 40 ? RED : d.panic_liquidation_rate > 20 ? GOLD : GREEN;
+  const isCompliance = mode === "compliance";
+  const visibleInsights = isCompliance ? d.insights : d.insights.slice(0, 3);
 
   return (
     <div id="report" className="space-y-4">
 
       {/* ── Report header ── */}
       <div
-        className="rounded-2xl px-6 py-5 flex items-center justify-between print:rounded-none"
+        className="rounded-2xl px-6 py-5 flex items-center justify-between print:rounded-none gap-4 flex-wrap"
         style={{
           background: "linear-gradient(135deg, #13120E 0%, #0F0E14 100%)",
           border: `1px solid ${GOLD}28`,
@@ -430,14 +492,18 @@ export function DiagnosticReport({ d }: { d: Diagnostic }) {
         }}
       >
         <div>
-          <div className="text-xs font-mono tracking-[0.2em] mb-1"
-            style={{ color: GOLD }}>
-            {d.firm_name.toUpperCase()} · BEHAVIORAL DIAGNOSTIC
+          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+            <span className="text-xs font-mono tracking-[0.2em]" style={{ color: GOLD }}>
+              {d.firm_name.toUpperCase()} · BEHAVIORAL DIAGNOSTIC
+            </span>
+            <ModeBadge mode={mode} />
           </div>
           <div className="text-xl font-bold tracking-tight">{d.client_label}</div>
           <div className="text-xs mt-1 font-mono" style={{ color: MUTED }}>
-            {d.period_start} → {d.period_end} · {d.transaction_count} transactions · confidence:{" "}
-            <span style={{ color: GOLD }}>{d.profile_confidence}</span>
+            {d.period_start} → {d.period_end} · {d.transaction_count} transactions
+            {isCompliance && (
+              <> · confidence: <span style={{ color: GOLD }}>{d.profile_confidence}</span></>
+            )}
           </div>
         </div>
         <div className="text-right hidden sm:block">
@@ -484,30 +550,32 @@ export function DiagnosticReport({ d }: { d: Diagnostic }) {
               </div>
               <p className="text-xs leading-relaxed" style={{ color: MUTED }}>
                 Weighted across {Object.keys(d.score_v2.subscores).length} measured dimensions.
-                Components without sufficient data are excluded, not defaulted.
+                {isCompliance && " Components without sufficient data are excluded, not defaulted."}
               </p>
             </div>
-            <div className="space-y-2.5">
-              {Object.entries(d.score_v2.subscores).map(([key, val]) => (
-                <div key={key} className="flex items-center gap-3">
-                  <span className="text-[10px] font-mono w-28 shrink-0" style={{ color: MUTED }}>
-                    {SUBSCORE_LABEL[key] ?? key}
-                  </span>
-                  <div className="flex-1 h-1.5 rounded-full overflow-hidden"
-                    style={{ background: "rgba(255,255,255,0.06)" }}>
-                    <div className="h-full rounded-full"
-                      style={{
-                        width: `${val}%`,
-                        background: val >= 70 ? GREEN : val >= 45 ? GOLD : RED,
-                      }} />
+            {isCompliance && (
+              <div className="space-y-2.5">
+                {Object.entries(d.score_v2.subscores).map(([key, val]) => (
+                  <div key={key} className="flex items-center gap-3">
+                    <span className="text-[10px] font-mono w-28 shrink-0" style={{ color: MUTED }}>
+                      {SUBSCORE_LABEL[key] ?? key}
+                    </span>
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden"
+                      style={{ background: "rgba(255,255,255,0.06)" }}>
+                      <div className="h-full rounded-full"
+                        style={{
+                          width: `${val}%`,
+                          background: val >= 70 ? GREEN : val >= 45 ? GOLD : RED,
+                        }} />
+                    </div>
+                    <span className="text-[11px] font-mono tabular-nums w-8 text-right"
+                      style={{ color: val >= 70 ? GREEN : val >= 45 ? GOLD : RED }}>
+                      {Math.round(val)}
+                    </span>
                   </div>
-                  <span className="text-[11px] font-mono tabular-nums w-8 text-right"
-                    style={{ color: val >= 70 ? GREEN : val >= 45 ? GOLD : RED }}>
-                    {Math.round(val)}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </Card>
         ) : null}
 
@@ -622,6 +690,7 @@ export function DiagnosticReport({ d }: { d: Diagnostic }) {
         ))}
       </div>
 
+      {isCompliance && (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
         {/* ── Behavioral metrics ── */}
@@ -685,9 +754,10 @@ export function DiagnosticReport({ d }: { d: Diagnostic }) {
           />
         </Card>
       </div>
+      )}
 
       {/* ── Institutional risk + behavioral deep-dive (price-enriched) ── */}
-      {(d.risk_suite || d.behavioral_v2) && (
+      {isCompliance && (d.risk_suite || d.behavioral_v2) && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {d.risk_suite && (
             <Card title="Institutional Risk Suite">
@@ -792,7 +862,7 @@ export function DiagnosticReport({ d }: { d: Diagnostic }) {
       )}
 
       {/* ── Tax efficiency + statistical confidence ── */}
-      {(d.tax_analysis || d.statistics) && (
+      {isCompliance && (d.tax_analysis || d.statistics) && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {d.tax_analysis && (
             <Card title={d.tax_analysis.currency === "AUD" ? "Tax Efficiency — CGT Discount" : "Tax Efficiency — Holding Periods"}>
@@ -908,10 +978,10 @@ export function DiagnosticReport({ d }: { d: Diagnostic }) {
       )}
 
       {/* ── Insights ── */}
-      {d.insights.length > 0 && (
-        <Card title="Advisor Insights">
+      {visibleInsights.length > 0 && (
+        <Card title={isCompliance ? "Advisor Insights" : "Key Findings"}>
           <div className="space-y-3">
-            {d.insights.map((text, i) => {
+            {visibleInsights.map((text, i) => {
               const isPositive = /exceptional|added value|contrarian|strong|disciplin/i.test(text);
               const isNegative = /high panic|behavioral tax|adverse|elevated loss|warrants/i.test(text);
               const accent = isPositive ? GREEN : isNegative ? RED : GOLD;
@@ -971,34 +1041,49 @@ export function DiagnosticReport({ d }: { d: Diagnostic }) {
         </Card>
       )}
 
-      {/* ── Methodology appendix ── */}
-      <Card title="Methodology Notes">
-        <div className="space-y-1.5 text-[11px] leading-relaxed font-mono" style={{ color: MUTED }}>
-          <p>· Returns: money-weighted (IRR via Brent root-finding on the cash-flow schedule); open positions valued at latest market close where available.</p>
-          <p>· Index replay: identical cash-flow dates and amounts applied to the benchmark; withdrawals capped at accumulated units.</p>
-          <p>· Risk metrics: flow-adjusted daily returns on reconstructed positions; Sharpe/Sortino vs a 4% cash-rate assumption; CVaR is the mean of the worst 5% of daily returns.</p>
-          <p>· Behavioral: disposition effect per Odean (1998) day-level PGR/PLR counting; FOMO measured as trailing 20-day return at purchase.</p>
-          <p>· Confidence intervals: percentile bootstrap, 2,000 resamples, fixed seed. Win-rate significance: one-sided exact binomial vs p = 0.5.</p>
-          {d.tax_analysis && (
-            <p>· Tax: FIFO lot matching; {d.tax_analysis.currency === "AUD" ? "Australian CGT 50% discount at the 12-month boundary" : "long-term holding boundary at 12 months"}; assumed marginal rate {(d.tax_analysis.marginal_rate_assumed * 100).toFixed(0)}% — not personal tax advice.</p>
-          )}
-          {d.projection && (
-            <p>· Projection: geometric Brownian motion, monthly steps, 1,000 paths per regime, drift/volatility clamped to [−15%, +25%] / [5%, 60%]. GBM understates tail risk; the bias applies to both regimes equally.</p>
-          )}
-          <p>· All computation is ephemeral — no client data is stored. Deterministic: identical inputs always reproduce this report.</p>
+      {/* ── Methodology appendix (compliance) / compact disclosure (prospect) ── */}
+      {isCompliance ? (
+        <Card title="Methodology Notes">
+          <div className="space-y-1.5 text-[11px] leading-relaxed font-mono" style={{ color: MUTED }}>
+            <p>· Returns: money-weighted (IRR via Brent root-finding on the cash-flow schedule); open positions valued at latest market close where available.</p>
+            <p>· Index replay: identical cash-flow dates and amounts applied to the benchmark; withdrawals capped at accumulated units.</p>
+            <p>· Risk metrics: flow-adjusted daily returns on reconstructed positions; Sharpe/Sortino vs a 4% cash-rate assumption; CVaR is the mean of the worst 5% of daily returns.</p>
+            <p>· Behavioral: disposition effect per Odean (1998) day-level PGR/PLR counting; FOMO measured as trailing 20-day return at purchase.</p>
+            <p>· Confidence intervals: percentile bootstrap, 2,000 resamples, fixed seed. Win-rate significance: one-sided exact binomial vs p = 0.5.</p>
+            {d.tax_analysis && (
+              <p>· Tax: FIFO lot matching; {d.tax_analysis.currency === "AUD" ? "Australian CGT 50% discount at the 12-month boundary" : "long-term holding boundary at 12 months"}; assumed marginal rate {(d.tax_analysis.marginal_rate_assumed * 100).toFixed(0)}% — not personal tax advice.</p>
+            )}
+            {d.projection && (
+              <p>· Projection: geometric Brownian motion, monthly steps, 1,000 paths per regime, drift/volatility clamped to [−15%, +25%] / [5%, 60%]. GBM understates tail risk; the bias applies to both regimes equally.</p>
+            )}
+            <p>· All computation is ephemeral — no client data is stored. Deterministic: identical inputs always reproduce this report.</p>
+          </div>
+        </Card>
+      ) : (
+        <div
+          className="rounded-lg px-4 py-3 text-[10.5px] leading-relaxed font-mono print:mt-4"
+          style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", color: MUTED }}
+        >
+          This analysis is based on the historical transaction data provided and is for illustrative
+          purposes only. Index-replay and projection figures are hypothetical, do not guarantee future
+          results, and rely on assumptions set out in the full methodology report available from your
+          advisor. Past performance is not indicative of future returns.
         </div>
-      </Card>
+      )}
 
       {/* ── Print footer ── */}
       <div
-        className="rounded-xl px-5 py-3 flex items-center justify-between text-[10px] font-mono print:mt-8"
+        className="rounded-xl px-5 py-3 flex items-center justify-between text-[10px] font-mono print:mt-8 gap-3 flex-wrap"
         style={{
           background: "#0D0D14",
           border: "1px solid rgba(255,255,255,0.05)",
           color: MUTED,
         }}
       >
-        <span>Platstock · B2B RIA Diagnostic · Confidential</span>
+        <span>
+          Platstock · B2B RIA Diagnostic ·{" "}
+          {isCompliance ? "Compliance File — Internal Use Only" : "Confidential — Prepared for Client Presentation"}
+        </span>
         <span>{d.analysis_date} · {d.firm_name}</span>
       </div>
     </div>

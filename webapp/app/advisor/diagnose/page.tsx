@@ -3,7 +3,7 @@
 import React, { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  Diagnostic, DiagnosticReport,
+  Diagnostic, DiagnosticReport, ReportModeToggle, ReportMode,
   GOLD, GOLD_DIM, GREEN, MUTED, RED,
 } from "@/components/advisor/diagnostic-report";
 import { PUBLIC_ENV } from "@/lib/env";
@@ -45,6 +45,7 @@ export default function AdvisorDiagnosePage() {
   const [error, setError]       = useState<string | null>(null);
   const [result, setResult]     = useState<Diagnostic | null>(null);
   const [save, setSave]         = useState<SaveState>({ kind: "idle" });
+  const [reportMode, setReportMode] = useState<ReportMode>("prospect");
   const inputRef                = useRef<HTMLInputElement>(null);
 
   const acceptFile = useCallback((f: File) => {
@@ -331,12 +332,10 @@ export default function AdvisorDiagnosePage() {
         </div>
       )}
 
-      {/* ── Results ── */}
-      {result && <DiagnosticReport d={result} />}
-
-      {/* ── Print button ── */}
+      {/* ── Mode toggle + print ── */}
       {result && (
-        <div className="flex justify-end print:hidden">
+        <div className="flex items-center justify-between gap-3 flex-wrap print:hidden">
+          <ReportModeToggle mode={reportMode} onChange={setReportMode} />
           <button
             onClick={() => window.print()}
             className="px-5 py-2.5 rounded-xl text-xs font-mono tracking-widest transition-all"
@@ -350,6 +349,9 @@ export default function AdvisorDiagnosePage() {
           </button>
         </div>
       )}
+
+      {/* ── Results ── */}
+      {result && <DiagnosticReport d={result} mode={reportMode} />}
 
       {/* ── Print CSS ── */}
       <style>{`

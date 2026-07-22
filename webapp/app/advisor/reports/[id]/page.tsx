@@ -12,7 +12,8 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ArrowLeft, Printer } from "lucide-react";
 import {
-  Diagnostic, DiagnosticReport, GOLD, GOLD_DIM, MUTED, RED,
+  Diagnostic, DiagnosticReport, ReportModeToggle, ReportMode,
+  GOLD, GOLD_DIM, MUTED, RED,
 } from "@/components/advisor/diagnostic-report";
 
 interface SavedReport {
@@ -29,6 +30,7 @@ export default function SavedReportPage() {
   const [report,  setReport]  = useState<SavedReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
+  const [reportMode, setReportMode] = useState<ReportMode>("prospect");
 
   useEffect(() => {
     async function load() {
@@ -81,12 +83,13 @@ export default function SavedReportPage() {
           <ArrowLeft size={13} />
           REPORT LIBRARY
         </Link>
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] font-mono hidden sm:block" style={{ color: MUTED }}>
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          <span className="text-[11px] font-mono hidden md:block" style={{ color: MUTED }}>
             Saved {new Date(report.created_at).toLocaleString("en-AU", {
               day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
             })}
           </span>
+          <ReportModeToggle mode={reportMode} onChange={setReportMode} />
           <button
             onClick={() => window.print()}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono tracking-widest transition-all"
@@ -99,7 +102,7 @@ export default function SavedReportPage() {
       </div>
 
       {/* ── The report ── */}
-      <DiagnosticReport d={report.diagnostic} />
+      <DiagnosticReport d={report.diagnostic} mode={reportMode} />
 
       {/* ── Print CSS ── */}
       <style>{`
