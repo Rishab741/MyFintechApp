@@ -3,9 +3,10 @@
 import React, { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  Diagnostic, DiagnosticReport, ReportModeToggle, ReportMode,
+  Diagnostic,
   GOLD, GOLD_DIM, GREEN, MUTED, RED,
 } from "@/components/advisor/diagnostic-report";
+import { SlideDeck, ModeOptionCards, ReportMode } from "@/components/advisor/report-slides";
 import { PUBLIC_ENV } from "@/lib/env";
 
 // ── Broker options ────────────────────────────────────────────────────────────
@@ -332,26 +333,27 @@ export default function AdvisorDiagnosePage() {
         </div>
       )}
 
-      {/* ── Mode toggle + print ── */}
+      {/* ── Report type + print ── */}
       {result && (
-        <div className="flex items-center justify-between gap-3 flex-wrap print:hidden">
-          <ReportModeToggle mode={reportMode} onChange={setReportMode} />
-          <button
-            onClick={() => window.print()}
-            className="px-5 py-2.5 rounded-xl text-xs font-mono tracking-widest transition-all"
-            style={{
-              background: GOLD_DIM,
-              border: `1px solid ${GOLD}40`,
-              color: GOLD,
-            }}
-          >
-            PRINT / SAVE PDF
-          </button>
+        <div className="space-y-3 print:hidden">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color: MUTED }}>
+              Choose report type
+            </p>
+            <button
+              onClick={() => window.print()}
+              className="px-5 py-2.5 rounded-xl text-xs font-mono tracking-widest transition-all shrink-0"
+              style={{ background: GOLD_DIM, border: `1px solid ${GOLD}40`, color: GOLD }}
+            >
+              PRINT / SAVE PDF
+            </button>
+          </div>
+          <ModeOptionCards mode={reportMode} onChange={setReportMode} />
         </div>
       )}
 
       {/* ── Results ── */}
-      {result && <DiagnosticReport d={result} mode={reportMode} />}
+      {result && <SlideDeck d={result} mode={reportMode} firmName={result.firm_name} />}
 
       {/* ── Print CSS ── */}
       <style>{`

@@ -17,9 +17,10 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ArrowLeft, Printer, Link2, Copy, Check, Ban, Eye } from "lucide-react";
 import {
-  Diagnostic, DiagnosticReport, ReportModeToggle, ReportMode,
+  Diagnostic,
   GOLD, GOLD_DIM, MUTED, RED, GREEN,
 } from "@/components/advisor/diagnostic-report";
+import { SlideDeck, ModeOptionCards, ReportMode } from "@/components/advisor/report-slides";
 
 interface SavedReport {
   id:                   string;
@@ -259,7 +260,6 @@ export default function SavedReportPage() {
               day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
             })}
           </span>
-          <ReportModeToggle mode={reportMode} onChange={setReportMode} />
           <button
             onClick={() => window.print()}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono tracking-widest transition-all"
@@ -274,8 +274,16 @@ export default function SavedReportPage() {
       {/* ── Share panel ── */}
       <SharePanel report={report} onChange={patch => setReport(r => r ? { ...r, ...patch } : r)} />
 
+      {/* ── Report type ── */}
+      <div className="print:hidden">
+        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color: MUTED }}>
+          Choose report type
+        </p>
+        <ModeOptionCards mode={reportMode} onChange={setReportMode} />
+      </div>
+
       {/* ── The report ── */}
-      <DiagnosticReport d={report.diagnostic} mode={reportMode} />
+      <SlideDeck d={report.diagnostic} mode={reportMode} firmName={report.diagnostic.firm_name} />
 
       {/* ── Print CSS ── */}
       <style>{`

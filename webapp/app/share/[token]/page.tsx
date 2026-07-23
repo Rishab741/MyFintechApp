@@ -4,8 +4,8 @@
  * /share/[token] — the client-facing surface.
  *
  * Deliberately NOT under /advisor — no advisor nav, no auth, no login wall.
- * This page has no ReportModeToggle import and never will: there is no code
- * path here that can render a compliance view, because the data it fetches
+ * This page never imports ModeOptionCards and never will: there is no code
+ * path here that can render a compliance deck, because the data it fetches
  * (prospect_snapshot, via /api/share/[token]) never contains risk_suite,
  * behavioral_v2, tax_analysis, statistics, or score subscores in the first
  * place. Separation isn't a UI mode check here — the data simply isn't present.
@@ -14,7 +14,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Printer, ShieldOff, Clock } from "lucide-react";
-import { Diagnostic, DiagnosticReport, GOLD, GOLD_DIM, MUTED } from "@/components/advisor/diagnostic-report";
+import { Diagnostic, GOLD, GOLD_DIM, MUTED } from "@/components/advisor/diagnostic-report";
+import { SlideDeck } from "@/components/advisor/report-slides";
 
 type LoadState =
   | { kind: "loading" }
@@ -94,7 +95,7 @@ export default function SharedReportPage() {
         </button>
       </div>
 
-      <DiagnosticReport d={state.diagnostic} mode="prospect" />
+      <SlideDeck d={state.diagnostic} mode="prospect" firmName={state.diagnostic.firm_name} />
 
       <style>{`
         @media print {

@@ -4,7 +4,7 @@ import React from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface WealthPoint {
+export interface WealthPoint {
   date: string;
   cumulative_in: number;
   cumulative_out: number;
@@ -137,7 +137,7 @@ const SUBSCORE_LABEL: Record<string, string> = {
 
 // ── Projection fan chart ──────────────────────────────────────────────────────
 
-function ProjectionChart({ p, ccy }: { p: NonNullable<Diagnostic["projection"]>; ccy?: string }) {
+export function ProjectionChart({ p, ccy }: { p: NonNullable<Diagnostic["projection"]>; ccy?: string }) {
   const W = 760, H = 220;
   const PAD = { t: 14, r: 96, b: 24, l: 8 };
   const IW = W - PAD.l - PAD.r;
@@ -271,7 +271,7 @@ export function ReportModeToggle({
 
 // ── Wealth path SVG chart ─────────────────────────────────────────────────────
 
-function WealthChart({ data }: { data: WealthPoint[] }) {
+export function WealthChart({ data }: { data: WealthPoint[] }) {
   if (data.length < 2) return null;
 
   const W = 760, H = 160;
@@ -376,7 +376,7 @@ function WealthChart({ data }: { data: WealthPoint[] }) {
 
 // ── Grade badge ───────────────────────────────────────────────────────────────
 
-function GradeBadge({ grade, label }: { grade: string; label: string }) {
+export function GradeBadge({ grade, label }: { grade: string; label: string }) {
   const color = GRADE_COLOR[grade] ?? MUTED;
   return (
     <div className="flex flex-col items-center gap-1.5">
@@ -401,7 +401,7 @@ function GradeBadge({ grade, label }: { grade: string; label: string }) {
 
 // ── Metric row ────────────────────────────────────────────────────────────────
 
-function MetricRow({
+export function MetricRow({
   label,
   value,
   color,
@@ -435,7 +435,7 @@ function MetricRow({
 
 // ── Card wrapper ──────────────────────────────────────────────────────────────
 
-function Card({
+export function Card({
   children,
   title,
   glow,
