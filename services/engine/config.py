@@ -1,5 +1,7 @@
+import os
 from functools import lru_cache
 
+import redis
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -59,7 +61,7 @@ class Settings(BaseSettings):
     # benchmark returns and rate-limit counters. Without it the app runs
     # correctly in single-worker mode using in-process dicts.
     # Example: redis://default:password@redis-host:6379/0
-    redis_url= os.getenv("REDIS_URL", "rediss://default:gQAAAAAAAd4OAAIgcDI4YWI0M2U3MTMwOGM0MjczYThmM2E3YzZlZGU4NWQwNw@amusing-grouper-122382.upstash.io:6379") 
+    redis_url= os.getenv("REDIS_URL", "") 
 
     pool= redis.ConnectionPool.from_url(redis_url, ssl_cert_reqs=None, socket_timeout=2,socket_keepalive=true,retry_on_timeout=True)
 
