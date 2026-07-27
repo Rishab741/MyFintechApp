@@ -96,6 +96,7 @@ export default function SyncPage() {
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount only
   useEffect(() => { load(); }, []);
 
   // ── Trigger sync — call Next.js API routes (server-side, no CORS issues) ───

@@ -312,7 +312,7 @@ export default function OnboardScreen() {
               <MaterialCommunityIcons name="arrow-right" size={20} color={BG} />
             </Pressable>
             <Pressable onPress={handleSkip} style={s.skip}>
-              <Text style={s.skipTxt}>I'll do this later</Text>
+              <Text style={s.skipTxt}>I&apos;ll do this later</Text>
             </Pressable>
           </ScrollView>
         )}
@@ -382,7 +382,7 @@ export default function OnboardScreen() {
               <Text style={s.stepLabel}>EXCHANGE API KEY</Text>
               <Text style={[s.hero, { fontSize: 26, marginBottom: 8 }]}>Connect your{'\n'}exchange</Text>
               <Text style={[s.sub, { marginBottom: 20 }]}>
-                Go to your exchange's <Text style={{ color: TXT, fontWeight: '700' }}>API Management</Text> settings and create
+                Go to your exchange&apos;s <Text style={{ color: TXT, fontWeight: '700' }}>API Management</Text> settings and create
                 a <Text style={{ color: TXT, fontWeight: '700' }}>read-only</Text> key. Platstock cannot trade or withdraw.
               </Text>
 
@@ -586,7 +586,7 @@ export default function OnboardScreen() {
             <View style={s.successRing}>
               <MaterialCommunityIcons name="check" size={48} color={GREEN} />
             </View>
-            <Text style={[s.hero, { textAlign: 'center', marginTop: 24 }]}>You're all set.</Text>
+            <Text style={[s.hero, { textAlign: 'center', marginTop: 24 }]}>You&apos;re all set.</Text>
             <Text style={[s.sub, { textAlign: 'center' }]}>
               {connectedPlatform
                 ? `${connectedPlatform} connected. Your dashboard is syncing now.`

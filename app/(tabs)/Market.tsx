@@ -12,7 +12,7 @@ import {
   ScrollView as HScrollView,
 } from 'react-native';
 import {
-  BG, BORDER, BORDER_HI, CARD, GOLD, GOLD_D, GREEN, MUTED, mono, RED, sans, TXT, TXT2,
+  BG, BORDER, BORDER_HI, CARD, GOLD, GREEN, MUTED, mono, RED, sans, TXT,
 } from '@/src/market/tokens';
 import { useMarketData } from '@/src/market/hooks/useMarketData';
 import {
@@ -148,7 +148,6 @@ export default function MarketScreen() {
 
   // Stats from S&P 500 + VIX if available
   const spx   = indices.find(i => i.symbol === '^GSPC');
-  const vix   = indices.find(i => i.symbol === '^VIX');
   const btc   = indices.find(i => i.symbol === 'BTC-USD');
   const spxUp = (spx?.quote?.changePct ?? 0) >= 0;
 

@@ -8,8 +8,6 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Animated,
-  FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -32,7 +30,6 @@ import {
   REBALANCING_LABELS,
   SERIES_COLORS,
   type AssetMetrics,
-  type BehavioralProfile,
   type ComparisonAsset,
   type MonteCarloFan,
   type RebalancingStrategy,
@@ -40,20 +37,18 @@ import {
   type TimeseriesPoint,
 } from '@/src/comparison/types';
 
-import { QL, sans, mono } from '@/constants/Colors';
+import { QL, mono } from '@/constants/Colors';
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const BG     = QL.BG;
 const CARD   = QL.CARD;
 const CARD2  = QL.CARD2;
 const GOLD   = QL.GOLD;
-const GOLD_D = QL.GOLD_D;
 const GREEN  = QL.GREEN;
 const RED    = QL.RED;
 const AMBER  = QL.AMBER;
 const BORDER = QL.BORDER;
 const TXT    = QL.TXT;
 const MUTED  = QL.MUTED;
-const SUB    = QL.TXT2;
 
 // ── Internal tabs ──────────────────────────────────────────────────────────────
 type InternalTab = 'builder' | 'results' | 'decisions' | 'profile';
@@ -355,8 +350,8 @@ export default function CompareScreen() {
   const insets = useSafeAreaInsets();
 
   const {
-    scenarios, isLoadingList, activeRun, isRunning, runError,
-    create, remove, run, clearRun, refreshList,
+    scenarios, activeRun, isRunning, runError,
+    create, remove, run, clearRun,
   } = useScenario();
 
   const { profile, isLoading: profileLoading, rebuild: rebuildProfile } = useBehavioralProfile();
@@ -378,7 +373,7 @@ export default function CompareScreen() {
   const [runMonteCarlo,   setRunMonteCarlo]   = useState(false);
   const [monthlySavings,  setMonthlySavings]  = useState('1000');
 
-  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
+  const [, setActiveScenarioId] = useState<string | null>(null);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

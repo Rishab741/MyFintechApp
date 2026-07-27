@@ -196,7 +196,7 @@ function IngestStep({
             {wasSample && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent">
                 <FlaskConical size={12} />
-                Sample data — flagged for easy retirement. Use "Retire sample data" below to remove it.
+                Sample data — flagged for easy retirement. Use &quot;Retire sample data&quot; below to remove it.
               </div>
             )}
             <div className="grid grid-cols-3 gap-3">
@@ -434,7 +434,7 @@ export default function PipelinePage() {
           <div>
             <p className="text-sm font-medium text-white">Retire sample data</p>
             <p className="text-xs text-muted mt-0.5">
-              Permanently deletes all data uploaded via "Use sample data" — keeps any real data you uploaded.
+              Permanently deletes all data uploaded via &quot;Use sample data&quot; — keeps any real data you uploaded.
               The ledger chain is automatically re-sealed after deletion.
             </p>
           </div>

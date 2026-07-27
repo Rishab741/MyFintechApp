@@ -15,7 +15,7 @@ import { usePortfolioData } from '@/src/portfolio/hooks/usePortfolioData';
 import { LineChart, DonutChart } from '@/src/portfolio/charts';
 import { PeriodTabs, SHead, Card } from '@/src/portfolio/components';
 import {
-    BG, CARD, CARD2, BORDER, BORDER2,
+    BG, CARD, CARD2, BORDER,
     GOLD, GOLD_D, GOLD_B,
     GREEN, GREEN_D, RED, RED_D,
     BLUE, ORANGE,

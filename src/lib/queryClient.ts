@@ -23,7 +23,8 @@ export const queryClient = new QueryClient({
 
       // Only refetch on window focus if data is already stale — prevents
       // unnecessary network calls on every tab switch during the 4-min fresh window.
-      refetchOnWindowFocus: 'stale',
+      // (TanStack Query's `true` already gates on staleTime, not just presence of data.)
+      refetchOnWindowFocus: true,
 
       // Active background refresh every 10 minutes even if the user keeps the
       // screen open — prevents data from silently drifting more than 10 min.

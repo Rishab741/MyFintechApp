@@ -5,7 +5,7 @@ import SHead from '../SHead';
 import HoldingRow from '../HoldingRow';
 import PerformersSection from '../PerformersSection';
 import {
-    GOLD, MUTED, TXT,
+    MUTED, TXT,
     sans, mono,
 } from '../../tokens';
 import { fmtCurrency, getTicker } from '../../helpers';

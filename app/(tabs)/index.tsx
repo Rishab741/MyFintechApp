@@ -18,14 +18,13 @@ import {
     View,
 } from 'react-native';
 import ConnectInvestment from '../../components/ConnectInvestments';
-import { QL, sans, mono } from '@/constants/Colors';
+import { QL, sans } from '@/constants/Colors';
 
 // ─── Palette — Quantum Ledger (unified) ───────────────────────────────────────
 const BG      = QL.BG;
 const CARD    = QL.CARD;
 const CARD2   = QL.CARD2;
 const BORDER  = QL.BORDER;
-const BORDER2 = QL.BORDER_HI;
 
 const IND     = QL.BLUE;
 const IND_L   = '#A5B4FC';
@@ -33,10 +32,8 @@ const IND_D   = QL.BLUE_D;
 const IND_B   = 'rgba(129,140,248,0.22)';
 
 const VIO     = QL.BLUE;
-const VIO_L   = '#C7D2FE';
 const VIO_D   = QL.BLUE_D;
 
-const TEAL    = QL.GOLD;
 const TEAL_D  = QL.GOLD_D;
 
 const GRN     = QL.GREEN;
@@ -45,7 +42,6 @@ const GRN_D   = QL.GREEN_D;
 const AMB     = QL.AMBER;
 const AMB_D   = QL.AMBER_D;
 
-const RED     = QL.RED;
 const RED_D   = QL.RED_D;
 
 const T1      = QL.TXT;

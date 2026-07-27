@@ -44,6 +44,7 @@ export default function MfaPage() {
       setSecret(data.totp.secret);
       setState("enroll");
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount only
   }, []);
 
   // ── Create challenge (move from QR screen → code entry screen) ──────────
@@ -158,7 +159,7 @@ export default function MfaPage() {
             onClick={startVerify}
             className="py-3 bg-accent hover:bg-accent/80 text-white text-sm font-semibold rounded-xl transition-colors"
           >
-            I've scanned it →
+            I&apos;ve scanned it →
           </button>
         </div>
       </div>

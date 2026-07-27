@@ -16,9 +16,7 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Image,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -33,20 +31,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBrokerageConnect } from "@/src/onboarding/hooks/useBrokerageConnect";
 import type { BrokerageAccount, BrokerageCatalogueItem } from "@/src/onboarding/types";
 
-import { QL, sans, mono } from "@/constants/Colors";
+import { QL, mono } from "@/constants/Colors";
 // ── Tokens ────────────────────────────────────────────────────────────────────
 const BG     = QL.BG;
 const CARD   = QL.CARD;
 const CARD2  = QL.CARD2;
 const GOLD   = QL.GOLD;
-const GOLD_D = QL.GOLD_D;
 const GREEN  = QL.GREEN;
 const RED    = QL.RED;
 const AMBER  = QL.AMBER;
 const BORDER = QL.BORDER;
 const TXT    = QL.TXT;
 const MUTED  = QL.MUTED;
-const SUB    = QL.TXT2;
 
 // ── Brokerage logo tile ───────────────────────────────────────────────────────
 function BrokerageTile({
@@ -320,14 +316,12 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
 
   const {
-    catalogue,
     isCatalogueLoading,
     searchQuery,
     setSearchQuery,
     filteredCatalogue,
     accounts,
     summary,
-    isAccountsLoading,
     refreshAccounts,
     disconnect,
     isConnecting,
@@ -589,7 +583,7 @@ export default function OnboardingScreen() {
             {filteredCatalogue.length === 0 && searchQuery.length > 0 && (
               <View style={s.noResults}>
                 <MaterialCommunityIcons name="bank-off-outline" size={36} color={MUTED} />
-                <Text style={s.noResultsTxt}>No match for "{searchQuery}"</Text>
+                <Text style={s.noResultsTxt}>No match for &quot;{searchQuery}&quot;</Text>
                 <Text style={s.noResultsSub}>
                   Try the CSV Import tab to upload a statement from any platform.
                 </Text>

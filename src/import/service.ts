@@ -3,7 +3,6 @@ import type {
   ColumnMap,
   CsvImportJob,
   ExchangeConnection,
-  ExchangeSlug,
   ImportResult,
   ParseColumnsResponse,
 } from "./types";
@@ -16,16 +15,6 @@ async function getAuthHeader(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("Not authenticated");
   return `Bearer ${session.access_token}`;
-}
-
-async function edgeFetch(path: string, formData: FormData): Promise<Response> {
-  const auth = await getAuthHeader();
-  const res  = await fetch(`${SUPABASE_URL}/functions/v1/${path}`, {
-    method:  "POST",
-    headers: { Authorization: auth },
-    body:    formData,
-  });
-  return res;
 }
 
 // ── CSV import ────────────────────────────────────────────────────────────────

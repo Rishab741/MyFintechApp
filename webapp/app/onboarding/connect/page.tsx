@@ -121,7 +121,7 @@ export default function ConnectPage() {
         className="w-full py-3 text-sm text-slate-500 hover:text-slate-300 transition-colors"
       >
         {loading && selected === "skip" ? <Loader2 size={14} className="animate-spin inline mr-2" /> : null}
-        Skip for now — I'll connect data later
+        Skip for now — I&apos;ll connect data later
       </button>
     </div>
   );

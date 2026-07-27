@@ -1,15 +1,14 @@
 import React, { useMemo } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Card from '../Card';
 import SHead from '../SHead';
 import RiskGrid from '../RiskGrid';
 import { DrawdownChart } from '../../charts';
 import {
-    GOLD, GOLD_D, GREEN, RED, RED_D,
-    MUTED, TXT, TXT2,
+    GOLD, GOLD_D, GREEN, RED,
+    MUTED, TXT2,
     sans, mono,
 } from '../../tokens';
-import { fmt2, sign } from '../../helpers';
 import type { RiskMetrics } from '../../types';
 import type { PerformanceMetrics } from '@/src/services/engineClient';
 import { computePortfolioScore, type ScoreInsight } from '../../scoring';

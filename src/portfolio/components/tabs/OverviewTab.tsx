@@ -5,13 +5,13 @@ import Card from '../Card';
 import SHead from '../SHead';
 import HoldingRow from '../HoldingRow';
 import {
-    GOLD, GOLD_D, GREEN, GREEN_D, RED, RED_D,
-    TXT, TXT2, MUTED, SUB,
-    sans, mono,
+    GOLD, GOLD_D, GREEN, RED,
+    TXT2, MUTED,
+    mono,
 } from '../../tokens';
 import { QL } from '@/constants/Colors';
 import { fmtCurrency, fmt2, sign, getTicker } from '../../helpers';
-import type { AllocSeg, PerformerItem, Position } from '../../types';
+import type { AllocSeg, Position } from '../../types';
 
 interface Props {
     totalVal:  number;
@@ -48,7 +48,7 @@ const Stat: React.FC<{ label: string; value: string; color?: string }> = ({ labe
     </View>
 );
 
-export default function OverviewTab({ totalVal, totalPos, totalPnl, cash, currency, positions, allocSegs }: Props) {
+export default function OverviewTab({ totalVal: _totalVal, totalPos, totalPnl, cash, currency, positions, allocSegs }: Props) {
     const invested = totalPos;
     const pnlColor = totalPnl >= 0 ? GREEN : RED;
 

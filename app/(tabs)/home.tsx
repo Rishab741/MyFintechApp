@@ -212,7 +212,7 @@ export default function HomeScreen() {
           <NavMenuButton />
           <Text style={styles.topBarGreeting}>{greeting}, {firstName}</Text>
         </View>
-        <Pressable onPress={() => router.push('/(tabs)/index')} hitSlop={12}>
+        <Pressable onPress={() => router.push('/(tabs)')} hitSlop={12}>
           <MaterialCommunityIcons name="bell-outline" size={19} color={TXT2} />
         </Pressable>
       </View>

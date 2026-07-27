@@ -136,7 +136,7 @@ export default function ConnectInvestment({
           >
             {loading
               ? <ActivityIndicator color="#0A0D14" />
-              : <Text style={[s.btnTxt, { color: '#0A0D14' }]}>I've Connected — Continue</Text>}
+              : <Text style={[s.btnTxt, { color: '#0A0D14' }]}>I&apos;ve Connected — Continue</Text>}
           </TouchableOpacity>
           <TouchableOpacity style={s.cancelBtn} onPress={() => setAwaitingCallback(false)} disabled={loading}>
             <Text style={s.cancelTxt}>Cancel</Text>

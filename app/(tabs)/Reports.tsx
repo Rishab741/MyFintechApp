@@ -34,7 +34,6 @@ const CARD2   = QL.CARD2;
 const BORDER  = QL.BORDER;
 const GOLD    = QL.GOLD;
 const GOLD_D  = QL.GOLD_D;
-const GOLD_B  = QL.GOLD_B;
 const GREEN   = QL.GREEN;
 const GREEN_D = QL.GREEN_D;
 const RED     = QL.RED;
@@ -158,7 +157,7 @@ export default function ReportsScreen() {
   const {
     reports, isConnected, isCheckingAccess,
     isGenerating, isLoading, error,
-    generate, remove, refresh,
+    generate, remove,
   } = useReports();
 
   const [selectedType,   setSelectedType]   = useState<ReportType>('holdings');

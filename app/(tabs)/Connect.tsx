@@ -13,7 +13,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -32,15 +31,14 @@ import {
   exchangeCoinbaseCode,
   listConnections,
 } from "@/src/import/service";
-import { EXCHANGE_META, type ExchangeConnection, type ExchangeSlug } from "@/src/import/types";
+import { EXCHANGE_META, type ExchangeConnection } from "@/src/import/types";
 
-import { QL, sans, mono } from "@/constants/Colors";
+import { QL, mono } from "@/constants/Colors";
 // ── Tokens ────────────────────────────────────────────────────────────────────
 const BG     = QL.BG;
 const CARD   = QL.CARD;
 const CARD2  = QL.CARD2;
 const GOLD   = QL.GOLD;
-const GOLD_D = QL.GOLD_D;
 const GREEN  = QL.GREEN;
 const RED    = QL.RED;
 const AMBER  = QL.AMBER;
@@ -318,7 +316,7 @@ export default function ConnectScreen() {
           <View style={s.csvHint}>
             <MaterialCommunityIcons name="file-upload-outline" size={16} color={MUTED} />
             <Text style={s.csvHintTxt}>
-              Don't see your exchange? Use the{" "}
+              Don&apos;t see your exchange? Use the{" "}
               <Text style={{ color: GOLD }}>Import</Text>{" "}
               tab to upload a CSV or Excel export directly.
             </Text>
@@ -335,7 +333,7 @@ export default function ConnectScreen() {
           <View style={[s.exchangeHero, { backgroundColor: COINBASE_BLUE + "15" }]}>
             <MaterialCommunityIcons name="bank" size={40} color={COINBASE_BLUE} />
             <Text style={s.heroTitle}>Connect Coinbase</Text>
-            <Text style={s.heroSub}>You'll be taken to Coinbase to approve read-only access, then brought straight back.</Text>
+            <Text style={s.heroSub}>You&apos;ll be taken to Coinbase to approve read-only access, then brought straight back.</Text>
           </View>
 
           <TrustBadge items={[
@@ -369,7 +367,7 @@ export default function ConnectScreen() {
           </TouchableOpacity>
 
           <Text style={s.legalTxt}>
-            By connecting, you agree to Coinbase's Terms and grant Platstock read-only OAuth access to your account data.
+            By connecting, you agree to Coinbase&apos;s Terms and grant Platstock read-only OAuth access to your account data.
           </Text>
 
           <View style={{ height: 60 }} />

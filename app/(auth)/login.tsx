@@ -70,7 +70,7 @@ function friendlyAuthError(message: string): string {
   return message;
 }
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AuthMode = 'signin' | 'signup';
@@ -714,7 +714,7 @@ export default function AuthScreen() {
           <View style={styles.forgotCard}>
             <Text style={styles.forgotTitle}>Reset Password</Text>
             <Text style={styles.forgotBody}>
-              Enter the email address linked to your account and we'll send reset instructions.
+              Enter the email address linked to your account and we&apos;ll send reset instructions.
             </Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
               <TouchableOpacity style={styles.backBtn} onPress={() => setForgotPassword(false)}>
@@ -738,7 +738,6 @@ const ACCENT       = '#0EA5E9';   // sky-500 blue
 const ACCENT_LIGHT = '#38BDF8';   // sky-400
 const GREEN        = '#10B981';   // emerald CTA
 const BG           = '#060E1F';   // deep navy
-const SURFACE      = '#0B1626';
 const CARD         = '#0E1D35';   // dark blue card
 
 const styles = StyleSheet.create({

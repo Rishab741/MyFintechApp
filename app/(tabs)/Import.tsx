@@ -5,11 +5,9 @@
 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -22,7 +20,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useCsvImport } from "@/src/import/hooks/useCsvImport";
 import {
-  ALL_FIELDS,
   FIELD_EXAMPLES,
   FIELD_LABELS,
   OPTIONAL_FIELDS,
@@ -30,13 +27,12 @@ import {
   type MappingField,
 } from "@/src/import/types";
 
-import { QL, sans, mono } from "@/constants/Colors";
+import { QL, mono } from "@/constants/Colors";
 // ── Tokens ────────────────────────────────────────────────────────────────────
 const BG     = QL.BG;
 const CARD   = QL.CARD;
 const CARD2  = QL.CARD2;
 const GOLD   = QL.GOLD;
-const GOLD_D = QL.GOLD_D;
 const GREEN  = QL.GREEN;
 const RED    = QL.RED;
 const AMBER  = QL.AMBER;
@@ -206,7 +202,7 @@ export default function ImportScreen() {
     parsed, mapping, setMapping, isParsing, parseError, runParse, isMappingComplete,
     isImporting, importError, runImport,
     result,
-    jobs, isLoadingJobs, loadJobs,
+    jobs, loadJobs,
   } = useCsvImport();
 
   useEffect(() => { loadJobs(); }, [loadJobs]);

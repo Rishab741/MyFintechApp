@@ -56,7 +56,7 @@ export function SectorGrid({ sectors }: { sectors: Sector[] }) {
             <View style={[styles.legendDot, { backgroundColor: GREEN }]} />
             <Text style={styles.legendTxt}>Bullish</Text>
           </View>
-          <Text style={styles.legendSub}>Today's performance by GICS sector</Text>
+          <Text style={styles.legendSub}>Today&apos;s performance by GICS sector</Text>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: RED }]} />
             <Text style={styles.legendTxt}>Bearish</Text>

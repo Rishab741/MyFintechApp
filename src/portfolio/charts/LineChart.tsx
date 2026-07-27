@@ -60,7 +60,6 @@ const LineChart: React.FC<{
                 const bottom = padding + innerH;
                 return pts.slice(0, -1).map((p1, i) => {
                     const p2   = pts[i + 1];
-                    const midX = (p1.x + p2.x) / 2;
                     const topY = Math.min(p1.y, p2.y);
                     const colH = bottom - topY;
                     return (

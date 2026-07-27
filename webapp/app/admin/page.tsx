@@ -85,7 +85,8 @@ export default function AdminPanel() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount only
+  useEffect(() => { load(); }, []);
 
   async function signOut() {
     await supabase.auth.signOut();
