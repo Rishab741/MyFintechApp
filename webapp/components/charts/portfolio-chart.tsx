@@ -31,7 +31,7 @@ interface CustomTooltipProps {
 }
 
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
-  if (!active || !payload?.length) return null;
+  if (!active || !payload?.length || !label) return null;
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-sm shadow-xl">
       <p className="text-muted mb-1">{fmtDate(label)}</p>
