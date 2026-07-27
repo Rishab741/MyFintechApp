@@ -88,6 +88,55 @@ jobs:
         # The -- passes --max-warnings 0 through to the underlying eslint call.
         continue-on-error: false
 
+  # ── Engine (Python / FastAPI) ────────────────────────────────────────────────
+  # Runs the offline subset of the pytest suite: pure calculation, parsing, and
+  # scoring logic that needs zero secrets and zero live services. This is the
+  # gate that would have caught the redis_url NameError incident before it
+  # ever reached Railway -- a broken config.py fails collection/import here,
+  # not at container startup.
+  #
+  # Two files are deliberately excluded, not forgotten:
+  #   test_rls_isolation.py            -- requires a live Supabase project plus
+  #                                        real RLS_TEST_USER_A/B credentials;
+  #                                        module-level `os.environ[...]` means
+  #                                        it hard-fails collection without them.
+  #   test_tenant_isolation.py         -- TestTenantIsolation / TestApiVersioning
+  #     (TestTenantIsolation,             classes hit a live engine over HTTP
+  #      TestApiVersioning classes)       (ENGINE_URL, defaults localhost:8000).
+  #                                        TestLedgerIntegrity in the same file
+  #                                        is pure and stays in the run.
+  # Wiring either of those into CI means deciding on a dedicated test Supabase
+  # project and a way to boot the engine in the runner first -- deliberately
+  # left for a follow-up, not silently skipped.
+  engine:
+    name: Engine — Pytest (offline subset)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/engine/requirements.txt
+
+      - name: Install dependencies
+        working-directory: ./services/engine
+        run: |
+          pip install -r requirements.txt
+          pip install pytest==9.0.3
+
+      - name: Run offline test suite
+        working-directory: ./services/engine
+        run: |
+          pytest tests/ -q --no-header \
+            --deselect tests/test_tenant_isolation.py::TestTenantIsolation \
+            --deselect tests/test_tenant_isolation.py::TestApiVersioning \
+            --ignore=tests/test_rls_isolation.py
+
   # ── Edge Functions (Deno) ────────────────────────────────────────────────────
   # Note: Deno edge functions use a separate toolchain (deno check, deno lint).
   # This job runs only if the Deno CLI is available. It is NOT blocking for now
