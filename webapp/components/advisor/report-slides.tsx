@@ -679,8 +679,9 @@ export function SlideDeck({
   const accent = modeAccent(mode);
   const slides = mode === "prospect" ? buildProspectSlides(d) : buildComplianceSlides(d);
   const [index, setIndex] = useState(0);
+  const safeIndex = Math.min(index, slides.length - 1);
 
-  useEffect(() => { setIndex(0); }, [mode]);
+  useEffect(() => { setIndex(0); }, [mode, d]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -700,7 +701,7 @@ export function SlideDeck({
       <div className="flex items-center justify-between gap-3 print:hidden">
         <button
           onClick={() => setIndex(i => Math.max(i - 1, 0))}
-          disabled={index === 0}
+          disabled={safeIndex === 0}
           className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-mono transition-all disabled:opacity-30"
           style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: MUTED }}
         >
@@ -716,20 +717,20 @@ export function SlideDeck({
                 aria-label={s.eyebrow}
                 className="rounded-full transition-all"
                 style={{
-                  width: i === index ? 22 : 6, height: 6,
-                  background: i === index ? accent : "rgba(255,255,255,0.15)",
+                  width: i === safeIndex ? 22 : 6, height: 6,
+                  background: i === safeIndex ? accent : "rgba(255,255,255,0.15)",
                 }}
               />
             ))}
           </div>
           <span className="text-[11px] font-mono ml-2" style={{ color: MUTED }}>
-            {index + 1} / {slides.length} · {slides[index].eyebrow}
+            {safeIndex + 1} / {slides.length} · {slides[safeIndex].eyebrow}
           </span>
         </div>
 
         <button
           onClick={() => setIndex(i => Math.min(i + 1, slides.length - 1))}
-          disabled={index === slides.length - 1}
+          disabled={safeIndex === slides.length - 1}
           className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-mono transition-all disabled:opacity-30"
           style={{ background: `${accent}12`, border: `1px solid ${accent}35`, color: accent }}
         >
@@ -739,7 +740,7 @@ export function SlideDeck({
 
       {/* ── Slides — all rendered; screen shows one, print shows all ── */}
       {slides.map((s, i) => (
-        <div key={s.id} className={`slide-page ${i === index ? "slide-active" : ""}`}>
+        <div key={s.id} className={`slide-page ${i === safeIndex ? "slide-active" : ""}`}>
           {s.node}
           <SlideFooter firmName={firmName} mode={mode} index={i + 1} total={slides.length} accent={accent} />
         </div>

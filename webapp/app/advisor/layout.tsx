@@ -165,8 +165,9 @@ function AdvisorNav() {
                 }}
               >
                 <Link
-                  href="/advisor/settings"
-                  onClick={() => setMenuOpen(false)}
+                  href="#"
+                  prefetch={false}
+                  onClick={(e) => { e.preventDefault(); setMenuOpen(false); }}
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#9CA3AF] hover:text-white hover:bg-white/4 transition-colors opacity-40 cursor-default"
                 >
                   <Settings size={13} />
