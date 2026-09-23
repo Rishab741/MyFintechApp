@@ -5,6 +5,7 @@ import {
   BG, BORDER, CARD, GOLD, GOLD_D, GREEN, MUTED, mono, RED, TXT, TXT2, width,
 } from '@/src/market/tokens';
 import type { ChartPoint, MarketIndex, Period } from '../types';
+import { haptics } from '@/src/lib/haptics';
 
 interface Props {
   index: MarketIndex | undefined;
@@ -19,7 +20,7 @@ const GRID_N  = 4;
 
 function PeriodTab({ label, active, onPress }: { label: Period; active: boolean; onPress: () => void }) {
   return (
-    <Text onPress={onPress} style={[styles.periodTab, active && styles.periodTabActive]}>
+    <Text onPress={() => { haptics.tap(); onPress(); }} style={[styles.periodTab, active && styles.periodTabActive]}>
       {label}
     </Text>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BORDER, BORDER_HI, CARD, CARD2, GOLD, GOLD_B, GREEN, GREEN_D,
@@ -10,6 +10,7 @@ interface Props {
   item: MarketIndex;
   active: boolean;
   onPress: () => void;
+  isLive?: boolean;
 }
 
 // Tiny inline sparkline using segments
@@ -54,9 +55,12 @@ function Sparkline({ data, up }: { data: number[]; up: boolean }) {
   );
 }
 
-export function IndexCard({ item, active, onPress }: Props) {
+export function IndexCard({ item, active, onPress, isLive }: Props) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim  = useRef(new Animated.Value(0)).current;
+  const flashAnim = useRef(new Animated.Value(0)).current;
+  const [flashColor, setFlashColor] = useState<string>(GREEN);
+  const prevPrice = useRef(item.quote?.price);
 
   useEffect(() => {
     Animated.parallel([
@@ -65,12 +69,28 @@ export function IndexCard({ item, active, onPress }: Props) {
     ]).start();
   }, [active]);
 
+  // Flash the card on a live price tick — same acknowledgment the web
+  // markets page gives (animate-flash-green/red), so users can see a
+  // Binance-fed price actually changed instead of it silently swapping.
+  useEffect(() => {
+    const price = item.quote?.price;
+    if (price === undefined || prevPrice.current === undefined || price === prevPrice.current) {
+      prevPrice.current = price;
+      return;
+    }
+    setFlashColor(price > prevPrice.current ? GREEN : RED);
+    prevPrice.current = price;
+    flashAnim.setValue(1);
+    Animated.timing(flashAnim, { toValue: 0, duration: 600, useNativeDriver: false }).start();
+  }, [item.quote?.price]);
+
   const q = item.quote;
   const up = (q?.changePct ?? 0) >= 0;
   const color = up ? GREEN : RED;
   const bgColor = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [CARD, CARD2] });
   const borderColor = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [BORDER, GOLD_B] });
   const borderTopColor = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [BORDER_HI, GOLD_B] });
+  const flashOpacity = flashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.25] });
 
   const sparkValues = item.chartData.length > 1
     ? item.chartData.map(p => p.value)
@@ -79,10 +99,22 @@ export function IndexCard({ item, active, onPress }: Props) {
   return (
     <Pressable onPress={onPress} style={{ marginRight: 10 }}>
       <Animated.View style={[styles.card, { backgroundColor: bgColor, borderColor, borderTopColor }]}>
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: flashColor, opacity: flashOpacity, borderRadius: 6 }]}
+        />
         {/* Region pill */}
         <View style={styles.regionRow}>
           <Text style={[styles.region, active && { color: GOLD }]}>{item.region}</Text>
-          {active && <View style={styles.activeDot} />}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            {isLive && (
+              <View style={styles.liveBadge}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveTxt}>LIVE</Text>
+              </View>
+            )}
+            {active && <View style={styles.activeDot} />}
+          </View>
         </View>
 
         {/* Label */}
@@ -152,6 +184,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
+  },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  liveDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: GREEN,
+  },
+  liveTxt: {
+    fontFamily: mono,
+    fontSize: 7,
+    fontWeight: '700',
+    color: GREEN,
+    letterSpacing: 0.5,
   },
   label: {
     fontFamily: mono,

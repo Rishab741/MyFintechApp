@@ -13,7 +13,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { QL } from '@/constants/Colors';
+
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 const { width } = Dimensions.get('window');
 
@@ -54,20 +57,20 @@ const EXCHANGES = [
   { id: 'cme',      name: 'CME',       region: 'United States',  flag: '🇺🇸', color: ORANGE,     assetClasses: ['commodities','forex','bonds'], description: "World's largest derivatives exchange",  hours: '23 / 5',        currency: 'USD'                        },
 ];
 
-const ASSET_CLASSES = [
-  { id: 'equities'    as AssetClass, label: 'Equities',    icon: '📈', color: BLUE,   description: 'Stocks & shares'      },
-  { id: 'crypto'      as AssetClass, label: 'Crypto',      icon: '₿',  color: GOLD,   description: 'Digital assets'       },
-  { id: 'etfs'        as AssetClass, label: 'ETFs',        icon: '🗂️', color: TEAL,   description: 'Exchange-traded funds' },
-  { id: 'forex'       as AssetClass, label: 'Forex',       icon: '💱', color: GREEN,  description: 'Currency pairs'       },
-  { id: 'commodities' as AssetClass, label: 'Commodities', icon: '🛢️', color: ORANGE, description: 'Gold, oil & more'     },
-  { id: 'bonds'       as AssetClass, label: 'Bonds',       icon: '🏦', color: PURPLE, description: 'Fixed income'         },
+const ASSET_CLASSES: { id: AssetClass; label: string; icon: IconName; color: string; description: string }[] = [
+  { id: 'equities',    label: 'Equities',    icon: 'chart-line',        color: BLUE,   description: 'Stocks & shares'      },
+  { id: 'crypto',      label: 'Crypto',      icon: 'currency-btc',      color: GOLD,   description: 'Digital assets'       },
+  { id: 'etfs',        label: 'ETFs',        icon: 'folder-multiple-outline', color: TEAL, description: 'Exchange-traded funds' },
+  { id: 'forex',       label: 'Forex',       icon: 'currency-usd',      color: GREEN,  description: 'Currency pairs'       },
+  { id: 'commodities', label: 'Commodities', icon: 'oil-lamp',          color: ORANGE, description: 'Gold, oil & more'     },
+  { id: 'bonds',       label: 'Bonds',       icon: 'bank-outline',      color: PURPLE, description: 'Fixed income'         },
 ];
 
-const RISK_LEVELS = [
-  { id: 'conservative' as RiskLevel, label: 'Conservative', desc: 'Capital preservation',      color: TEAL,   icon: '🛡️' },
-  { id: 'moderate'     as RiskLevel, label: 'Moderate',     desc: 'Balanced growth',            color: BLUE,   icon: '⚖️' },
-  { id: 'aggressive'   as RiskLevel, label: 'Aggressive',   desc: 'High growth, elevated risk', color: ORANGE, icon: '🚀' },
-  { id: 'speculative'  as RiskLevel, label: 'Speculative',  desc: 'Maximum risk & upside',      color: RED,    icon: '⚡' },
+const RISK_LEVELS: { id: RiskLevel; label: string; desc: string; color: string; icon: IconName }[] = [
+  { id: 'conservative', label: 'Conservative', desc: 'Capital preservation',      color: TEAL,   icon: 'shield-check-outline' },
+  { id: 'moderate',     label: 'Moderate',     desc: 'Balanced growth',            color: BLUE,   icon: 'scale-balance' },
+  { id: 'aggressive',   label: 'Aggressive',   desc: 'High growth, elevated risk', color: ORANGE, icon: 'rocket-launch-outline' },
+  { id: 'speculative',  label: 'Speculative',  desc: 'Maximum risk & upside',      color: RED,    icon: 'lightning-bolt-outline' },
 ];
 
 const CURRENCIES  = ['AUD', 'USD', 'GBP', 'EUR', 'JPY', 'HKD'];
@@ -116,7 +119,7 @@ const ExchangeCard: React.FC<{ ex: typeof EXCHANGES[0]; selected: boolean; onTog
             <Text style={xc.region}>{ex.region}</Text>
           </View>
           <View style={[xc.box, selected && { backgroundColor: ex.color, borderColor: ex.color }]}>
-            {selected && <Text style={xc.tick}>✓</Text>}
+            {selected && <MaterialCommunityIcons name="check" size={13} color={BG} />}
           </View>
         </View>
         <Text style={xc.desc}>{ex.description}</Text>
@@ -159,7 +162,7 @@ const AssetToggle: React.FC<{ def: typeof ASSET_CLASSES[0]; selected: boolean; o
         activeOpacity={1}
       >
         {selected && <View style={[at.dot, { backgroundColor: def.color }]} />}
-        <Text style={{ fontSize: 26, marginBottom: 8 }}>{def.icon}</Text>
+        <MaterialCommunityIcons name={def.icon} size={24} color={def.color} style={{ marginBottom: 8 }} />
         <Text style={[at.label, selected && { color: def.color }]}>{def.label}</Text>
         <Text style={at.sub}>{def.description}</Text>
       </TouchableOpacity>
@@ -187,7 +190,7 @@ const RiskCard: React.FC<{ item: typeof RISK_LEVELS[0]; selected: boolean; onPre
       >
         {selected && <View style={[rc.stripe, { backgroundColor: item.color }]} />}
         <View style={[rc.iconWrap, { backgroundColor: selected ? `${item.color}20` : 'rgba(255,255,255,0.05)' }]}>
-          <Text style={{ fontSize: 20 }}>{item.icon}</Text>
+          <MaterialCommunityIcons name={item.icon} size={18} color={item.color} />
         </View>
         <View style={{ flex: 1, marginLeft: 14 }}>
           <Text style={[rc.label, selected && { color: item.color }]}>{item.label}</Text>
@@ -287,7 +290,7 @@ export default function InvestmentProfileScreen() {
 
         {/* ── Portfolio link ── */}
         <TouchableOpacity style={s.linkCard} onPress={() => router.push('/(tabs)/Portfolio')}>
-          <View style={s.linkIcon}><Text style={{ fontSize: 20 }}>📊</Text></View>
+          <View style={s.linkIcon}><MaterialCommunityIcons name="view-dashboard-outline" size={18} color={GOLD} /></View>
           <Text style={s.linkTxt}>View Portfolio Dashboard</Text>
           <Text style={s.linkArrow}>›</Text>
         </TouchableOpacity>

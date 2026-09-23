@@ -9,6 +9,7 @@ import { queryClient } from '../src/lib/queryClient';
 import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useConnectionStore } from '../src/store/useConnectionStore';
+import { QL } from '../constants/Colors';
 
 // Initialise once at module load — before any component renders.
 // Sentry silently no-ops when DSN is empty, so local dev without a key is safe.
@@ -176,8 +177,8 @@ function RootLayout() {
     return (
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <View style={{ flex: 1, backgroundColor: '#060E1F', alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color="#0EA5E9" size="large" />
+          <View style={{ flex: 1, backgroundColor: QL.BG, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={QL.GOLD} size="large" />
           </View>
         </GestureHandlerRootView>
       </SafeAreaProvider>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchChartData,
   fetchGainers,
@@ -10,6 +10,14 @@ import {
 import type { ChartPoint, MarketIndex, MarketStatus, Mover, Period, Quote, Sector } from '../types';
 import { GREEN, AMBER } from '@/src/portfolio/tokens';
 import { supabase } from '@/src/lib/supabase';
+import { useBinanceWs } from './useBinanceWs';
+
+// Live crypto ticks come straight from Binance's own public feed instead of
+// waiting on the 30s/5min quote poll — see useBinanceWs.ts for why.
+const CRYPTO_BINANCE_SYMBOLS: Record<string, string> = {
+  'BTC-USD': 'BTCUSDT',
+  'ETH-USD': 'ETHUSDT',
+};
 
 // ─── Market status based on NYSE hours (ET = UTC-5 / UTC-4 DST) ──────────────
 // Avoids toLocaleString(timeZone) which is unreliable on Android < 10.
@@ -151,8 +159,32 @@ export function useMarketData() {
     loadChart(selectedIdx, period);
   }, [selectedIdx, period]);
 
+  // ── Live crypto overlay ─────────────────────────────────────────────────
+  const { liveQuotes: binanceQuotes, status: binanceStatus } = useBinanceWs(
+    Object.values(CRYPTO_BINANCE_SYMBOLS)
+  );
+  const liveIndices = useMemo<MarketIndex[]>(() => {
+    return indices.map(idx => {
+      const binSym = CRYPTO_BINANCE_SYMBOLS[idx.symbol];
+      const tick = binSym ? binanceQuotes[binSym] : undefined;
+      if (!tick || !idx.quote) return idx;
+      const prevClose = idx.quote.previousClose;
+      const change = tick.price - prevClose;
+      return {
+        ...idx,
+        quote: {
+          ...idx.quote,
+          price: tick.price,
+          change,
+          changePct: prevClose > 0 ? (change / prevClose) * 100 : idx.quote.changePct,
+        },
+      };
+    });
+  }, [indices, binanceQuotes]);
+
   return {
-    indices,
+    indices: liveIndices,
+    cryptoLive: binanceStatus === 'connected',
     selectedIdx,
     setSelectedIdx,
     period,

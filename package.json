@@ -16,8 +16,8 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
-    "@sentry/react-native": "~6.5.0",
     "@react-navigation/native": "^7.0.14",
+    "@sentry/react-native": "~6.5.0",
     "@supabase/supabase-js": "^2.45.0",
     "@tanstack/react-query": "^5.56.0",
     "expo": "^54.0.35",
@@ -27,6 +27,7 @@
     "expo-dev-client": "~6.0.21",
     "expo-document-picker": "~14.0.8",
     "expo-font": "~14.0.12",
+    "expo-haptics": "~15.0.8",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.24",
     "expo-secure-store": "~15.0.8",

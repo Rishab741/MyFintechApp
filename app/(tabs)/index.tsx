@@ -17,8 +17,11 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import ConnectInvestment from '../../components/ConnectInvestments';
 import { QL, sans } from '@/constants/Colors';
+
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 // ─── Palette — Quantum Ledger (unified) ───────────────────────────────────────
 const BG      = QL.BG;
@@ -34,6 +37,7 @@ const IND_B   = 'rgba(129,140,248,0.22)';
 const VIO     = QL.BLUE;
 const VIO_D   = QL.BLUE_D;
 
+const TEAL    = QL.GOLD;
 const TEAL_D  = QL.GOLD_D;
 
 const GRN     = QL.GREEN;
@@ -42,6 +46,7 @@ const GRN_D   = QL.GREEN_D;
 const AMB     = QL.AMBER;
 const AMB_D   = QL.AMBER_D;
 
+const RED     = QL.RED;
 const RED_D   = QL.RED_D;
 
 const T1      = QL.TXT;
@@ -89,7 +94,7 @@ const av = StyleSheet.create({
 });
 
 // ─── Score bar ────────────────────────────────────────────────────────────────
-const ScoreBar: React.FC<{ score: number }> = ({ score }) => {
+const ScoreBar: React.FC<{ score: number; title: string }> = ({ score, title }) => {
   const w = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(w, { toValue: score / 100, duration: 1100, useNativeDriver: false }).start();
@@ -99,7 +104,7 @@ const ScoreBar: React.FC<{ score: number }> = ({ score }) => {
   return (
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={bar.lbl}>Trust Score</Text>
+        <Text style={bar.lbl}>{title}</Text>
         <View style={bar.badge}>
           <Text style={[bar.badgeTxt, { color }]}>{label}</Text>
           <Text style={[bar.score, { color }]}>{score}<Text style={bar.max}>/100</Text></Text>
@@ -146,7 +151,7 @@ const st = StyleSheet.create({
 
 // ─── Nav card ─────────────────────────────────────────────────────────────────
 const NavCard: React.FC<{
-  icon: string; title: string; sub: string; accent: string;
+  icon: IconName; title: string; sub: string; accent: string;
   onPress: () => void; pill?: string;
 }> = ({ icon, title, sub, accent, onPress, pill }) => {
   const sc = useRef(new Animated.Value(1)).current;
@@ -160,7 +165,7 @@ const NavCard: React.FC<{
         activeOpacity={1}
       >
         <View style={[nc.icon, { backgroundColor: `${accent}18` }]}>
-          <Text style={{ fontSize: 19 }}>{icon}</Text>
+          <MaterialCommunityIcons name={icon} size={20} color={accent} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={nc.title}>{title}</Text>
@@ -198,25 +203,34 @@ const grp = StyleSheet.create({
 });
 
 // ─── Settings row ─────────────────────────────────────────────────────────────
+// `soon` marks a row whose backing feature isn't built yet — instead of an
+// Alert.alert('Coming Soon') popup on tap (which reads as broken), it shows a
+// muted "Soon" pill and isn't interactive.
 const Row: React.FC<{
-  icon: string; iconBg: string; label: string;
+  icon: IconName; iconBg: string; iconColor: string; label: string;
   value?: string; onPress?: () => void;
-  toggle?: boolean; toggleVal?: boolean; last?: boolean;
-}> = ({ icon, iconBg, label, value, onPress, toggle, toggleVal, last }) => (
+  toggle?: boolean; toggleVal?: boolean; last?: boolean; soon?: boolean;
+}> = ({ icon, iconBg, iconColor, label, value, onPress, toggle, toggleVal, last, soon }) => (
   <TouchableOpacity
     style={[rw.row, last && rw.rowLast]}
-    onPress={onPress}
-    activeOpacity={onPress ? 0.6 : 1}
+    onPress={soon ? undefined : onPress}
+    activeOpacity={onPress && !soon ? 0.6 : 1}
+    disabled={soon}
   >
     <View style={[rw.icon, { backgroundColor: iconBg }]}>
-      <Text style={{ fontSize: 15 }}>{icon}</Text>
+      <MaterialCommunityIcons name={icon} size={16} color={iconColor} />
     </View>
-    <Text style={rw.label}>{label}</Text>
+    <Text style={[rw.label, soon && { color: T3 }]}>{label}</Text>
     <View style={{ flex: 1 }} />
-    {toggle ? (
+    {soon ? (
+      <>
+        {value && <Text style={rw.value}>{value}</Text>}
+        <View style={rw.soonPill}><Text style={rw.soonTxt}>Soon</Text></View>
+      </>
+    ) : toggle ? (
       <Switch
         value={toggleVal ?? false}
-        onValueChange={() => Alert.alert('Coming Soon')}
+        onValueChange={onPress}
         trackColor={{ false: CARD2, true: VIO }}
         thumbColor={toggleVal ? '#fff' : T2}
         ios_backgroundColor={CARD2}
@@ -237,6 +251,9 @@ const rw = StyleSheet.create({
   label:    { color: T1, fontSize: 14, fontFamily: sans },
   value:    { color: T2, fontSize: 13, fontFamily: sans, marginRight: 2 },
   chevron:  { color: T3, fontSize: 20 },
+  soonPill: { backgroundColor: CARD2, borderWidth: 1, borderColor: BORDER,
+              borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, marginLeft: 6 },
+  soonTxt:  { color: T3, fontSize: 10, fontWeight: '600', fontFamily: sans, letterSpacing: 0.3 },
 });
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
@@ -300,7 +317,12 @@ export default function ProfileScreen() {
     : '—';
   const verified  = !!user?.email_confirmed_at;
   const initials  = getInitials(fullName);
-  const score     = verified ? 74 : 40;
+  // Profile completeness — a real count of filled-in profile fields, not a
+  // modeled risk/trust score. Keep this list in sync with the rows below.
+  const completenessChecks = [verified, !!meta.phone, !!meta.investor_type, connected];
+  const score = Math.round(
+    (completenessChecks.filter(Boolean).length / completenessChecks.length) * 100
+  );
 
   return (
     <View style={s.root}>
@@ -353,21 +375,21 @@ export default function ProfileScreen() {
           <View style={s.statsStrip}>
             <Stat label="Member since" value={since}       color={T1}   />
             <View style={s.statDiv} />
-            <Stat label="Trust score"  value={`${score}/100`} color={score >= 65 ? GRN : score >= 50 ? IND_L : AMB} />
+            <Stat label="Profile"      value={`${score}%`} color={score >= 65 ? GRN : score >= 50 ? IND_L : AMB} />
             <View style={s.statDiv} />
             <Stat label="Sessions"     value="1 active"    color={IND_L} />
           </View>
         </Animated.View>
 
-        {/* ─── Trust score card ─────────────────────────────── */}
+        {/* ─── Profile completeness card ───────────────────── */}
         <Animated.View style={[s.card, { opacity: fade, transform: [{ translateY: slideB }] }]}>
-          <ScoreBar score={score} />
+          <ScoreBar score={score} title="Profile Completeness" />
         </Animated.View>
 
         {/* ─── Portfolio ────────────────────────────────────── */}
         <SectionHead title="Portfolio" />
         <NavCard
-          icon="📊"
+          icon="view-dashboard-outline"
           title="Portfolio Dashboard"
           sub={connected ? 'Account connected · view live holdings' : 'Connect a brokerage to get started'}
           accent={IND}
@@ -375,7 +397,7 @@ export default function ProfileScreen() {
           pill={connected ? 'Live' : 'Connect'}
         />
         <NavCard
-          icon="🎯"
+          icon="target"
           title="Investment Profile"
           sub="Risk tolerance, asset classes & exchanges"
           accent={VIO}
@@ -395,42 +417,42 @@ export default function ProfileScreen() {
         {/* ─── Account settings ─────────────────────────────── */}
         <SectionHead title="Account Details" />
         <Group>
-          <Row icon="✉️" iconBg={IND_D}       label="Email"         value={email}  onPress={() => Alert.alert('Coming Soon')} />
-          <Row icon="📱" iconBg={TEAL_D}      label="Phone"         value={phone}  onPress={() => Alert.alert('Coming Soon')} />
-          <Row icon="🏷️" iconBg={VIO_D}       label="Investor type" value={type}   onPress={() => Alert.alert('Coming Soon')} />
-          <Row icon="🌐" iconBg={`${T3}25`}   label="Region"        value="UTC"    onPress={() => Alert.alert('Coming Soon')} last />
+          <Row icon="email-outline" iconBg={IND_D}     iconColor={IND}  label="Email"         value={email}  soon />
+          <Row icon="cellphone"     iconBg={TEAL_D}     iconColor={TEAL} label="Phone"         value={phone}  soon />
+          <Row icon="tag-outline"   iconBg={VIO_D}      iconColor={VIO}  label="Investor type" value={type}   soon />
+          <Row icon="earth"         iconBg={`${T3}25`}  iconColor={T3}   label="Region"        value="UTC"    soon last />
         </Group>
 
         {/* ─── Portfolio Tools ─────────────────────────────── */}
         <SectionHead title="Portfolio Tools" />
         <Group>
-          <Row icon="🏦" iconBg={TEAL_D}  label="Connected Accounts" onPress={() => router.navigate('/(tabs)/Onboarding')} />
-          <Row icon="📥" iconBg={IND_D}   label="Import Data"        onPress={() => router.navigate('/(tabs)/Import')} />
-          <Row icon="📊" iconBg={VIO_D}   label="Reports"            onPress={() => router.navigate('/(tabs)/Reports')} />
-          <Row icon="⚙️" iconBg={AMB_D}   label="Investment Profile"  onPress={() => router.navigate('/(tabs)/InvestmentProfile')} last />
+          <Row icon="bank"                iconBg={TEAL_D} iconColor={TEAL} label="Connected Accounts" onPress={() => router.navigate('/(tabs)/Onboarding')} />
+          <Row icon="tray-arrow-down"     iconBg={IND_D}  iconColor={IND}  label="Import Data"        onPress={() => router.navigate('/(tabs)/Import')} />
+          <Row icon="chart-bar"           iconBg={VIO_D}  iconColor={VIO}  label="Reports"            onPress={() => router.navigate('/(tabs)/Reports')} />
+          <Row icon="tune-variant"        iconBg={AMB_D}  iconColor={AMB}  label="Investment Profile"  onPress={() => router.navigate('/(tabs)/InvestmentProfile')} last />
         </Group>
 
         {/* ─── Security ─────────────────────────────────────── */}
         <SectionHead title="Security" />
         <Group>
-          <Row icon="🔑" iconBg={AMB_D}  label="Change password"           onPress={() => Alert.alert('Coming Soon')} />
-          <Row icon="🛡️" iconBg={VIO_D}  label="Two-factor authentication" toggle toggleVal={false} />
-          <Row icon="📋" iconBg={IND_D}  label="Active sessions"            onPress={() => Alert.alert('Coming Soon')} last />
+          <Row icon="key-outline"            iconBg={AMB_D} iconColor={AMB} label="Change password"           soon />
+          <Row icon="shield-check-outline"   iconBg={VIO_D} iconColor={VIO} label="Two-factor authentication" toggle toggleVal={false} soon />
+          <Row icon="clipboard-list-outline" iconBg={IND_D} iconColor={IND} label="Active sessions"            soon last />
         </Group>
 
         {/* ─── Preferences ──────────────────────────────────── */}
         <SectionHead title="Preferences" />
         <Group>
-          <Row icon="🔔" iconBg={AMB_D}        label="Notifications"   onPress={() => {}} />
-          <Row icon="🌙" iconBg={VIO_D}        label="Appearance"      value="Dark"   onPress={() => {}} />
-          <Row icon="💱" iconBg={TEAL_D}       label="Base currency"   value="AUD"    onPress={() => {}} />
-          <Row icon="📳" iconBg={`${T3}20`}   label="Haptic feedback" value="On"     onPress={() => {}} last />
+          <Row icon="bell-outline"     iconBg={AMB_D}      iconColor={AMB} label="Notifications"   soon />
+          <Row icon="weather-night"    iconBg={VIO_D}      iconColor={VIO} label="Appearance"      value="Dark" soon />
+          <Row icon="currency-usd"     iconBg={TEAL_D}     iconColor={TEAL} label="Base currency"   value="AUD"  soon />
+          <Row icon="vibrate"          iconBg={`${T3}20`}  iconColor={T3}  label="Haptic feedback" value="On"   soon last />
         </Group>
 
         {/* ─── Sign out ─────────────────────────────────────── */}
         <SectionHead title="Account" />
         <Group>
-          <Row icon="🚪" iconBg={RED_D} label="Sign out" onPress={handleSignOut} last />
+          <Row icon="logout" iconBg={RED_D} iconColor={RED} label="Sign out" onPress={handleSignOut} last />
         </Group>
 
         {/* ─── Footer ───────────────────────────────────────── */}

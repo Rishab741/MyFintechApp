@@ -34,6 +34,7 @@ import { searchAssets } from '@/src/comparison/service';
 import type { ComparisonAsset } from '@/src/comparison/types';
 import { addPosition, markOnboarded } from '@/src/portfolio/positionsService';
 import { QL } from '@/constants/Colors';
+import { haptics } from '@/src/lib/haptics';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const BG     = QL.BG;
@@ -93,7 +94,7 @@ function PlatCard({
   return (
     <Pressable
       style={[pc.card, { borderColor: accent + '33' }, disabled && { opacity: 0.45 }]}
-      onPress={onPress}
+      onPress={() => { haptics.tap(); onPress(); }}
       disabled={disabled || loading}
     >
       <View style={[pc.iconWrap, { backgroundColor: accent + '1A' }]}>
@@ -168,10 +169,12 @@ export default function OnboardScreen() {
 
   const handleExchangeConnect = async () => {
     if (!bnKey.trim() || !bnSecret.trim()) {
+      haptics.warning();
       setBnError('Both API Key and Secret are required.');
       return;
     }
     if (bnNet === 'kucoin' && !bnPassphrase.trim()) {
+      haptics.warning();
       setBnError('KuCoin also requires an API Passphrase — set one when you created the key.');
       return;
     }
@@ -198,9 +201,11 @@ export default function OnboardScreen() {
       if (!res.ok) throw new Error(json.error ?? 'Could not save your API key. Please try again.');
 
       await markOnboarded();
+      haptics.success();
       setConnectedPlatform(EXCHANGE_LABELS[bnNet]);
       transitionTo('done');
     } catch (e) {
+      haptics.warning();
       setBnError(e instanceof Error ? e.message : 'Connection failed');
     } finally {
       setBnLoading(false);
@@ -239,9 +244,11 @@ export default function OnboardScreen() {
         await addPosition({ symbol: pos.symbol, name: pos.name, quantity: parseFloat(pos.quantity), avg_cost: pos.avg_cost ? parseFloat(pos.avg_cost) : null, asset_class: pos.asset_class });
       }
       await markOnboarded();
+      haptics.success();
       setConnectedPlatform(pending.length > 0 ? `${pending.length} position${pending.length > 1 ? 's' : ''}` : null);
       transitionTo('done');
     } catch (e) {
+      haptics.warning();
       setMnError(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
       setMnLoading(false);
@@ -257,6 +264,12 @@ export default function OnboardScreen() {
     await markOnboarded().catch(() => {});
     router.replace('/(tabs)');
     setTimeout(() => router.push('/(tabs)/Import' as any), 350);
+  };
+
+  const handleConnectBrokerage = async () => {
+    await markOnboarded().catch(() => {});
+    router.replace('/(tabs)');
+    setTimeout(() => router.push('/(tabs)/Onboarding' as any), 350);
   };
 
   // ── Step transition ────────────────────────────────────────────────────────
@@ -307,7 +320,7 @@ export default function OnboardScreen() {
                 </View>
               ))}
             </View>
-            <Pressable style={s.primary} onPress={() => transitionTo('connect')}>
+            <Pressable style={s.primary} onPress={() => { haptics.tap(); transitionTo('connect'); }}>
               <Text style={s.primaryTxt}>Get started</Text>
               <MaterialCommunityIcons name="arrow-right" size={20} color={BG} />
             </Pressable>
@@ -349,10 +362,19 @@ export default function OnboardScreen() {
             <Text style={s.sectionLabel}>TRADITIONAL BROKERS & STOCKS</Text>
 
             <PlatCard
+              icon="bank-outline"
+              label="Connect your brokerage"
+              sublabel="Securely link Schwab, Fidelity, Robinhood, Vanguard, IBKR and 150+ other institutions — synced automatically."
+              accent={GREEN}
+              badge="150+ BROKERAGES"
+              onPress={handleConnectBrokerage}
+            />
+
+            <PlatCard
               icon="file-upload-outline"
               label="Import from CSV"
-              sublabel="Works with every broker — Schwab, Fidelity, Robinhood, IBKR, Vanguard. Just export a CSV from your broker's app."
-              accent={GREEN}
+              sublabel="Works with every broker — just export a CSV from your broker's app."
+              accent={VIOLET}
               onPress={handleImportCSV}
             />
 
@@ -592,7 +614,7 @@ export default function OnboardScreen() {
                 ? `${connectedPlatform} connected. Your dashboard is syncing now.`
                 : 'Your dashboard is ready. Add more accounts anytime from the Portfolio tab.'}
             </Text>
-            <Pressable style={[s.primary, { marginTop: 32, backgroundColor: GREEN }]} onPress={() => router.replace('/(tabs)')}>
+            <Pressable style={[s.primary, { marginTop: 32, backgroundColor: GREEN }]} onPress={() => { haptics.tap(); router.replace('/(tabs)'); }}>
               <Text style={s.primaryTxt}>Open my dashboard</Text>
               <MaterialCommunityIcons name="arrow-right" size={20} color={BG} />
             </Pressable>

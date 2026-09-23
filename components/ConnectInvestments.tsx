@@ -11,19 +11,23 @@ import {
 import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
 import { useConnectionHealth } from '../src/portfolio/hooks/useConnectionHealth';
+import { QL } from '../constants/Colors';
+import { haptics } from '../src/lib/haptics';
 
 // ── Token constants ───────────────────────────────────────────────────────────
-const GOLD   = '#C9A84C';
-const RED    = '#EF4444';
-const AMBER  = '#F59E0B';
-const GREEN  = '#22C55E';
-const CARD   = '#12161F';
-const BORDER_GOLD  = 'rgba(201,168,76,0.3)';
-const BORDER_RED   = 'rgba(239,68,68,0.3)';
-const BORDER_AMBER = 'rgba(245,158,11,0.3)';
-const BORDER_GREEN = 'rgba(34,197,94,0.3)';
-const MUTED  = '#5A6070';
-const TXT    = '#F0EDE6';
+// Aliased to QL (Quantum Ledger, see constants/Colors.ts) so this widget matches
+// the app's gold/ink palette instead of carrying its own drifted copy.
+const GOLD   = QL.GOLD;
+const RED    = QL.RED;
+const AMBER  = QL.AMBER;
+const GREEN  = QL.GREEN;
+const CARD   = QL.CARD;
+const BORDER_GOLD  = QL.GOLD_B;
+const BORDER_RED   = QL.RED + '4D';
+const BORDER_AMBER = QL.AMBER + '4D';
+const BORDER_GREEN = QL.GREEN + '4D';
+const MUTED  = QL.MUTED;
+const TXT    = QL.TXT;
 
 export default function ConnectInvestment({
   onConnectionChange,
@@ -62,6 +66,7 @@ export default function ConnectInvestment({
       await Linking.openURL(data.redirect_uri);
       setAwaitingCallback(true);
     } catch (err: any) {
+      haptics.warning();
       Alert.alert('Connection Error', err.message);
     } finally {
       setLoading(false);
@@ -80,6 +85,7 @@ export default function ConnectInvestment({
       });
 
       if (error || !data?.success) {
+        haptics.warning();
         Alert.alert(
           'Not Connected Yet',
           'We could not find a connected account. Complete the connection in the browser first, then tap below.',
@@ -101,8 +107,10 @@ export default function ConnectInvestment({
       });
 
       await health.recheck();
+      haptics.success();
       Alert.alert('Connected!', 'Your brokerage is linked. Portfolio data is loading.');
     } catch (err: any) {
+      haptics.warning();
       Alert.alert('Error', err.message);
     } finally {
       setLoading(false);
@@ -135,8 +143,8 @@ export default function ConnectInvestment({
             activeOpacity={0.8}
           >
             {loading
-              ? <ActivityIndicator color="#0A0D14" />
-              : <Text style={[s.btnTxt, { color: '#0A0D14' }]}>I&apos;ve Connected — Continue</Text>}
+              ? <ActivityIndicator color={QL.BG} />
+              : <Text style={[s.btnTxt, { color: QL.BG }]}>I&apos;ve Connected — Continue</Text>}
           </TouchableOpacity>
           <TouchableOpacity style={s.cancelBtn} onPress={() => setAwaitingCallback(false)} disabled={loading}>
             <Text style={s.cancelTxt}>Cancel</Text>
@@ -195,8 +203,8 @@ export default function ConnectInvestment({
             activeOpacity={0.8}
           >
             {loading
-              ? <ActivityIndicator color="#0A0D14" />
-              : <Text style={[s.btnTxt, { color: '#0A0D14' }]}>Sync Now</Text>}
+              ? <ActivityIndicator color={QL.BG} />
+              : <Text style={[s.btnTxt, { color: QL.BG }]}>Sync Now</Text>}
           </TouchableOpacity>
         </View>
       </View>
@@ -255,7 +263,7 @@ function PlatformButton({
   return (
     <TouchableOpacity
       style={[s.pBtn, disabled && { opacity: 0.5 }]}
-      onPress={onPress}
+      onPress={() => { haptics.tap(); onPress(); }}
       disabled={disabled}
       activeOpacity={0.7}
     >
@@ -306,7 +314,7 @@ const s = StyleSheet.create({
   pBtn: {
     backgroundColor: CARD, width: '48%', padding: 16,
     borderRadius: 20, alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1, borderColor: QL.BORDER,
   },
   iconCircle: {
     width: 50, height: 50, borderRadius: 25,

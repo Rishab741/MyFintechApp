@@ -1,4 +1,5 @@
 import { NavMenuButton } from '@/components/NavMenuButton';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useCallback, useRef, useState } from 'react';
 import {
     Animated,
@@ -39,6 +40,7 @@ import {
 } from '@/src/portfolio/tokens';
 import { fmtCurrency, fmt2, sign, getTicker, getUnits } from '@/src/portfolio/helpers';
 import type { AllocSeg } from '@/src/portfolio/types';
+import { haptics } from '@/src/lib/haptics';
 
 // ─── Tokens aligned to Quantum Ledger ────────────────────────────────────────
 const CYAN   = GOLD;
@@ -172,6 +174,7 @@ export default function PortfolioScreen() {
 
     const switchTab = useCallback((next: InternalTab) => {
         if (next === activeTab) return;
+        haptics.tap();
         Animated.parallel([
             Animated.timing(tabAnim,   { toValue: 0, duration: 110, useNativeDriver: true }),
             Animated.timing(slideAnim, { toValue: 10, duration: 110, useNativeDriver: true }),
@@ -252,7 +255,7 @@ export default function PortfolioScreen() {
 
             ) : !connected ? (
                 <View style={s.empty}>
-                    <Text style={s.emptyIcon}>📡</Text>
+                    <MaterialCommunityIcons name="access-point-off" size={40} color={MUTED} style={s.emptyIcon} />
                     <Text style={s.emptyTitle}>No Account Connected</Text>
                     <Text style={s.emptySub}>Connect your brokerage from the Profile tab to see live portfolio data here.</Text>
                 </View>

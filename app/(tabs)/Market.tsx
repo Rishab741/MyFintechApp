@@ -1,4 +1,5 @@
 import { NavMenuButton } from '@/components/NavMenuButton';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -15,6 +16,7 @@ import {
   BG, BORDER, BORDER_HI, CARD, GOLD, GREEN, MUTED, mono, RED, sans, TXT,
 } from '@/src/market/tokens';
 import { useMarketData } from '@/src/market/hooks/useMarketData';
+import { haptics } from '@/src/lib/haptics';
 import {
   IndexCard,
   MarketChart,
@@ -115,6 +117,7 @@ export default function MarketScreen() {
 
   const {
     indices,
+    cryptoLive,
     selectedIdx,
     setSelectedIdx,
     period,
@@ -179,6 +182,7 @@ export default function MarketScreen() {
             <Pressable
               key={tab}
               onPress={() => {
+                haptics.tap();
                 if (tab === 'explorer') {
                   router.navigate('/(tabs)/GlobalMarkets');
                 } else {
@@ -229,7 +233,7 @@ export default function MarketScreen() {
         </ScrollView>
       ) : error ? (
         <View style={styles.errorBox}>
-          <Text style={styles.errorIcon}>⚠</Text>
+          <MaterialCommunityIcons name="alert-circle-outline" size={36} color={MUTED} style={styles.errorIcon} />
           <Text style={styles.errorTitle}>Failed to load market data</Text>
           <Text style={styles.errorSub}>{error}</Text>
           <Text style={styles.retryBtn} onPress={refresh}>Tap to retry</Text>
@@ -264,6 +268,7 @@ export default function MarketScreen() {
                 item={item}
                 active={selectedIdx === i}
                 onPress={() => setSelectedIdx(i)}
+                isLive={cryptoLive && item.region === 'CRYPTO'}
               />
             ))}
           </HScrollView>

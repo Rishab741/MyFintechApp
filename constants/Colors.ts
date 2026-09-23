@@ -54,8 +54,12 @@ export const QL = {
   PURPLE_D:  'rgba(169,139,201,0.09)',
   ORANGE:    '#C1793F',
   ORANGE_D:  'rgba(193,121,63,0.10)',
-  AMBER:     '#D9B25C',
-  AMBER_D:   'rgba(217,178,92,0.09)',
+  // Deliberately brighter/more saturated than GOLD (not just a hue nudge) —
+  // GOLD is the muted brand/CTA color, AMBER is the warning/caution color,
+  // and at similar lightness+saturation the two read as nearly the same
+  // color (was #D9B25C, a 1.2:1 contrast from GOLD — see design review).
+  AMBER:     '#F3C949',
+  AMBER_D:   'rgba(243,201,73,0.09)',
 
   // Text — warm ivory instead of cool blue-white
   TXT:       '#F4EFE4',

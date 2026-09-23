@@ -15,11 +15,14 @@ import {
   View,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthStore } from '../../src/store/useAuthStore';
+import { QL } from '../../constants/Colors';
+import { haptics } from '../../src/lib/haptics';
 
 // ─── Rate limiting ─────────────────────────────────────────────────────────────
-const RATE_KEY = 'vestara_auth_rate';
+const RATE_KEY = 'platstock_auth_rate';
 
 interface RateData {
   count:       number;
@@ -125,7 +128,7 @@ const FloatingLabel: React.FC<{
   const labelSize = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 11] });
   const labelColor = floatAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#3D5166', focused ? '#0EA5E9' : '#607A93'],
+    outputRange: [QL.MUTED, focused ? QL.GOLD : QL.TXT2],
   });
 
   return (
@@ -147,7 +150,7 @@ const FloatingLabel: React.FC<{
       />
       {onToggleSecure && (
         <TouchableOpacity onPress={onToggleSecure} style={inputStyles.eyeBtn}>
-          <Text style={inputStyles.eyeIcon}>{isSecureVisible ? '●' : '○'}</Text>
+          <MaterialCommunityIcons name={isSecureVisible ? 'eye-off' : 'eye'} size={18} color={QL.TXT2} />
         </TouchableOpacity>
       )}
       <View style={[inputStyles.underline, focused && inputStyles.underlineFocused]} />
@@ -157,21 +160,21 @@ const FloatingLabel: React.FC<{
 
 const inputStyles = StyleSheet.create({
   wrapper: {
-    backgroundColor: 'rgba(14,165,233,0.04)',
+    backgroundColor: QL.GOLD_D,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 0,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: QL.BORDER,
     position: 'relative',
     minHeight: 62,
     justifyContent: 'flex-end',
   },
   wrapperFocused: {
-    backgroundColor: 'rgba(14,165,233,0.07)',
-    borderColor: 'rgba(14,165,233,0.45)',
+    backgroundColor: QL.GOLD_D,
+    borderColor: QL.BORDER_HI,
   },
   floatLabel: {
     position: 'absolute',
@@ -180,16 +183,15 @@ const inputStyles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   input: {
-    color: '#E8F4FD',
+    color: QL.TXT,
     fontSize: 16,
     paddingBottom: 10,
     paddingTop: 18,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   eyeBtn: { position: 'absolute', right: 14, bottom: 14 },
-  eyeIcon: { color: '#607A93', fontSize: 14 },
   underline: { height: 1, backgroundColor: 'transparent', marginHorizontal: -16 },
-  underlineFocused: { backgroundColor: 'rgba(14,165,233,0.5)' },
+  underlineFocused: { backgroundColor: QL.GOLD_B },
 });
 
 const InvestorChip: React.FC<{
@@ -211,32 +213,32 @@ const chipStyles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(14,165,233,0.04)',
+    backgroundColor: QL.GOLD_D,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: QL.BORDER,
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
     gap: 12,
   },
   chipSelected: {
-    backgroundColor: 'rgba(14,165,233,0.1)',
-    borderColor: 'rgba(14,165,233,0.45)',
+    backgroundColor: QL.GOLD_B,
+    borderColor: QL.BORDER_HI,
   },
   dot: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: '#3D5166',
+    borderColor: QL.MUTED,
   },
   dotSelected: {
-    borderColor: '#0EA5E9',
-    backgroundColor: '#0EA5E9',
+    borderColor: QL.GOLD,
+    backgroundColor: QL.GOLD,
   },
-  label: { color: '#7C9AB5', fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  labelSelected: { color: '#E8F4FD' },
-  desc: { color: '#3D5166', fontSize: 12 },
+  label: { color: QL.TXT2, fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  labelSelected: { color: QL.TXT },
+  desc: { color: QL.MUTED, fontSize: 12 },
 });
 
 const StepIndicator: React.FC<{ current: SignUpStep; total: number }> = ({ current, total }) => (
@@ -248,7 +250,7 @@ const StepIndicator: React.FC<{ current: SignUpStep; total: number }> = ({ curre
           step < current && stepStyles.dotDone,
           step === current && stepStyles.dotActive,
         ]}>
-          {step < current && <Text style={stepStyles.check}>✓</Text>}
+          {step < current && <MaterialCommunityIcons name="check" size={14} color={QL.BG} />}
         </View>
         {idx < total - 1 && (
           <View style={[stepStyles.line, step < current && stepStyles.lineDone]} />
@@ -265,17 +267,16 @@ const stepStyles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: '#1E3347',
-    backgroundColor: '#0B1626',
+    borderColor: QL.BORDER,
+    backgroundColor: QL.BG2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dotActive: { borderColor: '#0EA5E9', backgroundColor: 'rgba(14,165,233,0.15)' },
-  dotDone: { borderColor: '#0EA5E9', backgroundColor: '#0EA5E9' },
-  check: { color: '#060E1F', fontSize: 12, fontWeight: '900' },
-  line: { flex: 1, height: 2, backgroundColor: '#1E3347', marginHorizontal: 6 },
-  lineDone: { backgroundColor: '#0EA5E9' },
-  label: { color: '#3D5166', fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif' },
+  dotActive: { borderColor: QL.GOLD, backgroundColor: QL.GOLD_B },
+  dotDone: { borderColor: QL.GOLD, backgroundColor: QL.GOLD },
+  line: { flex: 1, height: 2, backgroundColor: QL.BORDER, marginHorizontal: 6 },
+  lineDone: { backgroundColor: QL.GOLD },
+  label: { color: QL.MUTED, fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif' },
 });
 
 const PasswordStrength: React.FC<{ password: string }> = ({ password }) => {
@@ -286,7 +287,7 @@ const PasswordStrength: React.FC<{ password: string }> = ({ password }) => {
     { label: 'Symbol', pass: /[^A-Za-z0-9]/.test(password) },
   ];
   const strength = checks.filter(c => c.pass).length;
-  const colors = ['#E74C3C', '#E67E22', '#F1C40F', '#2ECC71'];
+  const colors = [QL.RED, QL.ORANGE, QL.AMBER, QL.GREEN];
   const labels = ['Weak', 'Fair', 'Good', 'Strong'];
 
   return (
@@ -299,18 +300,18 @@ const PasswordStrength: React.FC<{ password: string }> = ({ password }) => {
               flex: 1,
               height: 3,
               borderRadius: 2,
-              backgroundColor: i < strength ? colors[strength - 1] : '#1E3347',
+              backgroundColor: i < strength ? colors[strength - 1] : QL.BORDER,
             }}
           />
         ))}
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ color: strength > 0 ? colors[strength - 1] : '#3D5166', fontSize: 11 }}>
+        <Text style={{ color: strength > 0 ? colors[strength - 1] : QL.MUTED, fontSize: 11 }}>
           {strength > 0 ? labels[strength - 1] : 'Enter password'}
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {checks.map(c => (
-            <Text key={c.label} style={{ color: c.pass ? '#0EA5E9' : '#1E3347', fontSize: 10 }}>
+            <Text key={c.label} style={{ color: c.pass ? QL.GOLD : QL.BORDER, fontSize: 10 }}>
               {c.label}
             </Text>
           ))}
@@ -420,7 +421,8 @@ export default function AuthScreen() {
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleNextStep = () => {
     const err = validateStep();
-    if (err) return Alert.alert('Required', err);
+    if (err) { haptics.warning(); return Alert.alert('Required', err); }
+    haptics.tap();
     if (step < 3) animateTransition(() => setStep((s) => (s + 1) as SignUpStep));
     else handleSignUp();
   };
@@ -432,7 +434,8 @@ export default function AuthScreen() {
 
   const handleSignIn = async () => {
     if (isLoading || lockSecondsLeft > 0) return;
-    if (!signInEmail || !signInPassword) return Alert.alert('Required', 'Please fill in all fields');
+    if (!signInEmail || !signInPassword) { haptics.warning(); return Alert.alert('Required', 'Please fill in all fields'); }
+    haptics.tap();
 
     setLoading(true);
     try {
@@ -441,6 +444,7 @@ export default function AuthScreen() {
         password: signInPassword,
       });
       if (error) {
+        haptics.warning();
         const rate = await recordFailedAttempt();
         const lockSecs = Math.ceil((rate.lockedUntil - Date.now()) / 1_000);
         if (lockSecs > 0) startLockoutTimer(lockSecs);
@@ -449,6 +453,7 @@ export default function AuthScreen() {
         await clearRateData();
       }
     } catch (e: any) {
+      haptics.warning();
       Alert.alert('Sign In Failed', friendlyAuthError(e.message ?? 'Unknown error'));
     } finally {
       setLoading(false);
@@ -487,12 +492,14 @@ export default function AuthScreen() {
         },
       });
       if (error) throw error;
+      haptics.success();
       Alert.alert(
         'Account Created',
         `Welcome, ${signUp.firstName}! Please check your email to verify your account before signing in.`,
         [{ text: 'Sign In', onPress: () => animateTransition(() => { setMode('signin'); setStep(1); }) }]
       );
     } catch (e: any) {
+      haptics.warning();
       Alert.alert('Registration Failed', e.message);
     } finally {
       setLoading(false);
@@ -532,7 +539,7 @@ export default function AuthScreen() {
         disabled={isLoading || lockSecondsLeft > 0}
       >
         {isLoading
-          ? <ActivityIndicator color="#FFFFFF" />
+          ? <ActivityIndicator color={QL.BG} />
           : lockSecondsLeft > 0
             ? <Text style={styles.primaryBtnText}>Try again in {lockSecondsLeft}s</Text>
             : <Text style={styles.primaryBtnText}>Sign In</Text>}
@@ -597,9 +604,16 @@ export default function AuthScreen() {
         isSecureVisible={showConfirm}
       />
       {signUp.confirmPassword.length > 0 && (
-        <Text style={{ fontSize: 12, color: signUp.password === signUp.confirmPassword ? '#2ECC71' : '#E74C3C', marginTop: -8, marginBottom: 12 }}>
-          {signUp.password === signUp.confirmPassword ? '✓ Passwords match' : '✗ Passwords do not match'}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: -8, marginBottom: 12 }}>
+          <MaterialCommunityIcons
+            name={signUp.password === signUp.confirmPassword ? 'check-circle' : 'close-circle'}
+            size={13}
+            color={signUp.password === signUp.confirmPassword ? QL.GREEN : QL.RED}
+          />
+          <Text style={{ fontSize: 12, color: signUp.password === signUp.confirmPassword ? QL.GREEN : QL.RED }}>
+            {signUp.password === signUp.confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+          </Text>
+        </View>
       )}
     </>
   );
@@ -635,7 +649,7 @@ export default function AuthScreen() {
         style={styles.termsRow}
       >
         <View style={[styles.checkbox, signUp.agreedToTerms && styles.checkboxChecked]}>
-          {signUp.agreedToTerms && <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '900' }}>✓</Text>}
+          {signUp.agreedToTerms && <MaterialCommunityIcons name="check" size={14} color={QL.BG} />}
         </View>
         <Text style={styles.termsText}>
           I agree to the{' '}
@@ -674,7 +688,7 @@ export default function AuthScreen() {
         {/* Logo */}
         <Animated.View style={[styles.logoWrap, { transform: [{ scale: logoScale }] }]}>
           <View style={styles.logoMark}>
-            <Text style={styles.logoMarkText}>↗</Text>
+            <MaterialCommunityIcons name="trending-up" size={28} color={QL.GOLD} />
           </View>
           <Text style={styles.logoName}>PLATSTOCK</Text>
           <Text style={styles.logoTagline}>DIGITAL MARKETS</Text>
@@ -696,7 +710,7 @@ export default function AuthScreen() {
                 disabled={isLoading}
               >
                 {isLoading
-                  ? <ActivityIndicator color="#FFFFFF" />
+                  ? <ActivityIndicator color={QL.BG} />
                   : <Text style={styles.primaryBtnText}>{step === 3 ? 'Create Account' : 'Continue'}</Text>}
               </TouchableOpacity>
             </View>
@@ -704,8 +718,8 @@ export default function AuthScreen() {
 
           {/* Security badge */}
           <View style={styles.securityBadge}>
-            <Text style={styles.securityIcon}>🔒</Text>
-            <Text style={styles.securityText}>256-bit SSL encrypted · SOC 2 Type II</Text>
+            <MaterialCommunityIcons name="shield-check-outline" size={12} color={QL.MUTED} />
+            <Text style={styles.securityText}>256-bit SSL encrypted</Text>
           </View>
         </Animated.View>
 
@@ -722,7 +736,7 @@ export default function AuthScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} onPress={handleForgotPassword} disabled={isLoading}>
                 {isLoading
-                  ? <ActivityIndicator color="#FFFFFF" />
+                  ? <ActivityIndicator color={QL.BG} />
                   : <Text style={styles.primaryBtnText}>Send Link</Text>}
               </TouchableOpacity>
             </View>
@@ -734,16 +748,13 @@ export default function AuthScreen() {
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
-const ACCENT       = '#0EA5E9';   // sky-500 blue
-const ACCENT_LIGHT = '#38BDF8';   // sky-400
-const GREEN        = '#10B981';   // emerald CTA
-const BG           = '#060E1F';   // deep navy
-const CARD         = '#0E1D35';   // dark blue card
+// Colors are drawn from QL (Quantum Ledger) — see constants/Colors.ts — so this
+// screen matches the ink/gold palette used everywhere else in the app.
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: QL.BG,
   },
 
   // ── Ambient glow effects ──
@@ -752,7 +763,7 @@ const styles = StyleSheet.create({
     width: 380,
     height: 380,
     borderRadius: 190,
-    backgroundColor: 'rgba(14,165,233,0.07)',
+    backgroundColor: QL.GOLD_D,
     top: -140,
     right: -130,
   },
@@ -761,7 +772,7 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: 'rgba(16,185,129,0.04)',
+    backgroundColor: QL.GREEN_D,
     bottom: 30,
     left: -90,
   },
@@ -770,7 +781,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: 'rgba(14,165,233,0.04)',
+    backgroundColor: QL.GOLD_D,
     top: height * 0.38,
     right: -60,
   },
@@ -791,32 +802,28 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: 'rgba(14,165,233,0.1)',
+    backgroundColor: QL.GOLD_B,
     borderWidth: 1.5,
-    borderColor: 'rgba(14,165,233,0.4)',
+    borderColor: QL.BORDER_HI,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
-    shadowColor: ACCENT,
+    shadowColor: QL.GOLD,
     shadowOpacity: 0.35,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 0 },
     elevation: 10,
   },
-  logoMarkText: {
-    fontSize: 28,
-    color: ACCENT,
-  },
   logoName: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#E8F4FD',
+    color: QL.TXT,
     letterSpacing: 6,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-medium',
   },
   logoTagline: {
     fontSize: 10,
-    color: ACCENT,
+    color: QL.GOLD,
     letterSpacing: 4,
     marginTop: 5,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
@@ -825,11 +832,11 @@ const styles = StyleSheet.create({
 
   // ── Card ──
   card: {
-    backgroundColor: CARD,
+    backgroundColor: QL.CARD,
     borderRadius: 24,
     padding: 28,
     borderWidth: 1,
-    borderColor: 'rgba(14,165,233,0.1)',
+    borderColor: QL.BORDER,
     shadowColor: '#000',
     shadowOpacity: 0.5,
     shadowRadius: 32,
@@ -839,20 +846,20 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 26,
     fontWeight: '700',
-    color: '#E8F4FD',
+    color: QL.TXT,
     marginBottom: 6,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-medium',
     letterSpacing: 0.2,
   },
   subheading: {
     fontSize: 14,
-    color: '#3D5166',
+    color: QL.MUTED,
     marginBottom: 28,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   sectionLabel: {
     fontSize: 11,
-    color: '#607A93',
+    color: QL.TXT2,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -860,23 +867,23 @@ const styles = StyleSheet.create({
 
   // ── Buttons ──
   primaryBtn: {
-    backgroundColor: GREEN,
+    backgroundColor: QL.GOLD,
     paddingVertical: 17,
     paddingHorizontal: 20,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: GREEN,
+    shadowColor: QL.GOLD,
     shadowOpacity: 0.3,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
   },
   primaryBtnDisabled: {
-    backgroundColor: 'rgba(16,185,129,0.35)',
+    backgroundColor: QL.GOLD_B,
     shadowOpacity: 0,
   },
   primaryBtnText: {
-    color: '#FFFFFF',
+    color: QL.BG,
     fontWeight: '700',
     fontSize: 16,
     letterSpacing: 0.4,
@@ -887,10 +894,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(14,165,233,0.3)',
+    borderColor: QL.BORDER_HI,
   },
   secondaryBtnText: {
-    color: ACCENT_LIGHT,
+    color: QL.GOLD_L,
     fontWeight: '600',
     fontSize: 15,
     letterSpacing: 0.3,
@@ -900,12 +907,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: QL.BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backBtnText: {
-    color: '#607A93',
+    color: QL.TXT2,
     fontWeight: '600',
     fontSize: 15,
   },
@@ -917,7 +924,7 @@ const styles = StyleSheet.create({
 
   // ── Misc ──
   link: {
-    color: ACCENT_LIGHT,
+    color: QL.GOLD_L,
     fontWeight: '600',
     fontSize: 13,
   },
@@ -933,7 +940,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   dividerText: {
-    color: '#1E3347',
+    color: QL.BORDER,
     fontSize: 12,
     letterSpacing: 2,
   },
@@ -949,18 +956,18 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#1E3347',
+    borderColor: QL.BORDER,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
     flexShrink: 0,
   },
   checkboxChecked: {
-    backgroundColor: ACCENT,
-    borderColor: ACCENT,
+    backgroundColor: QL.GOLD,
+    borderColor: QL.GOLD,
   },
   termsText: {
-    color: '#607A93',
+    color: QL.TXT2,
     fontSize: 13,
     lineHeight: 20,
     flex: 1,
@@ -972,29 +979,28 @@ const styles = StyleSheet.create({
     marginTop: 24,
     gap: 6,
   },
-  securityIcon: { fontSize: 11 },
   securityText: {
-    color: '#1E3347',
+    color: QL.MUTED,
     fontSize: 11,
     letterSpacing: 0.3,
   },
   forgotCard: {
-    backgroundColor: CARD,
+    backgroundColor: QL.CARD,
     borderRadius: 20,
     padding: 24,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: 'rgba(14,165,233,0.15)',
+    borderColor: QL.BORDER_HI,
   },
   forgotTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#E8F4FD',
+    color: QL.TXT,
     marginBottom: 8,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-medium',
   },
   forgotBody: {
-    color: '#607A93',
+    color: QL.TXT2,
     fontSize: 13,
     lineHeight: 20,
   },

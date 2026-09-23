@@ -5,13 +5,15 @@ import { usePortfolioData } from '@/src/portfolio/hooks/usePortfolioData';
 import type { Period } from '@/src/portfolio/types';
 import { InsightSeverity } from '@/src/services/mlPipeline';
 import { useAuthStore } from '@/src/store/useAuthStore';
+import { haptics } from '@/src/lib/haptics';
 import { NavMenuButton } from '@/components/NavMenuButton';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
+  PanResponder,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -21,7 +23,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Defs, Line, LinearGradient, Path, Stop, Svg } from 'react-native-svg';
+import { Circle, Defs, Line, LinearGradient, Path, Stop, Svg } from 'react-native-svg';
 
 // ─── Tokens ─────────────────────────────────────────────────────────────────
 const BG     = QL.BG;
@@ -44,9 +46,17 @@ const CHART_H  = 190;
 const RANGES: Period[] = ['1D', '1W', '1M', '3M', '1Y', 'ALL'];
 
 // ─── Chart ──────────────────────────────────────────────────────────────────
+// Scrub-to-inspect: drag a finger across the line to see the value at that
+// point follow your touch, with a haptic tick each time it crosses to a new
+// data point — the single interaction people expect most from a finance
+// chart (Apple Stocks, Robinhood, Coinbase all have it) and one this app's
+// charts had none of before.
 function PerformanceChart({ values }: { values: number[] }) {
-  const { linePath, areaPath, guideYs } = useMemo(() => {
-    if (values.length < 2) return { linePath: '', areaPath: '', guideYs: [] as number[] };
+  const [scrubIdx, setScrubIdx] = useState<number | null>(null);
+  const lastTickIdx = useRef<number | null>(null);
+
+  const { linePath, areaPath, guideYs, pts } = useMemo(() => {
+    if (values.length < 2) return { linePath: '', areaPath: '', guideYs: [] as number[], pts: [] as { x: number; y: number }[] };
     const min = Math.min(...values);
     const max = Math.max(...values);
     const range = max - min || 1;
@@ -57,8 +67,28 @@ function PerformanceChart({ values }: { values: number[] }) {
     }));
     const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
     const area = `${line} L${CHART_W.toFixed(1)},${CHART_H} L0,${CHART_H} Z`;
-    return { linePath: line, areaPath: area, guideYs: [CHART_H * 0.25, CHART_H * 0.5, CHART_H * 0.75] };
+    return { linePath: line, areaPath: area, guideYs: [CHART_H * 0.25, CHART_H * 0.5, CHART_H * 0.75], pts };
   }, [values]);
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => pts.length > 1,
+    onMoveShouldSetPanResponder: () => pts.length > 1,
+    onPanResponderGrant: (evt) => updateScrub(evt.nativeEvent.locationX),
+    onPanResponderMove: (evt) => updateScrub(evt.nativeEvent.locationX),
+    onPanResponderRelease: () => { setScrubIdx(null); lastTickIdx.current = null; },
+    onPanResponderTerminate: () => { setScrubIdx(null); lastTickIdx.current = null; },
+  }), [pts]);
+
+  function updateScrub(localX: number) {
+    if (pts.length < 2) return;
+    const clamped = Math.max(0, Math.min(CHART_W, localX));
+    const idx = Math.round((clamped / CHART_W) * (pts.length - 1));
+    setScrubIdx(idx);
+    if (lastTickIdx.current !== idx) {
+      lastTickIdx.current = idx;
+      haptics.tick();
+    }
+  }
 
   if (!linePath) {
     return <View style={{ height: CHART_H, alignItems: 'center', justifyContent: 'center' }}>
@@ -66,20 +96,37 @@ function PerformanceChart({ values }: { values: number[] }) {
     </View>;
   }
 
+  const scrubPt = scrubIdx !== null ? pts[scrubIdx] : null;
+
   return (
-    <Svg width={CHART_W} height={CHART_H}>
-      <Defs>
-        <LinearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={GOLD} stopOpacity={0.22} />
-          <Stop offset="100%" stopColor={GOLD} stopOpacity={0} />
-        </LinearGradient>
-      </Defs>
-      {guideYs.map((y) => (
-        <Line key={y} x1={0} x2={CHART_W} y1={y} y2={y} stroke={BORDER} strokeWidth={1} />
-      ))}
-      <Path d={areaPath} fill="url(#chartGrad)" />
-      <Path d={linePath} stroke={GOLD} strokeWidth={1.75} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
+    <View>
+      {scrubPt && (
+        <View pointerEvents="none" style={styles.scrubLabel}>
+          <Text style={styles.scrubLabelTxt}>{fmtCurrency(values[scrubIdx!])}</Text>
+        </View>
+      )}
+      <View {...panResponder.panHandlers}>
+        <Svg width={CHART_W} height={CHART_H}>
+          <Defs>
+            <LinearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%" stopColor={GOLD} stopOpacity={0.22} />
+              <Stop offset="100%" stopColor={GOLD} stopOpacity={0} />
+            </LinearGradient>
+          </Defs>
+          {guideYs.map((y) => (
+            <Line key={y} x1={0} x2={CHART_W} y1={y} y2={y} stroke={BORDER} strokeWidth={1} />
+          ))}
+          <Path d={areaPath} fill="url(#chartGrad)" />
+          <Path d={linePath} stroke={GOLD} strokeWidth={1.75} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          {scrubPt && (
+            <>
+              <Line x1={scrubPt.x} x2={scrubPt.x} y1={0} y2={CHART_H} stroke={GOLD} strokeWidth={1} strokeDasharray="3,4" opacity={0.5} />
+              <Circle cx={scrubPt.x} cy={scrubPt.y} r={4.5} fill={GOLD} stroke={BG} strokeWidth={2} />
+            </>
+          )}
+        </Svg>
+      </View>
+    </View>
   );
 }
 
@@ -87,7 +134,7 @@ function RangeTabs({ value, onChange }: { value: Period; onChange: (r: Period) =
   return (
     <View style={styles.rangeRow}>
       {RANGES.map((r) => (
-        <Pressable key={r} onPress={() => onChange(r)} style={styles.rangeTab} hitSlop={6}>
+        <Pressable key={r} onPress={() => { haptics.tap(); onChange(r); }} style={styles.rangeTab} hitSlop={6}>
           <Text style={[styles.rangeTxt, value === r && styles.rangeTxtActive]}>{r}</Text>
           {value === r && <View style={styles.rangeUnderline} />}
         </Pressable>
@@ -156,7 +203,7 @@ function MoverCard({ ticker, pct }: { ticker: string; pct: number }) {
 
 function ActionButton({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]}>
+    <Pressable onPress={() => { haptics.tap(); onPress(); }} style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]}>
       <View style={styles.actionCircle}>
         <MaterialCommunityIcons name={icon as any} size={19} color={GOLD} />
       </View>
@@ -324,6 +371,11 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root:   { flex: 1, backgroundColor: BG },
   scroll: { flex: 1 },
+
+  scrubLabel:    { position: 'absolute', top: -2, left: 0, right: 0, alignItems: 'center', zIndex: 2 },
+  scrubLabelTxt: { fontFamily: mono, fontSize: 13, fontWeight: '700', color: GOLD_L,
+                   backgroundColor: CARD, borderWidth: 1, borderColor: BORDER,
+                   borderRadius: RADIUS.SM, paddingHorizontal: 8, paddingVertical: 3 },
 
   topBar: {
     flexDirection: 'row',
