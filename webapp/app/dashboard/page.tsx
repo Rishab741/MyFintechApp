@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import { engine } from "@/lib/engine";
 import { getJwt } from "@/lib/jwt";
@@ -7,6 +8,7 @@ import PortfolioChart from "@/components/charts/portfolio-chart";
 import {
   TrendingUp, TrendingDown, Activity, Shield, Zap,
   AlertTriangle, Heart, ArrowUpRight, ArrowDownRight,
+  RefreshCw, Loader2, CheckCircle2,
 } from "lucide-react";
 import Link from "next/link";
 import { DataGate } from "@/components/data-gate";
@@ -91,11 +93,34 @@ function MetricCard({
 }
 
 export default function DashboardOverview() {
-  const { data: metrics, isLoading: mLoading } = useMetrics();
+  const { data: metrics, isLoading: mLoading, mutate: mutateMetrics } = useMetrics();
   const { data: tenant }                        = useTenant();
   const { data: usage }                         = useUsage();
-  const { data: history }                       = useHistory();
-  const { data: healthScore }                   = useHealthScore();
+  const { data: history, mutate: mutateHistory }     = useHistory();
+  const { data: healthScore, mutate: mutateHealth }  = useHealthScore();
+
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
+
+  async function handleSync() {
+    setSyncStatus("syncing");
+    try {
+      // Same two endpoints as the dedicated /dashboard/sync page — pulls
+      // fresh holdings/prices from SnapTrade and any connected exchanges,
+      // server-side via Supabase Edge Functions. A tenant with neither
+      // connected will just get two harmless no-ops here.
+      const results = await Promise.allSettled([
+        fetch("/api/sync/snaptrade", { method: "POST" }),
+        fetch("/api/sync/exchange", { method: "POST" }),
+      ]);
+      const anyOk = results.some(r => r.status === "fulfilled" && r.value.ok);
+      setSyncStatus(anyOk ? "done" : "error");
+      await Promise.all([mutateMetrics(), mutateHistory(), mutateHealth()]);
+    } catch {
+      setSyncStatus("error");
+    } finally {
+      setTimeout(() => setSyncStatus("idle"), 4000);
+    }
+  }
 
   const twrPct    = pct(metrics?.twr);
   const twrTrend  = metrics?.twr != null ? (metrics.twr >= 0 ? "positive" : "negative") : "neutral";
@@ -125,11 +150,22 @@ export default function DashboardOverview() {
           }}
         >
           <AlertTriangle size={15} className="shrink-0" />
-          <span>
+          <span className="flex-1">
             Portfolio prices are{" "}
             <strong>{Math.round(metrics.snapshot_age_hours)}h old</strong> —
-            NAV and all derived metrics may be incorrect. Trigger a price sync to refresh.
+            NAV and all derived metrics may be incorrect.
           </span>
+          <button
+            onClick={handleSync}
+            disabled={syncStatus === "syncing"}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border shrink-0 transition-colors disabled:opacity-60"
+            style={{ borderColor: "rgba(245,158,11,0.3)", color: "#F59E0B" }}
+          >
+            {syncStatus === "syncing" ? <Loader2 size={12} className="animate-spin" />
+              : syncStatus === "done"   ? <CheckCircle2 size={12} />
+              : <RefreshCw size={12} />}
+            {syncStatus === "syncing" ? "Syncing…" : syncStatus === "done" ? "Synced" : syncStatus === "error" ? "Retry sync" : "Sync now"}
+          </button>
         </div>
       )}
 
