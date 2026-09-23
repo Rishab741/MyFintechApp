@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { getYahooSession, invalidateYahooSession } from "@/lib/yahoo-auth";
 
 export const runtime = "nodejs";
 
@@ -36,13 +37,27 @@ export async function GET(req: NextRequest) {
     .join(",");
 
   try {
-    const res = await fetch(
-      `${YF}/v7/finance/quote?symbols=${encoded}&fields=${FIELDS}`,
-      {
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-        signal:  AbortSignal.timeout(8_000),
-      },
-    );
+    const fetchQuotes = async () => {
+      const session = await getYahooSession();
+      const crumbParam = session?.crumb ? `&crumb=${encodeURIComponent(session.crumb)}` : "";
+      return fetch(
+        `${YF}/v7/finance/quote?symbols=${encoded}&fields=${FIELDS}${crumbParam}`,
+        {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            ...(session?.cookie ? { Cookie: session.cookie } : {}),
+          },
+          signal: AbortSignal.timeout(8_000),
+        },
+      );
+    };
+
+    let res = await fetchQuotes();
+    if (res.status === 401) {
+      // Session likely expired — force a fresh cookie+crumb and retry once.
+      invalidateYahooSession();
+      res = await fetchQuotes();
+    }
     if (!res.ok) throw new Error(`YF ${res.status}`);
 
     const json = (await res.json()) as {

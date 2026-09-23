@@ -359,18 +359,24 @@ function SectorBarChart({ sectors }: { sectors: Record<string, number> }) {
 }
 
 // ─── Region heatmap tile ─────────────────────────────────────────────────────
-type LiveRegion = typeof REGIONS[0] & { change: number };
+type LiveRegion = typeof REGIONS[0] & { change: number | undefined };
 
 function RegionTile({ item, active, onClick }: { item: LiveRegion; active: boolean; onClick: () => void }) {
-  const intensity = Math.min(Math.abs(item.change) / 1.5, 1);
-  const up = item.change >= 0;
-  const bg = up ? `rgba(16,185,129,${0.08+intensity*0.35})` : `rgba(239,68,68,${0.08+intensity*0.35})`;
-  const border = up ? `rgba(16,185,129,${0.12+intensity*0.3})` : `rgba(239,68,68,${0.12+intensity*0.3})`;
+  // No fake "+0.00%" when the quote failed to load — that reads as "flat"
+  // when it actually means "no data", a real distinction in a finance app.
+  const change = item.change;
+  const noData = change === undefined;
+  const intensity = noData ? 0 : Math.min(Math.abs(change) / 1.5, 1);
+  const up = !noData && change >= 0;
+  const bg = noData ? "rgba(100,116,139,0.06)" : up ? `rgba(16,185,129,${0.08+intensity*0.35})` : `rgba(239,68,68,${0.08+intensity*0.35})`;
+  const border = noData ? "rgba(100,116,139,0.15)" : up ? `rgba(16,185,129,${0.12+intensity*0.3})` : `rgba(239,68,68,${0.12+intensity*0.3})`;
   return (
     <button onClick={onClick} className={`rounded-lg p-2.5 flex flex-col justify-between min-h-[58px] text-left w-full transition-all hover:scale-[1.04] ${active ? "ring-2 ring-cyan-500/50" : ""}`}
       style={{ background: bg, border: `1px solid ${border}` }}>
       <span className="text-[10px] font-mono text-slate-300 leading-tight">{item.label}</span>
-      <span className={`text-sm font-mono font-bold ${up ? "text-emerald-300" : "text-red-300"}`}>{fmtPct(item.change)}</span>
+      <span className={`text-sm font-mono font-bold ${noData ? "text-slate-600" : up ? "text-emerald-300" : "text-red-300"}`}>
+        {noData ? "—" : fmtPct(change)}
+      </span>
     </button>
   );
 }
@@ -722,7 +728,7 @@ export default function MarketsPage() {
     return Object.fromEntries(regionEtfData.map(q => [q.symbol, q]));
   }, [regionEtfData]);
   const liveRegions: LiveRegion[] = useMemo(
-    () => REGIONS.map(r => ({ ...r, change: regionMap[r.etf]?.changePct ?? 0 })),
+    () => REGIONS.map(r => ({ ...r, change: regionMap[r.etf]?.changePct })),
     [regionMap]
   );
 

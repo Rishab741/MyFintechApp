@@ -1,4 +1,5 @@
 import type { ChartPoint, DetailedQuote, Mover, Quote, Period } from './types';
+import { getYahooCrumb, invalidateYahooCrumb } from './yahooAuth';
 
 const BASE1 = 'https://query1.finance.yahoo.com';
 const BASE2 = 'https://query2.finance.yahoo.com';
@@ -7,6 +8,21 @@ const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   Accept: 'application/json',
 };
+
+// The v7 quote endpoint 401s without a crumb — see yahooAuth.ts. Retries
+// once with a freshly-fetched crumb if the cached one has expired.
+async function fetchWithYahooCrumb(baseUrl: string): Promise<Response> {
+  const crumb = await getYahooCrumb();
+  const withCrumb = crumb ? `${baseUrl}&crumb=${encodeURIComponent(crumb)}` : baseUrl;
+  let res = await fetch(withCrumb, { headers: HEADERS });
+  if (res.status === 401) {
+    invalidateYahooCrumb();
+    const freshCrumb = await getYahooCrumb();
+    const retryUrl = freshCrumb ? `${baseUrl}&crumb=${encodeURIComponent(freshCrumb)}` : baseUrl;
+    res = await fetch(retryUrl, { headers: HEADERS });
+  }
+  return res;
+}
 
 // ─── Period → interval/range params ──────────────────────────────────────────
 const PERIOD_PARAMS: Record<Period, { interval: string; range: string }> = {
@@ -22,7 +38,7 @@ export async function fetchQuotes(symbols: string[]): Promise<Quote[]> {
   const encoded = symbols.map(encodeURIComponent).join(',');
   const url = `${BASE1}/v7/finance/quote?symbols=${encoded}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketDayHigh,regularMarketDayLow,regularMarketVolume,marketCap,shortName,fiftyTwoWeekHigh,fiftyTwoWeekLow,regularMarketPreviousClose`;
 
-  const res = await fetch(url, { headers: HEADERS });
+  const res = await fetchWithYahooCrumb(url);
   const json = await res.json();
   const results: any[] = json?.quoteResponse?.result ?? [];
 
@@ -211,7 +227,7 @@ export async function fetchDetailedQuote(symbol: string): Promise<DetailedQuote 
   ].join(',');
   const url = `${BASE1}/v7/finance/quote?symbols=${encodeURIComponent(symbol)}&fields=${fields}`;
   try {
-    const res = await fetch(url, { headers: HEADERS });
+    const res = await fetchWithYahooCrumb(url);
     const json = await res.json();
     const r = json?.quoteResponse?.result?.[0];
     if (!r) return null;
