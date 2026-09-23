@@ -32,6 +32,7 @@ function redirectTo(origin: string, path: string) {
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code      = searchParams.get("code");
+  const type      = searchParams.get("type");
   const linkError = searchParams.get("error");
 
   // Supabase sends ?error= on an expired or already-used link.
@@ -50,6 +51,12 @@ export async function GET(request: NextRequest) {
   if (codeErr) {
     console.error("[advisor-callback] code exchange failed:", codeErr.message);
     return redirectTo(origin, "/advisor/login?error=callback_failed");
+  }
+
+  // Password-reset link — send them to set a new password instead of
+  // running them through the advisor-provisioning steps below.
+  if (type === "recovery") {
+    return redirectTo(origin, "/auth/update-password");
   }
 
   // ── 2. Get the now-authenticated user ────────────────────────────────────

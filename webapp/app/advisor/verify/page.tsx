@@ -13,9 +13,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Building2, Mail, RefreshCw, LogOut } from "lucide-react";
 
-const A        = "#C9A84C";
-const A_BG     = "rgba(201,168,76,0.08)";
-const A_BORDER = "rgba(201,168,76,0.18)";
+const A        = "#C9A24B";
+const A_BG     = "rgba(201,162,75,0.08)";
+const A_BORDER = "rgba(201,162,75,0.18)";
 
 export default function AdvisorVerifyEmail() {
   const supabase  = createClient();
@@ -46,7 +46,7 @@ export default function AdvisorVerifyEmail() {
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 600px 300px at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 65%)",
+            "radial-gradient(ellipse 600px 300px at 50% 0%, rgba(201,162,75,0.06) 0%, transparent 65%)",
         }}
       />
 
@@ -57,7 +57,7 @@ export default function AdvisorVerifyEmail() {
           style={{
             background: "#111118",
             border:     `1px solid #1E1E2E`,
-            boxShadow:  "0 0 0 1px rgba(201,168,76,0.04), 0 24px 48px rgba(0,0,0,0.4)",
+            boxShadow:  "0 0 0 1px rgba(201,162,75,0.04), 0 24px 48px rgba(0,0,0,0.4)",
           }}
         >
           {/* Brand */}

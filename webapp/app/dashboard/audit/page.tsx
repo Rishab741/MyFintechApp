@@ -16,7 +16,7 @@ const EVENT_FILTERS = [
 const PAGE_SIZE = 50;
 
 const EVENT_COLORS: Record<string, { bg: string; text: string }> = {
-  ledger:         { bg: "rgba(139,92,246,0.12)", text: "#A78BFA" },
+  ledger:         { bg: "rgba(201,162,75,0.12)", text: "#A78BFA" },
   ingest:         { bg: "rgba(16,185,129,0.12)", text: "#34D399" },
   "tenant.api_key":{ bg: "rgba(245,158,11,0.12)", text: "#FCD34D" },
 };
@@ -73,7 +73,7 @@ export default function AuditPage() {
             className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
             style={
               filter === value
-                ? { background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)", color: "#A78BFA" }
+                ? { background: "rgba(201,162,75,0.12)", border: "1px solid rgba(201,162,75,0.3)", color: "#A78BFA" }
                 : { background: "transparent", border: "1px solid #1A1A28", color: "#6B7280" }
             }
           >

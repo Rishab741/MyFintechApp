@@ -199,8 +199,8 @@ export function fmtMoney(v: number, ccy = "USD") {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-export const GOLD    = "#C9A84C";
-export const GOLD_DIM = "#C9A84C26";
+export const GOLD    = "#C9A24B";
+export const GOLD_DIM = "#C9A24B26";
 export const RED     = "#C1613F";
 export const GREEN   = "#7FA37A";
 export const MUTED   = "#6B7280";

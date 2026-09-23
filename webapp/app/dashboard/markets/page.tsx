@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import type { MarketSnapshot, Quote, Mover, SessionInfo, NewsItem } from "@/lib/alpha-vantage";
 import { useFinnhubWs, type WsStatus } from "@/hooks/use-finnhub-ws";
+import { useBinanceWs } from "@/hooks/use-binance-ws";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tab          = "overview" | "stocks" | "movers" | "sectors" | "news";
@@ -88,7 +89,15 @@ const UNIVERSE: StockItem[] = [
 const SECTOR_FILTERS: SectorFilter[] = ["All","Technology","Financials","Healthcare","Energy","Consumer","Industrials","Crypto"];
 
 const FH_SYMBOLS: Record<string, string> = {
-  SPY: "SPY", QQQ: "QQQ", GLD: "GLD", BTC: "BINANCE:BTCUSDT",
+  SPY: "SPY", QQQ: "QQQ", GLD: "GLD",
+};
+
+// Crypto goes straight to Binance's own public feed instead of through
+// Finnhub's aggregator — lower latency, no API key needed, and it frees up
+// Finnhub's single free-tier WS connection for equities/forex only.
+const BINANCE_SYMBOLS: Record<string, string> = {
+  BTC: "BTCUSDT", "BTC-USD": "BTCUSDT",
+  "ETH-USD": "ETHUSDT", "SOL-USD": "SOLUSDT", "BNB-USD": "BNBUSDT",
 };
 
 // ETF proxies for global indices — fetched live from Yahoo Finance
@@ -214,7 +223,7 @@ function TickerTape({ quotes, mergedQuotes }: { quotes: Record<string, Quote>; m
 }
 
 // ─── WsStatusBadge ────────────────────────────────────────────────────────────
-function WsStatusBadge({ status }: { status: WsStatus }) {
+function WsStatusBadge({ status, source }: { status: WsStatus; source?: string }) {
   const map: Record<WsStatus, { label: string; cls: string; dot?: string }> = {
     idle:         { label: "WS IDLE",        cls: "text-slate-500 border-slate-700"                },
     connecting:   { label: "CONNECTING",     cls: "text-amber-400 border-amber-500/30"             },
@@ -230,7 +239,7 @@ function WsStatusBadge({ status }: { status: WsStatus }) {
       {(status === "connecting" || status === "reconnecting") && (
         <span className="w-2.5 h-2.5 rounded-full border border-current border-t-transparent animate-spin" />
       )}
-      {label}
+      {source ? `${source} ${label}` : label}
     </span>
   );
 }
@@ -373,6 +382,16 @@ function StockTableRow({ rank, item, quote, isLoading, onClick, isActive }: {
 }) {
   const q = quote;
   const up = isPos(q?.changePct ?? 0);
+
+  // Flash the price cell on change — same acknowledgment pattern as
+  // IndexCard, so the crypto rows (now Binance-live) visibly prove they're
+  // updating instead of silently swapping text.
+  const prevRef  = useRef(q?.price);
+  const flashDir = q && prevRef.current !== undefined && q.price !== prevRef.current
+    ? (q.price > prevRef.current ? "up" : "down")
+    : null;
+  prevRef.current = q?.price;
+
   return (
     <tr
       onClick={onClick}
@@ -388,7 +407,7 @@ function StockTableRow({ rank, item, quote, isLoading, onClick, isActive }: {
         <div className="font-mono font-bold text-white text-sm">{item.symbol.replace("-USD","")}</div>
         <div className="text-[10px] text-slate-500 truncate max-w-[120px]">{item.name}</div>
       </td>
-      <td className="py-3 pr-4">
+      <td className={`py-3 pr-4 rounded ${flashDir === "up" ? "animate-flash-green" : flashDir === "down" ? "animate-flash-red" : ""}`}>
         {isLoading ? <div className="h-4 w-20 bg-slate-800 rounded animate-pulse" /> : (
           <span className="font-mono font-bold text-white text-sm">{q ? fmtUsd(q.price) : "—"}</span>
         )}
@@ -621,6 +640,9 @@ export default function MarketsPage() {
   // Data
   const { data, isLoading, mutate } = useSWR<MarketSnapshot>("/api/market", fetcher, { refreshInterval: 5 * 60_000 });
   const { liveQuotes, status: wsStatus } = useFinnhubWs(Object.values(FH_SYMBOLS));
+  const { liveQuotes: binanceQuotes, status: binanceStatus } = useBinanceWs(
+    Array.from(new Set(Object.values(BINANCE_SYMBOLS)))
+  );
 
   // UI state
   const [activeTab, setActiveTab]         = useState<Tab>("overview");
@@ -646,8 +668,14 @@ export default function MarketsPage() {
       const change = tick.price - base.previousClose;
       out[ourKey] = { ...base, price: tick.price, change, changePct: base.previousClose > 0 ? (change/base.previousClose)*100 : 0 };
     }
+    for (const [ourKey, binSym] of Object.entries(BINANCE_SYMBOLS)) {
+      const tick = binanceQuotes[binSym], base = out[ourKey];
+      if (!tick || !base) continue;
+      const change = tick.price - base.previousClose;
+      out[ourKey] = { ...base, price: tick.price, change, changePct: base.previousClose > 0 ? (change/base.previousClose)*100 : 0 };
+    }
     return out;
-  }, [snap?.quotes, liveQuotes]);
+  }, [snap?.quotes, liveQuotes, binanceQuotes]);
 
   const fg = snap ? fearGreedScore(snap.sectors) : 50;
   const { label: fgLbl, color: fgClr } = fgMeta(fg);
@@ -669,8 +697,18 @@ export default function MarketsPage() {
   );
   const yfMap = useMemo<Record<string, YfQuote>>(() => {
     if (!yfData) return {};
-    return Object.fromEntries(yfData.map(q => [q.symbol, q]));
-  }, [yfData]);
+    const out = Object.fromEntries(yfData.map(q => [q.symbol, q]));
+    // Overlay live Binance ticks onto the crypto rows (BTC-USD, ETH-USD, …)
+    // so they update in real time instead of waiting on the 60s REST poll.
+    for (const [yfSym, binSym] of Object.entries(BINANCE_SYMBOLS)) {
+      const tick = binanceQuotes[binSym], base = out[yfSym];
+      if (!tick || !base) continue;
+      const prevClose = base.previousClose ?? 0;
+      const change = tick.price - prevClose;
+      out[yfSym] = { ...base, price: tick.price, change, changePct: prevClose > 0 ? (change / prevClose) * 100 : base.changePct };
+    }
+    return out;
+  }, [yfData, binanceQuotes]);
 
   // Global heatmap — fetch ETF proxies for real daily change data
   const regionEtfKey = REGIONS.map(r => r.etf).join(",");
@@ -767,7 +805,8 @@ export default function MarketsPage() {
               <span className="font-bold text-[10px]" style={{ color: fgClr }}>{fgLbl}</span>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap justify-end">
-              <WsStatusBadge status={wsStatus} />
+              <WsStatusBadge status={wsStatus} source="FH" />
+              <WsStatusBadge status={binanceStatus} source="BINANCE" />
               {snap?.sessions.slice(0,3).map((s, i) => <SessionBadge key={i} s={s} />) ?? null}
               <button onClick={() => mutate()} className="text-[10px] font-mono text-slate-600 hover:text-slate-400 border border-slate-800 rounded px-2 py-1 hover:border-slate-700 transition-all">↺</button>
             </div>
@@ -801,8 +840,11 @@ export default function MarketsPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {quoteList.map(([name, sym]) => {
                 const q = mergedQuotes[sym] ?? snap?.quotes?.[sym];
-                const fhSym = FH_SYMBOLS[sym];
-                const isLive = wsStatus === "connected" && !!fhSym && !!liveQuotes[fhSym];
+                const fhSym  = FH_SYMBOLS[sym];
+                const binSym = BINANCE_SYMBOLS[sym];
+                const isLive =
+                  (wsStatus === "connected" && !!fhSym && !!liveQuotes[fhSym]) ||
+                  (binanceStatus === "connected" && !!binSym && !!binanceQuotes[binSym]);
                 if (!q) return (
                   <div key={sym} className="rounded-xl border border-slate-800 p-4 animate-pulse">
                     <div className="h-2.5 bg-slate-800 rounded mb-2 w-14" /><div className="h-5 bg-slate-800 rounded mb-3 w-20" /><div className="h-10 bg-slate-800 rounded" />

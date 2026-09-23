@@ -26,6 +26,7 @@ const COOKIE_OPTS = {
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const type = searchParams.get("type");
 
   if (!code) {
     return NextResponse.redirect(`${origin}/`);
@@ -44,6 +45,12 @@ export async function GET(request: NextRequest) {
 
   if (!user) {
     return NextResponse.redirect(`${origin}/`);
+  }
+
+  // Password-reset link — send them to set a new password instead of
+  // silently signing in and dropping them on the dashboard.
+  if (type === "recovery") {
+    return NextResponse.redirect(`${origin}/auth/update-password`);
   }
 
   // ── Look up onboarding row ────────────────────────────────────────────────

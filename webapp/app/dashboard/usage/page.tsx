@@ -25,7 +25,7 @@ export default function UsagePage() {
     : "—";
 
   const barColor =
-    pctUsed == null    ? "#8B5CF6" :
+    pctUsed == null    ? "#C9A24B" :
     pctUsed > 90       ? "#EF4444" :
     pctUsed > 70       ? "#F59E0B" :
                          "#10B981";
@@ -106,7 +106,7 @@ export default function UsagePage() {
       {data?.tier === "self_serve" && (
         <div
           className="rounded-xl p-5 flex items-start justify-between gap-4"
-          style={{ background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.15)" }}
+          style={{ background: "rgba(201,162,75,0.06)", border: "1px solid rgba(201,162,75,0.15)" }}
         >
           <div>
             <h3 className="font-semibold text-white text-sm mb-1">Upgrade to Starter</h3>

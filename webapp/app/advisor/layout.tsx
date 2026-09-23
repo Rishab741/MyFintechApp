@@ -10,9 +10,9 @@ import {
 } from "lucide-react";
 
 // ── Brand tokens ──────────────────────────────────────────────────────────────
-const A        = "#C9A84C";
-const A_BG     = "rgba(201,168,76,0.08)";
-const A_BORDER = "rgba(201,168,76,0.18)";
+const A        = "#C9A24B";
+const A_BG     = "rgba(201,162,75,0.08)";
+const A_BORDER = "rgba(201,162,75,0.18)";
 
 // Pages that don't need the advisor nav (auth flow pages).
 const AUTH_PATHS = ["/advisor/login", "/advisor/signup", "/advisor/verify"];

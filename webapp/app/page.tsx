@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Eye, EyeOff, Loader2, Shield, BarChart2, Zap, Mail, Building2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Shield, BarChart2, Zap, Mail, Building2, CheckCircle2 } from "lucide-react";
 
 const FEATURES = [
   {
@@ -45,17 +45,104 @@ function PlatstockLogo({ size = 32 }: { size?: number }) {
   );
 }
 
+// ── Forgot password sub-view — mirrors app/advisor/login/page.tsx's pattern ────
+function ForgotPassword({ onBack }: { onBack: () => void }) {
+  const supabase = createClient();
+  const [email,   setEmail]   = useState("");
+  const [loading, setLoading] = useState(false);
+  const [sent,    setSent]    = useState(false);
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${location.origin}/auth/callback`,
+      });
+    } finally {
+      // Never reveal whether the email exists — always show the same message.
+      setSent(true);
+      setLoading(false);
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="text-center space-y-4">
+        <CheckCircle2 size={32} className="mx-auto text-accent" />
+        <p className="text-white font-medium text-sm">Check your inbox</p>
+        <p className="text-[#6B7280] text-xs leading-relaxed">
+          If an account exists for <span className="text-white">{email}</span>,
+          you&apos;ll receive a reset link within a few minutes.
+        </p>
+        <button onClick={onBack} className="text-accent text-xs hover:underline">
+          Back to sign in
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleReset} className="space-y-4">
+      <div>
+        <h2 className="text-[22px] font-semibold text-white leading-tight">Reset password</h2>
+        <p className="text-[#6B7280] text-sm mt-1.5">
+          Enter your email and we&apos;ll send you a reset link.
+        </p>
+      </div>
+      <div>
+        <label className="block text-[#9CA3AF] text-xs font-medium mb-1.5 uppercase tracking-wide">
+          Email
+        </label>
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          className="w-full text-sm text-white placeholder-[#4B5563] rounded-lg px-3.5 py-3 focus:outline-none transition-all"
+          style={{ background: "#0A0A0F", border: "1px solid #1E1E2E" }}
+          onFocus={(e) => (e.target.style.borderColor = "rgba(201,162,75,0.5)")}
+          onBlur={(e) => (e.target.style.borderColor = "#1E1E2E")}
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full flex items-center justify-center gap-2 text-white text-sm font-medium rounded-lg py-3 transition-all disabled:opacity-50"
+        style={{
+          background: loading ? "rgba(201,162,75,0.7)" : "#C9A24B",
+          boxShadow: loading ? "none" : "0 0 20px rgba(201,162,75,0.25)",
+        }}
+      >
+        {loading && <Loader2 size={15} className="animate-spin" />}
+        {loading ? "Sending…" : "Send reset link"}
+      </button>
+      <button
+        type="button"
+        onClick={onBack}
+        className="w-full text-sm text-[#9CA3AF] hover:text-white rounded-lg py-2.5 border transition-colors"
+        style={{ borderColor: "#1E1E2E" }}
+      >
+        Back to sign in
+      </button>
+    </form>
+  );
+}
+
 export default function LoginPage() {
   const router   = useRouter();
   const supabase = createClient();
 
-  const [email,    setEmail]    = useState("");
-  const [password, setPassword] = useState("");
-  const [showPw,   setShowPw]   = useState(false);
-  const [error,    setError]    = useState("");
-  const [loading,  setLoading]  = useState(false);
-  const [mode,     setMode]     = useState<"signin" | "signup">("signin");
-  const [sent,     setSent]     = useState(false);
+  const [email,      setEmail]      = useState("");
+  const [password,   setPassword]   = useState("");
+  const [showPw,     setShowPw]     = useState(false);
+  const [error,      setError]      = useState("");
+  const [loading,    setLoading]    = useState(false);
+  const [mode,       setMode]       = useState<"signin" | "signup">("signin");
+  const [sent,       setSent]       = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -95,7 +182,7 @@ export default function LoginPage() {
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse 700px 400px at 50% 0%, rgba(139,92,246,0.13) 0%, transparent 70%)",
+              "radial-gradient(ellipse 700px 400px at 50% 0%, rgba(201,162,75,0.13) 0%, transparent 70%)",
           }}
         />
         <div className="relative w-full max-w-sm text-center space-y-6">
@@ -128,7 +215,7 @@ export default function LoginPage() {
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 800px 500px at 30% 20%, rgba(139,92,246,0.10) 0%, transparent 70%)",
+            "radial-gradient(ellipse 800px 500px at 30% 20%, rgba(201,162,75,0.10) 0%, transparent 70%)",
         }}
       />
       {/* Dot grid */}
@@ -193,9 +280,13 @@ export default function LoginPage() {
             style={{
               background: "#111118",
               border: "1px solid #1E1E2E",
-              boxShadow: "0 0 0 1px rgba(139,92,246,0.04), 0 24px 48px rgba(0,0,0,0.4)",
+              boxShadow: "0 0 0 1px rgba(201,162,75,0.04), 0 24px 48px rgba(0,0,0,0.4)",
             }}
           >
+            {forgotOpen ? (
+              <ForgotPassword onBack={() => setForgotOpen(false)} />
+            ) : (
+              <>
             {/* Card header */}
             <div className="mb-7">
               <h2 className="text-[22px] font-semibold text-white leading-tight">
@@ -226,7 +317,7 @@ export default function LoginPage() {
                     background: "#0A0A0F",
                     border: "1px solid #1E1E2E",
                   }}
-                  onFocus={(e) => (e.target.style.borderColor = "rgba(139,92,246,0.5)")}
+                  onFocus={(e) => (e.target.style.borderColor = "rgba(201,162,75,0.5)")}
                   onBlur={(e) => (e.target.style.borderColor = "#1E1E2E")}
                 />
               </div>
@@ -250,7 +341,7 @@ export default function LoginPage() {
                       background: "#0A0A0F",
                       border: "1px solid #1E1E2E",
                     }}
-                    onFocus={(e) => (e.target.style.borderColor = "rgba(139,92,246,0.5)")}
+                    onFocus={(e) => (e.target.style.borderColor = "rgba(201,162,75,0.5)")}
                     onBlur={(e) => (e.target.style.borderColor = "#1E1E2E")}
                   />
                   <button
@@ -278,8 +369,8 @@ export default function LoginPage() {
                 disabled={loading}
                 className="w-full flex items-center justify-center gap-2 text-white text-sm font-medium rounded-lg py-3 transition-all disabled:opacity-50"
                 style={{
-                  background: loading ? "rgba(139,92,246,0.7)" : "#8B5CF6",
-                  boxShadow: loading ? "none" : "0 0 20px rgba(139,92,246,0.25)",
+                  background: loading ? "rgba(201,162,75,0.7)" : "#C9A24B",
+                  boxShadow: loading ? "none" : "0 0 20px rgba(201,162,75,0.25)",
                 }}
               >
                 {loading && <Loader2 size={15} className="animate-spin" />}
@@ -305,10 +396,16 @@ export default function LoginPage() {
 
             {mode === "signin" && (
               <p className="text-center mt-4">
-                <button className="text-accent text-xs hover:underline">
+                <button
+                  type="button"
+                  onClick={() => setForgotOpen(true)}
+                  className="text-accent text-xs hover:underline"
+                >
                   Forgot password?
                 </button>
               </p>
+            )}
+              </>
             )}
           </div>
 
@@ -317,19 +414,19 @@ export default function LoginPage() {
             href="/advisor/login"
             className="mt-4 flex items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm transition-all hover:opacity-90"
             style={{
-              background: "rgba(201,168,76,0.06)",
-              border:     "1px solid rgba(201,168,76,0.16)",
+              background: "rgba(201,162,75,0.06)",
+              border:     "1px solid rgba(201,162,75,0.16)",
             }}
           >
             <div
               className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-              style={{ background: "rgba(201,168,76,0.1)" }}
+              style={{ background: "rgba(201,162,75,0.1)" }}
             >
-              <Building2 size={12} style={{ color: "#C9A84C" }} />
+              <Building2 size={12} style={{ color: "#C9A24B" }} />
             </div>
             <span className="text-[#9CA3AF]">
               Financial advisor or RIA firm?{" "}
-              <span className="font-medium" style={{ color: "#C9A84C" }}>
+              <span className="font-medium" style={{ color: "#C9A24B" }}>
                 Advisor portal →
               </span>
             </span>

@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 
 // ── Brand tokens ──────────────────────────────────────────────────────────────
-const A        = "#C9A84C";
-const A_BG     = "rgba(201,168,76,0.08)";
-const A_BORDER = "rgba(201,168,76,0.18)";
+const A        = "#C9A24B";
+const A_BG     = "rgba(201,162,75,0.08)";
+const A_BORDER = "rgba(201,162,75,0.18)";
 const CARD_BG  = "#111118";
 const CARD_BD  = "#1A1A28";
 
@@ -34,7 +34,7 @@ const TIER_LABEL: Record<string, string> = {
 const TIER_COLOR: Record<string, string> = {
   free:       "#6B7280",
   starter:    A,
-  pro:        "#8B5CF6",
+  pro:        "#C9A24B",
   enterprise: "#10B981",
 };
 
@@ -100,7 +100,7 @@ export default function AdvisorDashboard() {
           style={{
             background: A,
             color:      "#0A0A0F",
-            boxShadow:  "0 0 16px rgba(201,168,76,0.18)",
+            boxShadow:  "0 0 16px rgba(201,162,75,0.18)",
           }}
         >
           <Upload size={14} />

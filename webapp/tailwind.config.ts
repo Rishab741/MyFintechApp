@@ -10,13 +10,16 @@ const config: Config = {
     extend: {
       colors: {
         // Platstock brand palette — Platstock Dark
+        // accent matches the mobile app's QL.GOLD (constants/Colors.ts) so the
+        // web app and the mobile app read as the same product instead of two
+        // unrelated brand languages (violet here vs. brass/gold on mobile).
         surface:  "#0A0A0F",
         card:     "#111118",
         border:   "#1A1A28",
         muted:    "#6B7280",
         accent: {
-          DEFAULT: "#8B5CF6",
-          hover:   "#7C3AED",
+          DEFAULT: "#C9A24B",
+          hover:   "#B78D34",
         },
         positive: "#10B981",
         negative: "#EF4444",

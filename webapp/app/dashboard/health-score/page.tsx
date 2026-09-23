@@ -57,7 +57,7 @@ const BREAKDOWN_CONFIG: {
   color: string;
   description: string;
 }[] = [
-  { key: "diversification",    label: "Diversification",    max: 30, color: "#8B5CF6", description: "Asset & sector spread" },
+  { key: "diversification",    label: "Diversification",    max: 30, color: "#C9A24B", description: "Asset & sector spread" },
   { key: "risk_return",        label: "Risk-Return",        max: 25, color: "#10B981", description: "Sharpe ratio quality"  },
   { key: "drawdown_resilience",label: "Drawdown Resilience",max: 25, color: "#3B82F6", description: "Max DD mitigation"     },
   { key: "consistency",        label: "Consistency",        max: 10, color: "#F59E0B", description: "Daily return stability" },

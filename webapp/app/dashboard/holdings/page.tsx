@@ -24,7 +24,7 @@ function Skeleton({ className = "" }: { className?: string }) {
 }
 
 const ASSET_CLASS_COLORS: Record<string, string> = {
-  equity:      "#8B5CF6",
+  equity:      "#C9A24B",
   fixed_income:"#10B981",
   crypto:      "#F59E0B",
   cash:        "#6B7280",
@@ -34,7 +34,7 @@ const ASSET_CLASS_COLORS: Record<string, string> = {
 };
 
 const SECTOR_COLORS = [
-  "#8B5CF6", "#10B981", "#3B82F6", "#F59E0B",
+  "#C9A24B", "#10B981", "#3B82F6", "#F59E0B",
   "#EC4899", "#EF4444", "#06B6D4", "#84CC16",
 ];
 
@@ -79,7 +79,7 @@ export default function HoldingsPage() {
         </div>
         {data?.position_count != null && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
-            style={{ background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)", color: "#8B5CF6" }}>
+            style={{ background: "rgba(201,162,75,0.08)", border: "1px solid rgba(201,162,75,0.15)", color: "#C9A24B" }}>
             <Briefcase size={12} />
             {data.position_count} positions
           </div>

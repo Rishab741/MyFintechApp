@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 
 // ── Brand tokens ──────────────────────────────────────────────────────────────
-const A        = "#C9A84C";
-const A_BG     = "rgba(201,168,76,0.08)";
-const A_BORDER = "rgba(201,168,76,0.18)";
+const A        = "#C9A24B";
+const A_BG     = "rgba(201,162,75,0.08)";
+const A_BORDER = "rgba(201,162,75,0.18)";
 const CARD_BG  = "#111118";
 const CARD_BD  = "#1E1E2E";
 const INPUT_CLS =
@@ -154,7 +154,7 @@ function VerifySent({ email }: { email: string }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0A0A0F] px-4">
       <div className="absolute inset-0 pointer-events-none"
-        style={{ background: "radial-gradient(ellipse 600px 300px at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 65%)" }} />
+        style={{ background: "radial-gradient(ellipse 600px 300px at 50% 0%, rgba(201,162,75,0.06) 0%, transparent 65%)" }} />
       <div className="relative w-full max-w-sm text-center space-y-6">
         <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center"
           style={{ background: A_BG, border: `1px solid ${A_BORDER}` }}>
@@ -326,7 +326,7 @@ export default function AdvisorSignup() {
 
       {/* ── Background ──────────────────────────────────────────────────── */}
       <div className="absolute inset-0 pointer-events-none"
-        style={{ background: "radial-gradient(ellipse 800px 500px at 40% 0%, rgba(201,168,76,0.07) 0%, transparent 65%)" }} />
+        style={{ background: "radial-gradient(ellipse 800px 500px at 40% 0%, rgba(201,162,75,0.07) 0%, transparent 65%)" }} />
       <div className="absolute inset-0 pointer-events-none opacity-[0.13]"
         style={{ backgroundImage: "radial-gradient(circle, #2A2A1A 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
 
@@ -384,7 +384,7 @@ export default function AdvisorSignup() {
           <div className="rounded-2xl p-8" style={{
             background: CARD_BG,
             border:     `1px solid ${CARD_BD}`,
-            boxShadow:  "0 0 0 1px rgba(201,168,76,0.04), 0 24px 48px rgba(0,0,0,0.4)",
+            boxShadow:  "0 0 0 1px rgba(201,162,75,0.04), 0 24px 48px rgba(0,0,0,0.4)",
           }}>
             {/* Step progress */}
             <StepBar current={step} />
@@ -744,7 +744,7 @@ export default function AdvisorSignup() {
                   className="flex-1 flex items-center justify-center gap-2 text-[#0A0A0F] text-sm font-semibold rounded-xl py-2.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{
                     background: A,
-                    boxShadow:  loading || !canAdvance() ? "none" : "0 0 20px rgba(201,168,76,0.20)",
+                    boxShadow:  loading || !canAdvance() ? "none" : "0 0 20px rgba(201,162,75,0.20)",
                   }}
                 >
                   {loading && <Loader2 size={15} className="animate-spin" />}

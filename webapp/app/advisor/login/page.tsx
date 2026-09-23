@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 
 // ── Brand tokens ──────────────────────────────────────────────────────────────
-const A        = "#C9A84C";
-const A_BG     = "rgba(201,168,76,0.08)";
-const A_BORDER = "rgba(201,168,76,0.18)";
+const A        = "#C9A24B";
+const A_BG     = "rgba(201,162,75,0.08)";
+const A_BORDER = "rgba(201,162,75,0.18)";
 const CARD_BG  = "#111118";
 const CARD_BD  = "#1E1E2E";
 const INPUT_CLS =
@@ -242,7 +242,7 @@ function AdvisorLoginInner() {
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 700px 400px at 60% 0%, rgba(201,168,76,0.06) 0%, transparent 65%)",
+            "radial-gradient(ellipse 700px 400px at 60% 0%, rgba(201,162,75,0.06) 0%, transparent 65%)",
         }}
       />
       <div
@@ -317,7 +317,7 @@ function AdvisorLoginInner() {
             style={{
               background: CARD_BG,
               border:     `1px solid ${CARD_BD}`,
-              boxShadow:  "0 0 0 1px rgba(201,168,76,0.04), 0 24px 48px rgba(0,0,0,0.4)",
+              boxShadow:  "0 0 0 1px rgba(201,162,75,0.04), 0 24px 48px rgba(0,0,0,0.4)",
             }}
           >
             {forgot ? (
@@ -423,7 +423,7 @@ function AdvisorLoginInner() {
                     className="w-full flex items-center justify-center gap-2 text-[#0A0A0F] text-sm font-semibold rounded-lg py-3 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{
                       background: A,
-                      boxShadow:  loading ? "none" : "0 0 24px rgba(201,168,76,0.20)",
+                      boxShadow:  loading ? "none" : "0 0 24px rgba(201,162,75,0.20)",
                     }}
                   >
                     {loading && <Loader2 size={15} className="animate-spin" />}
@@ -488,7 +488,7 @@ export default function AdvisorLogin() {
       <div className="min-h-screen flex items-center justify-center bg-[#0A0A0F]">
         <div
           className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
-          style={{ borderColor: "rgba(201,168,76,0.4)", borderTopColor: "transparent" }}
+          style={{ borderColor: "rgba(201,162,75,0.4)", borderTopColor: "transparent" }}
         />
       </div>
     }>

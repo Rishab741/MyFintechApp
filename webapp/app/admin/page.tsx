@@ -14,10 +14,12 @@ import {
   Building2, Eye, FileText, LogOut, RefreshCw, ShieldCheck, Users,
 } from "lucide-react";
 
-// Steel-blue accent — visually distinct from retail purple and advisor gold.
-const A        = "#7BA3C9";
-const A_BG     = "rgba(123,163,201,0.08)";
-const A_BORDER = "rgba(123,163,201,0.2)";
+// Unified brand gold — matches retail/advisor/mobile (constants/Colors.ts
+// QL.GOLD). Admin is told apart by the "Observer" copy/banner below, not by
+// running a fourth, disconnected brand color.
+const A        = "#C9A24B";
+const A_BG     = "rgba(201,162,75,0.08)";
+const A_BORDER = "rgba(201,162,75,0.2)";
 const CARD_BG  = "#111118";
 const CARD_BD  = "#1A1A28";
 
@@ -44,7 +46,7 @@ interface AuditRow {
 }
 
 const TIER_COLOR: Record<string, string> = {
-  free: "#6B7280", starter: "#C9A84C", pro: "#8B5CF6", enterprise: "#10B981",
+  free: "#6B7280", starter: "#C1793F", pro: "#C9A24B", enterprise: "#10B981",
 };
 
 const AUM_LABEL: Record<string, string> = {

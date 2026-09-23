@@ -160,7 +160,7 @@ export default function ApiKeysPage() {
             placeholder="e.g. Production, CI/CD"
             className="w-full rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-[#4B5563] focus:outline-none transition-all"
             style={{ background: "#0A0A0F", border: "1px solid #1A1A28" }}
-            onFocus={(e) => (e.target.style.borderColor = "rgba(139,92,246,0.4)")}
+            onFocus={(e) => (e.target.style.borderColor = "rgba(201,162,75,0.4)")}
             onBlur={(e)  => (e.target.style.borderColor = "#1A1A28")}
           />
         </div>
@@ -183,7 +183,7 @@ export default function ApiKeysPage() {
               onClick={issueKey}
               disabled={loading}
               className="text-sm text-white px-4 py-1.5 rounded-lg disabled:opacity-50 transition-all"
-              style={{ background: "#8B5CF6" }}
+              style={{ background: "#C9A24B" }}
             >
               {loading ? "…" : "Confirm"}
             </button>
@@ -192,7 +192,7 @@ export default function ApiKeysPage() {
           <button
             onClick={() => setConfirm("issue")}
             className="flex items-center gap-2 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-all"
-            style={{ background: "#8B5CF6", boxShadow: "0 0 18px rgba(139,92,246,0.2)" }}
+            style={{ background: "#C9A24B", boxShadow: "0 0 18px rgba(201,162,75,0.2)" }}
           >
             <RefreshCw size={14} />
             {tenant?.has_api_key ? "Rotate Key" : "Generate Key"}

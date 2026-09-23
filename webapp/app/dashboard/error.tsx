@@ -52,7 +52,7 @@ export default function DashboardError({
       <div className="flex gap-3">
         <button
           onClick={reset}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-md transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white text-sm rounded-md transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
           Retry
@@ -60,7 +60,7 @@ export default function DashboardError({
         {isAuthError && (
           <a
             href="/"
-            className="px-4 py-2 bg-[#21262d] hover:bg-[#30363d] text-white text-sm rounded-md transition-colors"
+            className="px-4 py-2 bg-card hover:bg-border text-white text-sm rounded-md transition-colors border border-border"
           >
             Sign in
           </a>

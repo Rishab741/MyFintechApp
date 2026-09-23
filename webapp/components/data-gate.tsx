@@ -20,7 +20,7 @@ export function DataGate({ children, description }: DataGateProps) {
       <div className="flex items-center justify-center" style={{ minHeight: 480 }}>
         <div
           className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
-          style={{ borderColor: "rgba(139,92,246,0.4)", borderTopColor: "transparent" }}
+          style={{ borderColor: "rgba(201,162,75,0.4)", borderTopColor: "transparent" }}
         />
       </div>
     );
@@ -36,8 +36,8 @@ export function DataGate({ children, description }: DataGateProps) {
           <div
             className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center"
             style={{
-              background: "rgba(139,92,246,0.07)",
-              border:     "1px solid rgba(139,92,246,0.18)",
+              background: "rgba(201,162,75,0.07)",
+              border:     "1px solid rgba(201,162,75,0.18)",
             }}
           >
             <Lock size={24} className="text-accent opacity-70" />
@@ -60,8 +60,8 @@ export function DataGate({ children, description }: DataGateProps) {
               href="/dashboard/ingest"
               className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all hover:opacity-90"
               style={{
-                background: "rgba(139,92,246,0.12)",
-                border:     "1px solid rgba(139,92,246,0.22)",
+                background: "rgba(201,162,75,0.12)",
+                border:     "1px solid rgba(201,162,75,0.22)",
                 color:      "#A78BFA",
               }}
             >
