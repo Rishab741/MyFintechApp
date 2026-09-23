@@ -82,7 +82,7 @@ export function IndexCard({ item, active, onPress, isLive }: Props) {
     prevPrice.current = price;
     flashAnim.setValue(1);
     Animated.timing(flashAnim, { toValue: 0, duration: 600, useNativeDriver: false }).start();
-  }, [item.quote?.price]);
+  }, [item.quote?.price]); // eslint-disable-line react-hooks/exhaustive-deps -- flashAnim is a stable ref (useRef), never changes identity
 
   const q = item.quote;
   const up = (q?.changePct ?? 0) >= 0;

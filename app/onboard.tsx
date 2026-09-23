@@ -269,7 +269,7 @@ export default function OnboardScreen() {
   const handleConnectBrokerage = async () => {
     await markOnboarded().catch(() => {});
     router.replace('/(tabs)');
-    setTimeout(() => router.push('/(tabs)/Onboarding' as any), 350);
+    setTimeout(() => router.push('/(tabs)/Onboarding'), 350);
   };
 
   // ── Step transition ────────────────────────────────────────────────────────

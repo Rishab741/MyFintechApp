@@ -70,25 +70,26 @@ function PerformanceChart({ values }: { values: number[] }) {
     return { linePath: line, areaPath: area, guideYs: [CHART_H * 0.25, CHART_H * 0.5, CHART_H * 0.75], pts };
   }, [values]);
 
-  const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => pts.length > 1,
-    onMoveShouldSetPanResponder: () => pts.length > 1,
-    onPanResponderGrant: (evt) => updateScrub(evt.nativeEvent.locationX),
-    onPanResponderMove: (evt) => updateScrub(evt.nativeEvent.locationX),
-    onPanResponderRelease: () => { setScrubIdx(null); lastTickIdx.current = null; },
-    onPanResponderTerminate: () => { setScrubIdx(null); lastTickIdx.current = null; },
-  }), [pts]);
-
-  function updateScrub(localX: number) {
-    if (pts.length < 2) return;
-    const clamped = Math.max(0, Math.min(CHART_W, localX));
-    const idx = Math.round((clamped / CHART_W) * (pts.length - 1));
-    setScrubIdx(idx);
-    if (lastTickIdx.current !== idx) {
-      lastTickIdx.current = idx;
-      haptics.tick();
+  const panResponder = useMemo(() => {
+    function updateScrub(localX: number) {
+      if (pts.length < 2) return;
+      const clamped = Math.max(0, Math.min(CHART_W, localX));
+      const idx = Math.round((clamped / CHART_W) * (pts.length - 1));
+      setScrubIdx(idx);
+      if (lastTickIdx.current !== idx) {
+        lastTickIdx.current = idx;
+        haptics.tick();
+      }
     }
-  }
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => pts.length > 1,
+      onMoveShouldSetPanResponder: () => pts.length > 1,
+      onPanResponderGrant: (evt) => updateScrub(evt.nativeEvent.locationX),
+      onPanResponderMove: (evt) => updateScrub(evt.nativeEvent.locationX),
+      onPanResponderRelease: () => { setScrubIdx(null); lastTickIdx.current = null; },
+      onPanResponderTerminate: () => { setScrubIdx(null); lastTickIdx.current = null; },
+    });
+  }, [pts]);
 
   if (!linePath) {
     return <View style={{ height: CHART_H, alignItems: 'center', justifyContent: 'center' }}>

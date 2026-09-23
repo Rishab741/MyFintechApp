@@ -1,5 +1,6 @@
 import { NavMenuButton } from '@/components/NavMenuButton';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { haptics } from '@/src/lib/haptics';
 import React, { useCallback, useRef, useState } from 'react';
 import {
     Animated,
@@ -40,7 +41,6 @@ import {
 } from '@/src/portfolio/tokens';
 import { fmtCurrency, fmt2, sign, getTicker, getUnits } from '@/src/portfolio/helpers';
 import type { AllocSeg } from '@/src/portfolio/types';
-import { haptics } from '@/src/lib/haptics';
 
 // ─── Tokens aligned to Quantum Ledger ────────────────────────────────────────
 const CYAN   = GOLD;
